@@ -1,9 +1,7 @@
 import { app, BrowserWindow } from 'electron'
-import electronUpdater from 'electron-updater'
+import { autoUpdater } from 'electron-updater'
 import type { UpdateDownloadedEvent, UpdateInfo, ProgressInfo } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
-
-const { autoUpdater } = electronUpdater
 
 let updaterInitialized = false
 let mainWindowGetter: (() => BrowserWindow | null) | null = null

@@ -9,7 +9,10 @@ const config: Configuration = {
     buildResources: 'assets',
   },
   files: [
-    'dist/**/*',
+    'dist/main/**/*',
+    'dist/renderer/**/*',
+    'dist/shared/**/*',
+    'dist/preload.js',
     'assets/**/*',
     'package.json',
   ],

@@ -34,26 +34,48 @@ import {
   installDownloadedUpdate,
   setUpdaterWindowGetter,
 } from './updater'
+import {
+  acquireSingleInstanceChannel,
+  cleanupSingleInstanceChannel,
+  setSecondInstanceHandler,
+} from './single-instance'
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, Settings } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
+let revealWindowOnReady = false
+const windowsAppUserModelId = 'com.gitlab-req-manager.app'
 
-const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (process.platform === 'win32') {
+  app.setAppUserModelId(windowsAppUserModelId)
+}
 
-if (!gotSingleInstanceLock) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    if (!app.isReady()) return
+function exitDuplicateInstance(): never {
+  app.exit(0)
+  process.exit(0)
+}
 
-    showTrayWindow(getOrCreateMainWindow())
+function revealMainWindow(): void {
+  if (!app.isReady()) {
+    revealWindowOnReady = true
+    return
+  }
+
+  showTrayWindow(getOrCreateMainWindow())
+}
+
+async function startApp(): Promise<void> {
+  setSecondInstanceHandler(() => {
+    revealMainWindow()
   })
 
-  app.whenReady().then(() => {
-    app.setAppUserModelId('GitLab MR Manager')
+  const gotSingleInstanceChannel = await acquireSingleInstanceChannel()
+  if (!gotSingleInstanceChannel) {
+    exitDuplicateInstance()
+  }
 
+  app.whenReady().then(() => {
     // Sync login item status from OS to store on startup
     const loginSettings = app.getLoginItemSettings()
     const storedSettings = getSettings()
@@ -86,6 +108,11 @@ if (!gotSingleInstanceLock) {
     setupIPC()
     initializeUpdater()
 
+    if (revealWindowOnReady) {
+      revealWindowOnReady = false
+      revealMainWindow()
+    }
+
     if (isConfigured()) {
       const settings = getSettings()
       if (settings.webhookEnabled) {
@@ -104,9 +131,7 @@ if (!gotSingleInstanceLock) {
   })
 
   app.on('activate', () => {
-    if (!app.isReady()) return
-
-    showTrayWindow(getOrCreateMainWindow())
+    revealMainWindow()
   })
 
   app.on('window-all-closed', (e: Event) => {
@@ -121,8 +146,15 @@ if (!gotSingleInstanceLock) {
     stopTunnel()
     disconnectSocketClient()
     destroyTray()
+    void cleanupSingleInstanceChannel()
   })
+
 }
+
+void startApp().catch((error) => {
+  console.error('[app] startup failed:', error)
+  app.exit(1)
+})
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({

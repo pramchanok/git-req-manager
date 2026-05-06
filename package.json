@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -30,7 +30,10 @@
       "buildResources": "assets"
     },
     "files": [
-      "dist/**/*",
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "dist/shared/**/*",
+      "dist/preload.js",
       "assets/**/*",
       "package.json"
     ],
