@@ -21,6 +21,7 @@ const config: Configuration = {
     provider: 'github',
     owner: 'pramchanok',
     repo: 'git-req-manager',
+    releaseType: 'release',
   },
   win: {
     target: [{ target: 'nsis', arch: ['x64'] }],

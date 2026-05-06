@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -41,7 +41,8 @@
     "publish": {
       "provider": "github",
       "owner": "pramchanok",
-      "repo": "git-req-manager"
+      "repo": "git-req-manager",
+      "releaseType": "release"
     },
     "win": {
       "icon": "assets/icon.ico",
