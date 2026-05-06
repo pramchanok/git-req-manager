@@ -201,6 +201,7 @@ App ใช้ `electron-updater` เช็กอัปเดตจาก GitHub 
 หมายเหตุ:
 
 - **Windows auto-update** ใช้แพ็กเกจแบบ **NSIS installer**
+- repo นี้มี GitHub Actions สำหรับปล่อย **Windows release อัตโนมัติเมื่อ push tag `v*`**
 - **macOS auto-update** ต้อง build แบบ signed app และมีทั้ง `dmg` กับ `zip`
 - ตอนรันใน dev (`npm run dev` / `npm start`) ระบบ update จะถูกปิดไว้ และจะทำงานจริงเฉพาะ packaged app
 
