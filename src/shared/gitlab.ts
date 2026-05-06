@@ -1,0 +1,242 @@
+import axios, { AxiosInstance } from 'axios'
+import type { GitLabUser, MergeRequest, GitLabProject } from './types'
+
+export class GitLabClient {
+  private http: AxiosInstance
+
+  constructor(baseUrl: string, accessToken: string) {
+    const normalizedUrl = baseUrl.replace(/\/$/, '')
+    this.http = axios.create({
+      baseURL: `${normalizedUrl}/api/v4`,
+      headers: {
+        'PRIVATE-TOKEN': accessToken,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    })
+  }
+
+  async getCurrentUser(): Promise<GitLabUser> {
+    const { data } = await this.http.get('/user')
+    return this.mapUser(data)
+  }
+
+  async getAccessibleProjects(): Promise<GitLabProject[]> {
+    const projects: GitLabProject[] = []
+    let page = 1
+
+    while (true) {
+      const { data } = await this.http.get('/projects', {
+        params: {
+          membership: true,
+          per_page: 100,
+          page,
+          order_by: 'last_activity_at',
+          sort: 'desc',
+        },
+      })
+      if (data.length === 0) break
+      projects.push(...data.map(this.mapProject))
+      if (data.length < 100) break
+      page++
+    }
+
+    return projects
+  }
+
+  async getMRsForReview(userId: number): Promise<MergeRequest[]> {
+    const { data } = await this.http.get('/merge_requests', {
+      params: {
+        reviewer_id: userId,
+        state: 'opened',
+        per_page: 100,
+        scope: 'all',
+        with_labels_details: false,
+      },
+    })
+    return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+  }
+
+  // ────── Webhook Management ──────
+
+  private static readonly HOOK_PREFIX = 'gitlab-mr-manager:'
+
+  private hookDescription(username: string): string {
+    return `${GitLabClient.HOOK_PREFIX}${username}`
+  }
+
+  async listProjectHooks(projectId: number): Promise<{ id: number; url: string; description?: string }[]> {
+    try {
+      const { data } = await this.http.get(`/projects/${projectId}/hooks`)
+      return data
+    } catch {
+      return []
+    }
+  }
+
+  async upsertProjectWebhook(projectId: number, webhookUrl: string, secret: string, username: string): Promise<void> {
+    const hooks = await this.listProjectHooks(projectId)
+    const myDesc = this.hookDescription(username)
+    const legacyDesc = GitLabClient.HOOK_PREFIX.slice(0, -1)
+
+    // Collect all hooks that belong to this app for this user (current + legacy format)
+    const ours = hooks.filter(
+      (h) => h.description === myDesc || h.description === legacyDesc
+    )
+
+    // Prefer the hook with the correct username description; fall back to legacy
+    const keeper = ours.find((h) => h.description === myDesc) ?? ours[0]
+
+    // Delete all duplicates except the one we'll keep/update
+    for (const h of ours) {
+      if (h !== keeper) {
+        await this.http.delete(`/projects/${projectId}/hooks/${h.id}`).catch(() => {})
+      }
+    }
+
+    const payload: Record<string, unknown> = {
+      url: webhookUrl,
+      merge_requests_events: true,
+      description: myDesc,
+      enable_ssl_verification: webhookUrl.startsWith('https'),
+    }
+    if (secret) payload.token = secret
+
+    if (keeper) {
+      await this.http.put(`/projects/${projectId}/hooks/${keeper.id}`, payload)
+    } else {
+      await this.http.post(`/projects/${projectId}/hooks`, payload)
+    }
+  }
+
+  async deleteOurProjectWebhook(projectId: number, username: string): Promise<void> {
+    const hooks = await this.listProjectHooks(projectId)
+    const existing = hooks.find((h) => h.description === this.hookDescription(username))
+    if (existing) {
+      await this.http.delete(`/projects/${projectId}/hooks/${existing.id}`)
+    }
+  }
+
+  async syncWebhooksToAllProjects(
+    webhookUrl: string,
+    secret: string,
+    projectIds: number[],
+    username: string,
+    onProgress?: (done: number, total: number) => void
+  ): Promise<{ success: number; failed: number }> {
+    let ids = projectIds
+    if (ids.length === 0) {
+      const projects = await this.getAccessibleProjects()
+      ids = projects.map((p) => p.id)
+    }
+
+    let success = 0
+    let failed = 0
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await this.upsertProjectWebhook(ids[i], webhookUrl, secret, username)
+        success++
+      } catch {
+        failed++
+      }
+      onProgress?.(i + 1, ids.length)
+    }
+    return { success, failed }
+  }
+
+  // ────── MRs ──────
+
+  async getAllOpenMRs(projectIds: number[]): Promise<MergeRequest[]> {
+    if (projectIds.length === 0) {
+      // Fetch from all accessible projects
+      const { data } = await this.http.get('/merge_requests', {
+        params: {
+          state: 'opened',
+          per_page: 100,
+          scope: 'all',
+        },
+      })
+      return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+    }
+
+    const results = await Promise.all(
+      projectIds.map((id) =>
+        this.http
+          .get(`/projects/${id}/merge_requests`, {
+            params: { state: 'opened', per_page: 100 },
+          })
+          .then(({ data }) => data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
+          .catch(() => [] as MergeRequest[])
+      )
+    )
+
+    return results.flat()
+  }
+
+  private mapUser(u: Record<string, unknown>): GitLabUser {
+    return {
+      id: u.id as number,
+      name: u.name as string,
+      username: u.username as string,
+      avatarUrl: u.avatar_url as string,
+      webUrl: u.web_url as string,
+    }
+  }
+
+  private mapProject(p: Record<string, unknown>): GitLabProject {
+    return {
+      id: p.id as number,
+      name: p.name as string,
+      nameWithNamespace: p.name_with_namespace as string,
+      webUrl: p.web_url as string,
+      defaultBranch: p.default_branch as string,
+    }
+  }
+
+  private mapMR(mr: Record<string, unknown>): MergeRequest {
+    const refs = mr.references as Record<string, unknown> | undefined
+    const projectId =
+      typeof mr.project_id === 'number'
+        ? mr.project_id
+        : refs
+          ? parseInt(String(refs.full ?? '').split('!')[0]) || 0
+          : 0
+
+    const rawAuthor = mr.author as Record<string, unknown>
+    const rawAssignees = (mr.assignees as Record<string, unknown>[]) ?? []
+    const rawReviewers = (mr.reviewers as Record<string, unknown>[]) ?? []
+
+    const projectPathParts = String(
+      (mr.references as Record<string, unknown> | undefined)?.full ?? ''
+    ).split('!')
+    const projectNamespace = projectPathParts[0] ?? ''
+    const projectName = projectNamespace.split('/').pop() ?? ''
+
+    return {
+      id: mr.id as number,
+      iid: mr.iid as number,
+      projectId,
+      projectName,
+      projectNamespace,
+      title: mr.title as string,
+      description: (mr.description as string) ?? '',
+      state: mr.state as MergeRequest['state'],
+      createdAt: mr.created_at as string,
+      updatedAt: mr.updated_at as string,
+      mergedAt: (mr.merged_at as string | null) ?? null,
+      author: this.mapUser(rawAuthor),
+      assignees: rawAssignees.map(this.mapUser.bind(this)),
+      reviewers: rawReviewers.map(this.mapUser.bind(this)),
+      sourceBranch: mr.source_branch as string,
+      targetBranch: mr.target_branch as string,
+      webUrl: mr.web_url as string,
+      approvalsRequired: (mr.approvals_required as number) ?? 0,
+      approvalsLeft: (mr.approvals_left as number) ?? 0,
+      draft: (mr.draft as boolean) ?? false,
+      hasConflicts: (mr.has_conflicts as boolean) ?? false,
+      upvotes: (mr.upvotes as number) ?? 0,
+      downvotes: (mr.downvotes as number) ?? 0,
+      userNotesCount: (mr.user_notes_count as number) ?? 0,
+    }
+  }
+}
