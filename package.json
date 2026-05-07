@@ -15,9 +15,9 @@
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "package": "npm run build && electron-builder --publish never",
-    "package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --arch x64 --publish never",
+    "package:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --publish never",
     "package:mac": "npm run build && electron-builder --mac dmg zip --publish never",
-    "publish:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --arch x64 --publish always",
+    "publish:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --publish always",
     "publish:mac": "npm run build && electron-builder --mac dmg zip --publish always",
     "publish:all": "npm run build && electron-builder --mac dmg zip --publish always && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --arch x64 --publish always",
     "start": "electron ."
