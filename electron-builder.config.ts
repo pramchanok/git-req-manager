@@ -41,7 +41,6 @@ const config: Configuration = {
   nsis: {
     oneClick: false,
     perMachine: false,
-    allowToChangeInstallationDirectory: true,
   },
 }
 
