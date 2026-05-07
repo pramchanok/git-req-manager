@@ -3,8 +3,11 @@ import { autoUpdater } from 'electron-updater'
 import type { UpdateDownloadedEvent, UpdateInfo, ProgressInfo } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
 
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
+
 let updaterInitialized = false
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
+let updateCheckIntervalHandle: ReturnType<typeof setInterval> | null = null
 
 let updateState: UpdateState = {
   currentVersion: app.getVersion(),
@@ -185,4 +188,15 @@ export function initializeUpdater(): void {
   })
 
   void checkForUpdates()
+
+  updateCheckIntervalHandle = setInterval(() => {
+    void checkForUpdates()
+  }, UPDATE_CHECK_INTERVAL_MS)
+}
+
+export function stopUpdater(): void {
+  if (updateCheckIntervalHandle !== null) {
+    clearInterval(updateCheckIntervalHandle)
+    updateCheckIntervalHandle = null
+  }
 }
