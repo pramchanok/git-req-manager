@@ -37,7 +37,13 @@ const config: Configuration = {
     ],
     icon: 'assets/icon.png',
     category: 'public.app-category.developer-tools',
+    hardenedRuntime: true,
+    entitlements: 'assets/entitlements.mac.plist',
+    entitlementsInherit: 'assets/entitlements.mac.plist',
     gatekeeperAssess: false,
+    notarize: process.env.APPLE_TEAM_ID
+      ? { teamId: process.env.APPLE_TEAM_ID }
+      : false,
   },
   nsis: {
     oneClick: true,
