@@ -22,8 +22,9 @@ function createIcon(active: boolean): Electron.NativeImage {
   const iconName = active ? 'tray-icon-active.png' : 'tray-icon.png'
   const iconPath = path.join(app.getAppPath(), 'assets', iconName)
   const icon = nativeImage.createFromPath(iconPath)
-  // macOS requires template images for proper dark/light mode rendering in the menu bar
-  if (process.platform === 'darwin') {
+  // Inactive icon: use template so macOS auto-adapts to light/dark mode
+  // Active icon: keep colored (orange + red badge) so it stands out visually
+  if (process.platform === 'darwin' && !active) {
     icon.setTemplateImage(true)
   }
   return icon
