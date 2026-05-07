@@ -37,9 +37,10 @@ const config: Configuration = {
     ],
     icon: 'assets/icon.png',
     category: 'public.app-category.developer-tools',
+    gatekeeperAssess: false,
   },
   nsis: {
-    oneClick: false,
+    oneClick: true,
     perMachine: false,
   },
 }

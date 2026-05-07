@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -80,7 +80,7 @@
       "category": "public.app-category.developer-tools"
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false
     }
   },
