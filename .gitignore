@@ -2,6 +2,7 @@ node_modules/
 dist/
 release/
 release-temp/
+test-install/
 
 *.log
 npm-debug.log*
