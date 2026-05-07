@@ -77,7 +77,14 @@
         }
       ],
       "icon": "assets/icon.png",
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "57TK5HXL9A"
+      }
     },
     "nsis": {
       "oneClick": true,
