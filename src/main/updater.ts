@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { UpdateDownloadedEvent, UpdateInfo, ProgressInfo } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
@@ -173,6 +173,21 @@ export function initializeUpdater(): void {
 
   autoUpdater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
     setDownloadedState(info)
+
+    if (Notification.isSupported()) {
+      const notification = new Notification({
+        title: 'GitLab MR Manager — Update ready',
+        body: `Version ${info.version} has been downloaded. Click to install.`,
+      })
+      notification.on('click', () => {
+        const win = getMainWindow()
+        if (win) {
+          win.show()
+          win.focus()
+        }
+      })
+      notification.show()
+    }
   })
 
   autoUpdater.on('update-not-available', (info: UpdateInfo) => {

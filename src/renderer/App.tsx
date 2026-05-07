@@ -64,10 +64,13 @@ export default function App() {
         >
           <button
             onClick={() => setPage(page === 'settings' ? 'dashboard' : 'settings')}
-            className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+            className="relative p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
             title={page === 'settings' ? 'Back to dashboard' : 'Settings'}
           >
             {page === 'settings' ? '◀' : '⚙️'}
+            {updateState.status === 'downloaded' && page !== 'settings' && (
+              <span className="absolute top-0 right-0 w-2 h-2 bg-green-400 rounded-full" />
+            )}
           </button>
           <button
             onClick={() => window.close()}
