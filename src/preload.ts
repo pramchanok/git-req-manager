@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWebhookUrl: (): Promise<string | null> => ipcRenderer.invoke('get-webhook-url'),
   checkCloudflared: (): Promise<{ available: boolean; path: string | null }> =>
     ipcRenderer.invoke('check-cloudflared'),
+  getMergedMRsByAuthor: (username: string): Promise<import('./shared/types').MergeRequest[]> =>
+    ipcRenderer.invoke('get-merged-mrs-by-author', username),
   onAppStateUpdated: (callback: (state: AppState) => void) => {
     ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
     return () => ipcRenderer.removeAllListeners('app-state-updated')
@@ -24,5 +26,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateStateChanged: (callback: (state: UpdateState) => void) => {
     ipcRenderer.on('update-state-changed', (_event, state: UpdateState) => callback(state))
     return () => ipcRenderer.removeAllListeners('update-state-changed')
+  },
+  onShowSettings: (callback: () => void) => {
+    ipcRenderer.on('show-settings', () => callback())
+    return () => ipcRenderer.removeAllListeners('show-settings')
   },
 })

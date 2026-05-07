@@ -3,6 +3,7 @@ import path from 'path'
 import {
   createTray,
   updateTrayBadge,
+  updateTrayMRs,
   destroyTray,
   setTrayWindow,
   setWindowFactory,
@@ -89,9 +90,9 @@ async function startApp(): Promise<void> {
     setTunnelUrlCallback((url) => autoSyncWebhooks(`${url}/webhook`))
 
     setStateChangeCallback((state: AppState) => {
-      // Update tray badge
-      const reviewCount = state.myReviewMRs.length
-      updateTrayBadge(reviewCount)
+      // Update tray badge and MR list for quick-open menu
+      updateTrayBadge(state.myReviewMRs.length)
+      updateTrayMRs(state.myReviewMRs)
 
       // Push state to renderer
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -304,6 +305,13 @@ function setupIPC(): void {
   ipcMain.handle('check-cloudflared', async () => {
     const bin = await findCloudflared()
     return { available: !!bin, path: bin }
+  })
+
+  ipcMain.handle('get-merged-mrs-by-author', async (_event, username: string) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getMergedMRsByAuthor(username)
   })
 }
 

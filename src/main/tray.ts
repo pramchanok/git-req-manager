@@ -1,8 +1,10 @@
-import { Tray, Menu, nativeImage, BrowserWindow, app, screen } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell } from 'electron'
 import path from 'path'
+import type { MergeRequest } from '../shared/types'
 
 let tray: Tray | null = null
 let pendingCount = 0
+let mrList: MergeRequest[] = []
 let windowRef: BrowserWindow | null = null
 let windowFactory: (() => BrowserWindow) | null = null
 
@@ -65,20 +67,47 @@ export function updateTrayBadge(count: number): void {
   updateTrayMenu()
 }
 
+export function updateTrayMRs(mrs: MergeRequest[]): void {
+  mrList = mrs
+  updateTrayMenu()
+}
+
 function updateTrayMenu(): void {
   if (!tray) return
+
+  const mrItems = mrList.slice(0, 3).map((mr) => ({
+    label: mr.title.length > 45 ? mr.title.slice(0, 45) + '…' : mr.title,
+    click: () => shell.openExternal(mr.webUrl),
+  }))
 
   const contextMenu = Menu.buildFromTemplate([
     {
       label: pendingCount > 0 ? `📋 ${pendingCount} MR(s) need review` : '📋 No pending MRs',
       enabled: false,
     },
+    ...(mrItems.length > 0
+      ? [
+          { type: 'separator' as const },
+          { label: 'My Reviews', enabled: false },
+          ...mrItems,
+        ]
+      : []),
     { type: 'separator' },
     {
       label: 'Open',
       click: () => {
         const win = getOrCreateWindow()
         if (win) showWindow(win)
+      },
+    },
+    {
+      label: 'Settings',
+      click: () => {
+        const win = getOrCreateWindow()
+        if (win) {
+          showWindow(win)
+          win.webContents.send('show-settings')
+        }
       },
     },
     {
@@ -101,13 +130,36 @@ function updateTrayMenu(): void {
 function showWindow(win: BrowserWindow): void {
   if (win.isMinimized()) win.restore()
 
-  // Center window on primary display
-  const { workAreaSize } = screen.getPrimaryDisplay()
-  const [w, h] = win.getSize()
-  win.setPosition(
-    Math.round((workAreaSize.width - w) / 2),
-    Math.round((workAreaSize.height - h) / 2)
-  )
+  // Position window near tray icon
+  if (tray) {
+    const trayBounds = tray.getBounds()
+    const [winW, winH] = win.getSize()
+    const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
+    const { workArea } = display
+
+    let x = Math.round(trayBounds.x + trayBounds.width / 2 - winW / 2)
+    let y: number
+    if (process.platform === 'darwin') {
+      // Below the macOS menu bar
+      y = Math.round(trayBounds.y + trayBounds.height + 4)
+    } else {
+      // Above the Windows taskbar
+      y = Math.round(trayBounds.y - winH - 4)
+    }
+
+    // Clamp to work area
+    x = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - winW))
+    y = Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - winH))
+    win.setPosition(x, y)
+  } else {
+    // Fallback: center on primary display
+    const { workAreaSize } = screen.getPrimaryDisplay()
+    const [w, h] = win.getSize()
+    win.setPosition(
+      Math.round((workAreaSize.width - w) / 2),
+      Math.round((workAreaSize.height - h) / 2)
+    )
+  }
 
   if (process.platform === 'darwin') {
     app.dock.show()

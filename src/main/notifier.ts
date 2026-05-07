@@ -1,18 +1,44 @@
 import { Notification, shell } from 'electron'
 import type { MergeRequest } from '../shared/types'
+import { addNotifiedMRId, clearNotifiedMRIds, getNotifiedMRIds, removeNotifiedMRId } from './store'
 
-const notifiedMRIds = new Set<number>()
+// Lazy-initialized from persisted store so we don't re-notify after restart
+let _notifiedMRIds: Set<number> | null = null
+
+function getTracked(): Set<number> {
+  if (!_notifiedMRIds) _notifiedMRIds = getNotifiedMRIds()
+  return _notifiedMRIds
+}
 
 export function notifyNewMRs(newMRs: MergeRequest[]): void {
   for (const mr of newMRs) {
-    if (notifiedMRIds.has(mr.id)) continue
-    notifiedMRIds.add(mr.id)
+    if (getTracked().has(mr.id)) continue
+    getTracked().add(mr.id)
+    addNotifiedMRId(mr.id)
 
     if (!Notification.isSupported()) continue
 
     const notification = new Notification({
       title: '🔔 GitLab MR Manager',
-      body: `${mr.author.name} opened: ${mr.title}`,
+      body: `${mr.author.name} requested your review: ${mr.title}`,
+      silent: false,
+    })
+
+    notification.on('click', () => {
+      shell.openExternal(mr.webUrl)
+    })
+
+    notification.show()
+  }
+}
+
+export function notifyCIPipelineFailed(mrs: MergeRequest[]): void {
+  for (const mr of mrs) {
+    if (!Notification.isSupported()) continue
+
+    const notification = new Notification({
+      title: '🔴 GitLab CI Failed',
+      body: `Pipeline failed: ${mr.title}`,
       silent: false,
     })
 
@@ -25,9 +51,11 @@ export function notifyNewMRs(newMRs: MergeRequest[]): void {
 }
 
 export function clearTrackedMRs(): void {
-  notifiedMRIds.clear()
+  getTracked().clear()
+  clearNotifiedMRIds()
 }
 
 export function removeTrackedMR(id: number): void {
-  notifiedMRIds.delete(id)
+  getTracked().delete(id)
+  removeNotifiedMRId(id)
 }

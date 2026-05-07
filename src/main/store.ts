@@ -13,6 +13,7 @@ interface StoreSchema {
   webhookPublicUrl: string
   webhookUseTunnel: boolean
   launchAtStartup: boolean
+  notifiedMRIds: number[]
 }
 
 const store = new Store<StoreSchema>({
@@ -27,6 +28,7 @@ const store = new Store<StoreSchema>({
     webhookPublicUrl: 'https://ig-server-eoffice.igenco.dev/gitlab-webhook',
     webhookUseTunnel: false,
     launchAtStartup: false,
+    notifiedMRIds: [],
   },
 })
 
@@ -78,4 +80,24 @@ export function isConfigured(): boolean {
   const url = store.get('gitlabUrl', '')
   const token = store.get('encryptedToken', '')
   return url.length > 0 && token.length > 0
+}
+
+export function getNotifiedMRIds(): Set<number> {
+  return new Set(store.get('notifiedMRIds', []))
+}
+
+export function addNotifiedMRId(id: number): void {
+  const ids = store.get('notifiedMRIds', [])
+  if (!ids.includes(id)) {
+    store.set('notifiedMRIds', [...ids, id])
+  }
+}
+
+export function removeNotifiedMRId(id: number): void {
+  const ids = store.get('notifiedMRIds', [])
+  store.set('notifiedMRIds', ids.filter((i) => i !== id))
+}
+
+export function clearNotifiedMRIds(): void {
+  store.set('notifiedMRIds', [])
 }

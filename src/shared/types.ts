@@ -36,6 +36,7 @@ export interface MergeRequest {
   upvotes: number
   downvotes: number
   userNotesCount: number
+  pipelineStatus: 'running' | 'success' | 'failed' | 'canceled' | null
 }
 
 export interface GitLabUser {

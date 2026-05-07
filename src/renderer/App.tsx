@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import type { AppState, UpdateState } from '../../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
+import TeamReport from './pages/TeamReport'
 
-type Page = 'dashboard' | 'settings'
+type Page = 'dashboard' | 'settings' | 'team-report'
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
@@ -39,9 +40,14 @@ export default function App() {
       setUpdateState(state)
     })
 
+    const unsubscribeShowSettings = window.electronAPI.onShowSettings(() => {
+      setPage('settings')
+    })
+
     return () => {
       unsubscribe()
       unsubscribeUpdates()
+      unsubscribeShowSettings()
     }
   }, [])
 
@@ -62,6 +68,15 @@ export default function App() {
           className="flex items-center gap-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
+          <button
+            onClick={() => setPage(page === 'team-report' ? 'dashboard' : 'team-report')}
+            className={`relative p-1 rounded hover:bg-gray-700 transition-colors text-sm ${
+              page === 'team-report' ? 'text-orange-400' : 'text-gray-400 hover:text-white'
+            }`}
+            title="Team Report"
+          >
+            👥
+          </button>
           <button
             onClick={() => setPage(page === 'settings' ? 'dashboard' : 'settings')}
             className="relative p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
@@ -86,6 +101,8 @@ export default function App() {
         <div className="flex-1 overflow-hidden">
         {page === 'dashboard' ? (
           <Dashboard appState={appState} />
+        ) : page === 'team-report' ? (
+          <TeamReport appState={appState} />
         ) : (
           <Settings
             onSaved={() => setPage('dashboard')}

@@ -146,6 +146,30 @@ export class GitLabClient {
 
   // ────── MRs ──────
 
+  async getMergedMRsByAuthor(authorUsername: string): Promise<MergeRequest[]> {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data } = await this.http.get('/merge_requests', {
+      params: {
+        author_username: authorUsername,
+        state: 'merged',
+        per_page: 50,
+        scope: 'all',
+        created_after: since,
+      },
+    })
+    return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+  }
+
+  async getMRPipelines(projectId: number, mrIid: number): Promise<MergeRequest['pipelineStatus']> {
+    try {
+      const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/pipelines`)
+      if (!Array.isArray(data) || data.length === 0) return null
+      return (data[0].status as MergeRequest['pipelineStatus']) ?? null
+    } catch {
+      return null
+    }
+  }
+
   async getAllOpenMRs(projectIds: number[]): Promise<MergeRequest[]> {
     if (projectIds.length === 0) {
       // Fetch from all accessible projects
@@ -237,6 +261,7 @@ export class GitLabClient {
       upvotes: (mr.upvotes as number) ?? 0,
       downvotes: (mr.downvotes as number) ?? 0,
       userNotesCount: (mr.user_notes_count as number) ?? 0,
+      pipelineStatus: null,
     }
   }
 }
