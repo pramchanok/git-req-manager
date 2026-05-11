@@ -10,6 +10,16 @@ let previousReviewMRIds = new Set<number>()
 let previousPipelineStatuses = new Map<number, MergeRequest['pipelineStatus']>()
 let cachedUser: GitLabUser | null = null
 
+async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[], chunkSize = 5): Promise<void> {
+  for (let i = 0; i < mrs.length; i += chunkSize) {
+    const chunk = mrs.slice(i, i + chunkSize)
+    const statuses = await Promise.all(
+      chunk.map((mr) => client.getMRPipelines(mr.projectId, mr.iid))
+    )
+    chunk.forEach((mr, j) => { mr.pipelineStatus = statuses[j] })
+  }
+}
+
 const currentState: AppState = {
   myReviewMRs: [],
   allOpenMRs: [],
@@ -53,19 +63,16 @@ export async function syncNow(): Promise<void> {
     currentState.currentUser = user
 
     const [reviewMRs, allOpenMRs] = await Promise.all([
-      client.getMRsForReview(user.id),
+      client.getMRsForReview(user.id).then(async (mrs) => {
+        await fetchPipelinesThrottled(client, mrs)
+        return mrs
+      }),
       client.getAllOpenMRs(settings.projectIds),
     ])
 
-    // Fetch pipeline status for review MRs (limit API calls to reviews only)
-    const pipelineStatuses = await Promise.all(
-      reviewMRs.map((mr) => client.getMRPipelines(mr.projectId, mr.iid))
-    )
-
-    // Attach pipeline status and detect running→failed transitions
+    // Detect running→failed pipeline transitions
     const ciFailures: MergeRequest[] = []
-    reviewMRs.forEach((mr, i) => {
-      mr.pipelineStatus = pipelineStatuses[i]
+    reviewMRs.forEach((mr) => {
       const prev = previousPipelineStatuses.get(mr.id)
       if (prev === 'running' && mr.pipelineStatus === 'failed') {
         ciFailures.push(mr)
