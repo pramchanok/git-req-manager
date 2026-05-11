@@ -192,7 +192,9 @@ export class GitLabClient {
 
   async getMRPipelines(projectId: number, mrIid: number): Promise<MergeRequest['pipelineStatus']> {
     try {
-      const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/pipelines`)
+      const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/pipelines`, {
+        params: { per_page: 1 },
+      })
       if (!Array.isArray(data) || data.length === 0) return null
       return (data[0].status as MergeRequest['pipelineStatus']) ?? null
     } catch {

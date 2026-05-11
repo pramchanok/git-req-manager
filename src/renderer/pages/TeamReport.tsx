@@ -132,17 +132,25 @@ export default function TeamReport({ appState }: TeamReportProps) {
     return Array.from(summaries.values())
   }, [allMRs, selectedGroupId, groupMembers])
 
-  const filtered = search.trim()
-    ? devSummaries.filter(
-        (d) =>
-          d.user.name.toLowerCase().includes(search.toLowerCase()) ||
-          d.user.username.toLowerCase().includes(search.toLowerCase())
-      )
-    : devSummaries
-  const sorted = [...filtered].sort((a, b) => {
-    const total = (s: DevSummary) => s.authored.length + s.reviewing.length + s.assigned.length
-    return total(b) - total(a)
-  })
+  const filtered = useMemo(
+    () =>
+      search.trim()
+        ? devSummaries.filter(
+            (d) =>
+              d.user.name.toLowerCase().includes(search.toLowerCase()) ||
+              d.user.username.toLowerCase().includes(search.toLowerCase())
+          )
+        : devSummaries,
+    [devSummaries, search]
+  )
+  const sorted = useMemo(
+    () =>
+      [...filtered].sort((a, b) => {
+        const total = (s: DevSummary) => s.authored.length + s.reviewing.length + s.assigned.length
+        return total(b) - total(a)
+      }),
+    [filtered]
+  )
 
   const loadMerged = useCallback(async (username: string) => {
     if (loadedSet.current.has(username)) return

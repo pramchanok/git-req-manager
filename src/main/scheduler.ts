@@ -1,5 +1,5 @@
 import { GitLabClient } from '../shared/gitlab'
-import type { AppState, MergeRequest } from '../shared/types'
+import type { AppState, GitLabUser, MergeRequest } from '../shared/types'
 import { getSettings, isConfigured } from './store'
 import { notifyNewMRs, notifyCIPipelineFailed } from './notifier'
 
@@ -8,6 +8,7 @@ type StateChangeCallback = (state: AppState) => void
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 let previousReviewMRIds = new Set<number>()
 let previousPipelineStatuses = new Map<number, MergeRequest['pipelineStatus']>()
+let cachedUser: GitLabUser | null = null
 
 const currentState: AppState = {
   myReviewMRs: [],
@@ -48,7 +49,7 @@ export async function syncNow(): Promise<void> {
     const settings = getSettings()
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
 
-    const user = await client.getCurrentUser()
+    const user = cachedUser ?? (cachedUser = await client.getCurrentUser())
     currentState.currentUser = user
 
     const [reviewMRs, allOpenMRs] = await Promise.all([
@@ -109,6 +110,7 @@ export function stopScheduler(): void {
 }
 
 export function restartScheduler(): void {
+  cachedUser = null
   const settings = getSettings()
   startScheduler(settings.refreshIntervalMinutes)
 }
