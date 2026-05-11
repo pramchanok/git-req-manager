@@ -65,3 +65,30 @@ src/preload.ts           ← contextBridge bridge
 **Dev mode inside Claude Code or another Electron process** — will fail with `mach_port_rendezvous: Permission denied`. Run `npm run dev` from a native terminal (iTerm, Terminal.app) instead.
 
 **macOS quarantine** — apps downloaded from the internet get `com.apple.quarantine`. Remove with `xattr -cr "/path/to/App.app"` before opening.
+
+## Known Gotchas
+
+**nativeImage + .asar** — `nativeImage.createFromPath()` cannot read from `.asar` archives (packaged builds). Always use:
+```ts
+nativeImage.createFromBuffer(fs.readFileSync(path))
+```
+Applies to tray icons, app icons — anywhere `nativeImage` is used in main process.
+
+**macOS Retina tray icons** — `@2x` filename convention is unreliable. Explicitly call `addRepresentation()`:
+```ts
+icon.addRepresentation({ scaleFactor: 2, buffer: fs.readFileSync(icon2xPath) });
+```
+Provide a 44×44px image for the 22×22 logical size.
+
+**electron-builder GitHub publish defaults to draft** — add `"releaseType": "release"` explicitly in the `build` config in `package.json`, otherwise releases are created as drafts and won't appear publicly.
+
+**Auto-update target requirements** — Windows must use `nsis` target (not `portable`/`zip`). macOS needs both `dmg` + `zip` targets AND a signed build. Unsigned macOS builds silently skip the update check.
+
+**Single-instance cleanup on quit** — use `cleanupSingleInstanceChannelSync()` (sync version) in the `before-quit` event. The async version won't complete before the process exits, leaving stale lock/socket files.
+
+**IPC channel checklist** — adding any new IPC channel requires changes in **exactly 3 files**:
+1. `src/preload.ts` — expose via `contextBridge`
+2. `src/main/index.ts` `setupIPC()` — register `ipcMain.handle`
+3. `src/renderer/electron.d.ts` — add TypeScript type
+
+**electron-builder config** — packaging config lives in `package.json` `"build"` field. `electron-builder.config.ts` is not used by any npm script.
