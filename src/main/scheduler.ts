@@ -1,6 +1,6 @@
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, GitLabUser, MergeRequest } from '../shared/types'
-import { getSettings, isConfigured } from './store'
+import { getSettings, isConfigured, pruneNotifiedMRIds } from './store'
 import { notifyNewMRs, notifyCIPipelineFailed } from './notifier'
 
 type StateChangeCallback = (state: AppState) => void
@@ -85,6 +85,10 @@ export async function syncNow(): Promise<void> {
     currentState.allOpenMRs = allOpenMRs
     currentState.lastSyncedAt = new Date().toISOString()
     currentState.error = null
+
+    // Prune notifiedMRIds to only active open MRs (cap 500) to prevent unbounded growth
+    const activeMRIds = new Set([...reviewMRs, ...allOpenMRs].map((mr) => mr.id))
+    pruneNotifiedMRIds(activeMRIds)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     currentState.error = `Sync failed: ${message}`

@@ -95,6 +95,14 @@ export function addNotifiedMRId(id: number): void {
   }
 }
 
+export function pruneNotifiedMRIds(activeIds: Set<number>): void {
+  const ids = store.get('notifiedMRIds', [])
+  const pruned = ids.filter((id) => activeIds.has(id)).slice(-500)
+  if (pruned.length !== ids.length) {
+    store.set('notifiedMRIds', pruned)
+  }
+}
+
 export function removeNotifiedMRId(id: number): void {
   const ids = store.get('notifiedMRIds', [])
   store.set('notifiedMRIds', ids.filter((i) => i !== id))
