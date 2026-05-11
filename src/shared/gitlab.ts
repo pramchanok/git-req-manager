@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { GitLabUser, MergeRequest, GitLabProject } from './types'
+import type { GitLabUser, MergeRequest, GitLabProject, GitLabGroup } from './types'
 
 export class GitLabClient {
   private http: AxiosInstance
@@ -42,6 +42,36 @@ export class GitLabClient {
     }
 
     return projects
+  }
+
+  async getGroups(): Promise<GitLabGroup[]> {
+    const groups: GitLabGroup[] = []
+    let page = 1
+    while (true) {
+      const { data } = await this.http.get('/groups', {
+        params: { per_page: 100, page, order_by: 'name', sort: 'asc' },
+      })
+      if (data.length === 0) break
+      groups.push(...data.map((g: Record<string, unknown>) => this.mapGroup(g)))
+      if (data.length < 100) break
+      page++
+    }
+    return groups
+  }
+
+  async getGroupMembers(groupId: number): Promise<GitLabUser[]> {
+    const members: GitLabUser[] = []
+    let page = 1
+    while (true) {
+      const { data } = await this.http.get(`/groups/${groupId}/members/all`, {
+        params: { per_page: 100, page },
+      })
+      if (data.length === 0) break
+      members.push(...data.map((u: Record<string, unknown>) => this.mapUser(u)))
+      if (data.length < 100) break
+      page++
+    }
+    return members
   }
 
   async getMRsForReview(userId: number): Promise<MergeRequest[]> {
@@ -195,6 +225,15 @@ export class GitLabClient {
     )
 
     return results.flat()
+  }
+
+  private mapGroup(g: Record<string, unknown>): GitLabGroup {
+    return {
+      id: g.id as number,
+      name: g.name as string,
+      fullPath: g.full_path as string,
+      webUrl: g.web_url as string,
+    }
   }
 
   private mapUser(u: Record<string, unknown>): GitLabUser {

@@ -47,6 +47,13 @@ export interface GitLabUser {
   webUrl: string
 }
 
+export interface GitLabGroup {
+  id: number
+  name: string
+  fullPath: string
+  webUrl: string
+}
+
 export interface GitLabProject {
   id: number
   name: string
@@ -101,3 +108,7 @@ export type IpcChannel =
   | 'check-for-updates'
   | 'install-update'
   | 'update-state-changed'
+  | 'get-gitlab-groups'
+  | 'get-group-members'
+  | 'get-team-report-group'
+  | 'set-team-report-group'

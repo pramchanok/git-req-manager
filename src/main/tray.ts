@@ -1,4 +1,5 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import type { MergeRequest } from '../shared/types'
 
@@ -19,9 +20,24 @@ function getOrCreateWindow(): BrowserWindow | null {
 }
 
 function createIcon(active: boolean): Electron.NativeImage {
-  const iconName = active ? 'tray-icon-active.png' : 'tray-icon.png'
-  const iconPath = path.join(app.getAppPath(), 'assets', iconName)
-  const icon = nativeImage.createFromPath(iconPath)
+  const baseName = active ? 'tray-icon-active' : 'tray-icon'
+  const assetsDir = path.join(app.getAppPath(), 'assets')
+
+  // Use fs.readFileSync so we can read from inside an asar archive, then
+  // build the image from a buffer.  nativeImage.createFromPath uses native
+  // OS APIs that don't understand the asar virtual filesystem on macOS.
+  const icon = nativeImage.createEmpty()
+  const tryAdd = (filename: string, scale: number) => {
+    try {
+      const buf = fs.readFileSync(path.join(assetsDir, filename))
+      icon.addRepresentation({ scaleFactor: scale, buffer: buf })
+    } catch {
+      // missing variant — skip silently
+    }
+  }
+  tryAdd(`${baseName}.png`, 1.0)
+  tryAdd(`${baseName}@2x.png`, 2.0)
+
   // Inactive icon: use template so macOS auto-adapts to light/dark mode
   // Active icon: keep colored (orange + red badge) so it stands out visually
   if (process.platform === 'darwin' && !active) {

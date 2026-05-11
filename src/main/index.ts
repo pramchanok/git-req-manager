@@ -10,7 +10,7 @@ import {
   showTrayWindow,
   hideWindow,
 } from './tray'
-import { getSettings, saveSettings, isConfigured } from './store'
+import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId } from './store'
 import {
   startScheduler,
   stopScheduler,
@@ -38,12 +38,11 @@ import {
 } from './updater'
 import {
   acquireSingleInstanceChannel,
-  cleanupSingleInstanceChannel,
+  cleanupSingleInstanceChannelSync,
   setSecondInstanceHandler,
 } from './single-instance'
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, Settings } from '../shared/types'
-
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 let revealWindowOnReady = false
@@ -149,7 +148,7 @@ async function startApp(): Promise<void> {
     stopTunnel()
     disconnectSocketClient()
     destroyTray()
-    void cleanupSingleInstanceChannel()
+    cleanupSingleInstanceChannelSync()
   })
 
 }
@@ -199,7 +198,18 @@ function registerMainWindow(win: BrowserWindow): BrowserWindow {
   setUpdaterWindowGetter(() => mainWindow)
 
   win.webContents.once('did-finish-load', () => {
-    showTrayWindow(win)
+    const { wasOpenedAsHidden, wasOpenedAtLogin } = app.getLoginItemSettings()
+    // On macOS: wasOpenedAsHidden = launched from login item with openAsHidden:true
+    // On Windows: wasOpenedAtLogin  = launched from startup entry
+    const startHidden =
+      wasOpenedAsHidden || (process.platform === 'win32' && wasOpenedAtLogin)
+
+    if (startHidden) {
+      // Stay in tray only — do not show window or Dock icon
+      if (process.platform === 'darwin') app.dock.hide()
+    } else {
+      showTrayWindow(win)
+    }
   })
 
   win.on('closed', () => {
@@ -313,5 +323,23 @@ function setupIPC(): void {
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
     return client.getMergedMRsByAuthor(username)
   })
+
+  ipcMain.handle('get-gitlab-groups', async () => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getGroups()
+  })
+
+  ipcMain.handle('get-group-members', async (_event, groupId: number) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getGroupMembers(groupId)
+  })
+
+  ipcMain.handle('get-team-report-group', () => getTeamReportGroupId())
+
+  ipcMain.handle('set-team-report-group', (_event, id: number | null) => saveTeamReportGroupId(id))
 }
 

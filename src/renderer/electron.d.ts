@@ -1,4 +1,4 @@
-import type { AppState, MergeRequest, Settings, UpdateState } from '../../shared/types'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest, Settings, UpdateState } from '../../shared/types'
 
 declare global {
   interface Window {
@@ -14,6 +14,10 @@ declare global {
       getWebhookUrl: () => Promise<string | null>
       checkCloudflared: () => Promise<{ available: boolean; path: string | null }>
       getMergedMRsByAuthor: (username: string) => Promise<MergeRequest[]>
+      getGitLabGroups: () => Promise<GitLabGroup[]>
+      getGroupMembers: (groupId: number) => Promise<GitLabUser[]>
+      getTeamReportGroup: () => Promise<number | null>
+      setTeamReportGroup: (id: number | null) => Promise<void>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void

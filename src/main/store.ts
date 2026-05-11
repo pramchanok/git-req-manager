@@ -14,6 +14,7 @@ interface StoreSchema {
   webhookUseTunnel: boolean
   launchAtStartup: boolean
   notifiedMRIds: number[]
+  teamReportGroupId: number  // 0 = no group selected
 }
 
 const store = new Store<StoreSchema>({
@@ -29,6 +30,7 @@ const store = new Store<StoreSchema>({
     webhookUseTunnel: false,
     launchAtStartup: false,
     notifiedMRIds: [],
+    teamReportGroupId: 0,
   },
 })
 
@@ -100,4 +102,13 @@ export function removeNotifiedMRId(id: number): void {
 
 export function clearNotifiedMRIds(): void {
   store.set('notifiedMRIds', [])
+}
+
+export function getTeamReportGroupId(): number | null {
+  const id = store.get('teamReportGroupId', 0)
+  return id > 0 ? id : null
+}
+
+export function saveTeamReportGroupId(id: number | null): void {
+  store.set('teamReportGroupId', id ?? 0)
 }

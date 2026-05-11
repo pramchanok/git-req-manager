@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Settings, AppState, UpdateState } from './shared/types'
+import type { Settings, AppState, UpdateState, GitLabGroup } from './shared/types'
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('get-settings'),
@@ -15,6 +15,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('check-cloudflared'),
   getMergedMRsByAuthor: (username: string): Promise<import('./shared/types').MergeRequest[]> =>
     ipcRenderer.invoke('get-merged-mrs-by-author', username),
+  getGitLabGroups: (): Promise<GitLabGroup[]> =>
+    ipcRenderer.invoke('get-gitlab-groups'),
+  getGroupMembers: (groupId: number): Promise<import('./shared/types').GitLabUser[]> =>
+    ipcRenderer.invoke('get-group-members', groupId),
+  getTeamReportGroup: (): Promise<number | null> =>
+    ipcRenderer.invoke('get-team-report-group'),
+  setTeamReportGroup: (id: number | null): Promise<void> =>
+    ipcRenderer.invoke('set-team-report-group', id),
   onAppStateUpdated: (callback: (state: AppState) => void) => {
     ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
     return () => ipcRenderer.removeAllListeners('app-state-updated')

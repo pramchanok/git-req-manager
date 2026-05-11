@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useMemo } from 'react'
-import type { AppState, GitLabUser, MergeRequest } from '../../../shared/types'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../../../shared/types'
 import MRCard from '../components/MRCard'
 
 interface TeamReportProps {
@@ -44,6 +44,63 @@ export default function TeamReport({ appState }: TeamReportProps) {
   const [mergedData, setMergedData] = useState<Map<string, MergeRequest[] | 'loading'>>(new Map())
   const loadedSet = useRef(new Set<string>())
 
+  // ── Group filter ──────────────────────────────────────────────────────────
+  const [groups, setGroups] = useState<GitLabGroup[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  const [groupMembers, setGroupMembers] = useState<GitLabUser[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+
+  // Load groups + saved group preference once when the app is configured
+  useEffect(() => {
+    if (!appState.isConfigured) return
+    let cancelled = false
+    setGroupsLoading(true)
+    Promise.all([
+      window.electronAPI.getGitLabGroups(),
+      window.electronAPI.getTeamReportGroup(),
+    ])
+      .then(([loadedGroups, savedId]) => {
+        if (cancelled) return
+        setGroups(loadedGroups)
+        setGroupsLoading(false)
+        if (savedId !== null) {
+          setSelectedGroupId(savedId)
+          setMembersLoading(true)
+          return window.electronAPI
+            .getGroupMembers(savedId)
+            .then((members) => { if (!cancelled) setGroupMembers(members) })
+            .finally(() => { if (!cancelled) setMembersLoading(false) })
+        }
+      })
+      .catch(() => { if (!cancelled) setGroupsLoading(false) })
+    return () => { cancelled = true }
+  }, [appState.isConfigured])
+
+  const handleGroupChange = async (groupId: number | null) => {
+    setSelectedGroupId(groupId)
+    void window.electronAPI.setTeamReportGroup(groupId)
+    // Reset expanded/detail state so stale panels don't show
+    setExpanded(new Set())
+    setActiveDetailTab(new Map())
+    setMergedData(new Map())
+    loadedSet.current.clear()
+    if (groupId !== null) {
+      setMembersLoading(true)
+      try {
+        const members = await window.electronAPI.getGroupMembers(groupId)
+        setGroupMembers(members)
+      } catch {
+        setGroupMembers([])
+      }
+      setMembersLoading(false)
+    } else {
+      setGroupMembers([])
+    }
+  }
+
+  // ── MR data ───────────────────────────────────────────────────────────────
+
   // Merge allOpenMRs + myReviewMRs (deduplicated) so the current user always appears
   const allMRs = useMemo(() => {
     const seen = new Set<number>()
@@ -57,10 +114,23 @@ export default function TeamReport({ appState }: TeamReportProps) {
     return combined
   }, [appState.allOpenMRs, appState.myReviewMRs])
 
-  const devSummaries = useMemo(
-    () => Array.from(buildDevSummary(allMRs).values()),
-    [allMRs]
-  )
+  const devSummaries = useMemo(() => {
+    const summaries = buildDevSummary(allMRs)
+
+    if (selectedGroupId !== null && groupMembers.length > 0) {
+      const memberSet = new Set(groupMembers.map((m) => m.username))
+      // Ensure every group member has a row (even if they have no open MRs)
+      for (const member of groupMembers) {
+        if (!summaries.has(member.username)) {
+          summaries.set(member.username, { user: member, authored: [], reviewing: [], assigned: [] })
+        }
+      }
+      // Filter to group members only
+      return Array.from(summaries.values()).filter((d) => memberSet.has(d.user.username))
+    }
+
+    return Array.from(summaries.values())
+  }, [allMRs, selectedGroupId, groupMembers])
 
   const filtered = search.trim()
     ? devSummaries.filter(
@@ -69,7 +139,6 @@ export default function TeamReport({ appState }: TeamReportProps) {
           d.user.username.toLowerCase().includes(search.toLowerCase())
       )
     : devSummaries
-
   const sorted = [...filtered].sort((a, b) => {
     const total = (s: DevSummary) => s.authored.length + s.reviewing.length + s.assigned.length
     return total(b) - total(a)
@@ -121,23 +190,45 @@ export default function TeamReport({ appState }: TeamReportProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search */}
-      <div className="px-3 py-2 border-b border-gray-700">
+      {/* Search + Group filter */}
+      <div className="px-3 py-2 border-b border-gray-700 flex items-center gap-2">
         <input
           type="text"
           placeholder="Search developer…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 placeholder-gray-500"
+          className="flex-1 min-w-0 bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 placeholder-gray-500"
         />
+        <select
+          value={selectedGroupId ?? ''}
+          onChange={(e) => void handleGroupChange(e.target.value ? Number(e.target.value) : null)}
+          disabled={groupsLoading}
+          title={groups.find((g) => g.id === selectedGroupId)?.fullPath ?? 'Filter by group'}
+          className="max-w-[130px] bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50 cursor-pointer"
+        >
+          <option value="">All groups</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Dev list */}
       <div className="flex-1 overflow-y-auto">
-        {sorted.length === 0 ? (
+        {membersLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-500 text-sm animate-pulse">Loading members…</p>
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-500 text-sm">
-              {appState.allOpenMRs.length === 0 ? 'No open MRs yet.' : 'No developers found.'}
+              {selectedGroupId !== null
+                ? 'No members found in this group.'
+                : appState.allOpenMRs.length === 0
+                ? 'No open MRs yet.'
+                : 'No developers found.'}
             </p>
           </div>
         ) : (

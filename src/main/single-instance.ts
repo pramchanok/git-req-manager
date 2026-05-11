@@ -141,3 +141,15 @@ export async function cleanupSingleInstanceChannel(): Promise<void> {
   releaseSingleInstanceLock()
   if (process.platform !== 'win32') fs.rmSync(singleInstanceChannelPath, { force: true })
 }
+
+// Synchronous cleanup used in before-quit so lock/socket files are removed
+// before the process exits — prevents the relaunched instance from seeing a
+// stale lock and aborting as a duplicate (critical for macOS quitAndInstall).
+export function cleanupSingleInstanceChannelSync(): void {
+  if (singleInstanceServer) {
+    singleInstanceServer.close()
+    singleInstanceServer = null
+  }
+  releaseSingleInstanceLock()
+  if (process.platform !== 'win32') fs.rmSync(singleInstanceChannelPath, { force: true })
+}
