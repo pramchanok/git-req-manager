@@ -81,3 +81,19 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           gh release edit "v${VERSION}" --notes-file release-notes.txt --repo pramchanok/git-req-manager
+
+  finalize:
+    runs-on: ubuntu-latest
+    needs: [publish-windows, publish-mac]
+    if: always() && needs.publish-windows.result == 'success'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release edit "v${VERSION}" --draft=false --repo pramchanok/git-req-manager
+          echo "✅ Release v${VERSION} is now public"

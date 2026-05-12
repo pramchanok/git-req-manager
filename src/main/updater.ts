@@ -195,10 +195,19 @@ export function initializeUpdater(): void {
   })
 
   autoUpdater.on('error', (error: Error) => {
+    // "Not found" errors occur when a Windows release is published but the macOS
+    // artifacts (latest-mac.yml) haven't been uploaded yet. Treat these as
+    // "no update available" to avoid showing confusing error UI to users.
+    const message = normalizeErrorMessage(error)
+    const isNotFound = /404|not found|cannot find.*yml|enoent|enotfound/i.test(message)
+    if (isNotFound) {
+      setNotAvailableState()
+      return
+    }
     setUpdateState({
       status: 'error',
       progressPercent: null,
-      message: normalizeErrorMessage(error),
+      message,
     })
   })
 
