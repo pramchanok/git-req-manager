@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import {
   createTray,
   updateTrayBadge,
@@ -11,7 +12,7 @@ import {
   showTrayWindow,
   hideWindow,
 } from './tray'
-import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId } from './store'
+import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId, getLastSeenVersion, setLastSeenVersion } from './store'
 import {
   startScheduler,
   stopScheduler,
@@ -133,6 +134,15 @@ async function startApp(): Promise<void> {
       updateTrayUpdate(state.status, state.availableVersion ?? state.downloadedVersion)
     })
     initializeUpdater()
+
+    // Show changelog automatically on first launch after an update
+    const currentVersion = app.getVersion()
+    const lastSeenVersion = getLastSeenVersion()
+    if (lastSeenVersion && lastSeenVersion !== currentVersion) {
+      mainWindow.webContents.once('did-finish-load', () => {
+        mainWindow?.webContents.send('show-changelog')
+      })
+    }
 
     if (revealWindowOnReady) {
       revealWindowOnReady = false
@@ -377,5 +387,17 @@ function setupIPC(): void {
   ipcMain.handle('get-team-report-group', () => getTeamReportGroupId())
 
   ipcMain.handle('set-team-report-group', (_event, id: number | null) => saveTeamReportGroupId(id))
-}
 
+  ipcMain.handle('get-changelog', () => {
+    try {
+      const changelogPath = path.join(app.getAppPath(), 'CHANGELOG.md')
+      return fs.readFileSync(changelogPath, 'utf-8')
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('set-last-seen-version', () => {
+    setLastSeenVersion(app.getVersion())
+  })
+}

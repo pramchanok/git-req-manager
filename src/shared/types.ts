@@ -113,3 +113,6 @@ export type IpcChannel =
   | 'get-group-members'
   | 'get-team-report-group'
   | 'set-team-report-group'
+  | 'get-changelog'
+  | 'set-last-seen-version'
+  | 'show-changelog'

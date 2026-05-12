@@ -18,10 +18,13 @@ declare global {
       getGroupMembers: (groupId: number) => Promise<GitLabUser[]>
       getTeamReportGroup: () => Promise<number | null>
       setTeamReportGroup: (id: number | null) => Promise<void>
+      getChangelog: () => Promise<string | null>
+      setLastSeenVersion: () => Promise<void>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void
       onShowSettings: (callback: () => void) => () => void
+      onShowChangelog: (callback: () => void) => () => void
     }
   }
 }

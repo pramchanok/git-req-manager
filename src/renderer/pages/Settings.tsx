@@ -3,6 +3,7 @@ import type { Settings, UpdateState } from '../../../shared/types'
 
 interface SettingsPageProps {
   onSaved: () => void
+  onShowChangelog: () => void
   updateState: UpdateState
   onCheckForUpdates: () => Promise<unknown>
   onInstallUpdate: () => Promise<unknown>
@@ -41,6 +42,7 @@ function getUpdateMessageClass(status: UpdateState['status']): string {
 
 export default function SettingsPage({
   onSaved,
+  onShowChangelog,
   updateState,
   onCheckForUpdates,
   onInstallUpdate,
@@ -442,6 +444,13 @@ export default function SettingsPage({
         <p className="text-xs text-gray-600">
           Packaged apps check for updates automatically on startup.
         </p>
+
+        <button
+          onClick={onShowChangelog}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
+        >
+          📋 ดูสิ่งที่เปลี่ยนแปลงทั้งหมด
+        </button>
       </div>
     </div>
   )

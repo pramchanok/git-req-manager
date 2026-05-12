@@ -3,8 +3,9 @@ import type { AppState, UpdateState } from '../../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TeamReport from './pages/TeamReport'
+import Changelog from './pages/Changelog'
 
-type Page = 'dashboard' | 'settings' | 'team-report'
+type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog'
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
@@ -45,10 +46,15 @@ export default function App() {
       setPage('settings')
     })
 
+    const unsubscribeShowChangelog = window.electronAPI.onShowChangelog(() => {
+      setPage('changelog')
+    })
+
     return () => {
       unsubscribe()
       unsubscribeUpdates()
       unsubscribeShowSettings()
+      unsubscribeShowChangelog()
     }
   }, [])
 
@@ -107,9 +113,12 @@ export default function App() {
           <Dashboard appState={appState} />
         ) : page === 'team-report' ? (
           <TeamReport appState={appState} />
+        ) : page === 'changelog' ? (
+          <Changelog onBack={() => setPage('dashboard')} currentVersion={updateState.currentVersion} />
         ) : (
           <Settings
             onSaved={() => setPage('dashboard')}
+            onShowChangelog={() => setPage('changelog')}
             updateState={updateState}
             onCheckForUpdates={() => window.electronAPI.checkForUpdates()}
             onInstallUpdate={() => window.electronAPI.installUpdate()}

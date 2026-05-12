@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-team-report-group'),
   setTeamReportGroup: (id: number | null): Promise<void> =>
     ipcRenderer.invoke('set-team-report-group', id),
+  getChangelog: (): Promise<string | null> =>
+    ipcRenderer.invoke('get-changelog'),
+  setLastSeenVersion: (): Promise<void> =>
+    ipcRenderer.invoke('set-last-seen-version'),
   onAppStateUpdated: (callback: (state: AppState) => void) => {
     ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
     return () => ipcRenderer.removeAllListeners('app-state-updated')
@@ -38,5 +42,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onShowSettings: (callback: () => void) => {
     ipcRenderer.on('show-settings', () => callback())
     return () => ipcRenderer.removeAllListeners('show-settings')
+  },
+  onShowChangelog: (callback: () => void) => {
+    ipcRenderer.on('show-changelog', () => callback())
+    return () => ipcRenderer.removeAllListeners('show-changelog')
   },
 })
