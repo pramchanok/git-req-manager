@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.2] - 2026-05-12
+
+### Bug Fixes
+
+- **Windows: window not showing on launch** — replaced unreliable `wasOpenedAtLogin` API with an explicit `--openedAtLogin` command-line arg; the window was being hidden on every manual launch for users who had "Launch at Startup" enabled
+- **macOS: startup/login item not working** — fixed `release-all.yml` CI workflow that incorrectly set `CSC_IDENTITY_AUTO_DISCOVERY=false` on the macOS job, producing unsigned/unnotarized builds that Gatekeeper and macOS Login Items (13+) reject
+- **macOS: window not focused after tray click** — `app.dock.show()` is now properly awaited before `app.focus()` and `win.show()`, so the window receives focus correctly when revealed from a startup-hidden state
+- **Recreated window stuck hidden** — added `isInitialLaunch` guard so startup-hidden logic only applies on first launch; windows recreated after being destroyed always show as expected
+
+---
+
 ## [1.2.0] - 2026-05-11
 
 ### Performance
