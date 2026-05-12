@@ -26,8 +26,15 @@ function getMainWindow(): BrowserWindow | null {
   return win && !win.isDestroyed() ? win : null
 }
 
+let stateChangeCallback: ((state: UpdateState) => void) | null = null
+
+export function setUpdateStateCallback(cb: (state: UpdateState) => void): void {
+  stateChangeCallback = cb
+}
+
 function emitUpdateState(): void {
   getMainWindow()?.webContents.send('update-state-changed', updateState)
+  stateChangeCallback?.(updateState)
 }
 
 function setUpdateState(patch: Partial<UpdateState>): void {

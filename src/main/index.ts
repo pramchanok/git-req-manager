@@ -4,6 +4,7 @@ import {
   createTray,
   updateTrayBadge,
   updateTrayMRs,
+  updateTrayUpdate,
   destroyTray,
   setTrayWindow,
   setWindowFactory,
@@ -34,6 +35,7 @@ import {
   checkForUpdates,
   installDownloadedUpdate,
   setUpdaterWindowGetter,
+  setUpdateStateCallback,
   stopUpdater,
 } from './updater'
 import {
@@ -127,6 +129,9 @@ async function startApp(): Promise<void> {
     })
 
     setupIPC()
+    setUpdateStateCallback((state) => {
+      updateTrayUpdate(state.status, state.availableVersion ?? state.downloadedVersion)
+    })
     initializeUpdater()
 
     if (revealWindowOnReady) {

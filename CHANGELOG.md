@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.5] - 2026-05-12
+
+### ฟีเจอร์ใหม่
+
+- **Update indicator หลายจุด** — เมื่อมี version ใหม่ แอปจะแจ้งเตือนทุกจุดที่ผู้ใช้อาจเห็น:
+  - **Tray menu** — แสดง item "🔔 Update available" หรือ "⬆️ Update ready — Click to install" ใน context menu
+  - **Settings button** — dot สีส้ม (กะพริบ) ตอนกำลัง download, สีเขียวตอนพร้อม install
+  - **Footer version** — ตัวอักษรเปลี่ยนสีและกดได้เพื่อไป Settings (สีส้มตอน downloading, สีเขียวตอนพร้อม)
+
+---
+
 ## [1.2.4] - 2026-05-12
 
 ### ฟีเจอร์ใหม่

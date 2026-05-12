@@ -1,13 +1,15 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import type { MergeRequest } from '../shared/types'
+import type { MergeRequest, UpdateStatus } from '../shared/types'
 
 let tray: Tray | null = null
 let pendingCount = 0
 let mrList: MergeRequest[] = []
 let windowRef: BrowserWindow | null = null
 let windowFactory: (() => BrowserWindow) | null = null
+let updateStatus: UpdateStatus = 'idle'
+let updateVersion: string | null = null
 
 function getOrCreateWindow(): BrowserWindow | null {
   if (windowRef && !windowRef.isDestroyed()) return windowRef
@@ -74,6 +76,12 @@ export function setWindowFactory(factory: () => BrowserWindow): void {
   windowFactory = factory
 }
 
+export function updateTrayUpdate(status: UpdateStatus, version: string | null): void {
+  updateStatus = status
+  updateVersion = version
+  updateTrayMenu()
+}
+
 export function updateTrayBadge(count: number): void {
   if (!tray) return
   pendingCount = count
@@ -97,6 +105,33 @@ function updateTrayMenu(): void {
     click: () => shell.openExternal(mr.webUrl),
   }))
 
+  const updateItems: Electron.MenuItemConstructorOptions[] = []
+  if (updateStatus === 'downloaded' && updateVersion) {
+    updateItems.push(
+      { type: 'separator' },
+      {
+        label: `⬆️ Update ready: v${updateVersion} — Click to install`,
+        click: () => {
+          const win = getOrCreateWindow()
+          if (win) {
+            showWindow(win)
+            win.webContents.send('show-settings')
+          }
+        },
+      }
+    )
+  } else if ((updateStatus === 'available' || updateStatus === 'downloading') && updateVersion) {
+    updateItems.push(
+      { type: 'separator' },
+      {
+        label: updateStatus === 'downloading'
+          ? `⬇️ Downloading update v${updateVersion}…`
+          : `🔔 Update available: v${updateVersion}`,
+        enabled: false,
+      }
+    )
+  }
+
   const contextMenu = Menu.buildFromTemplate([
     {
       label: pendingCount > 0 ? `📋 ${pendingCount} MR(s) need review` : '📋 No pending MRs',
@@ -109,6 +144,7 @@ function updateTrayMenu(): void {
           ...mrItems,
         ]
       : []),
+    ...updateItems,
     { type: 'separator' },
     {
       label: 'Open',

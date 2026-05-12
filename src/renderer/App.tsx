@@ -25,6 +25,7 @@ export default function App() {
     progressPercent: null,
     message: null,
     releaseDate: null,
+    releaseNotes: null,
   })
 
   useEffect(() => {
@@ -86,6 +87,9 @@ export default function App() {
             {updateState.status === 'downloaded' && page !== 'settings' && (
               <span className="absolute top-0 right-0 w-2 h-2 bg-green-400 rounded-full" />
             )}
+            {(updateState.status === 'available' || updateState.status === 'downloading') && page !== 'settings' && (
+              <span className="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+            )}
           </button>
           <button
             onClick={() => window.close()}
@@ -122,7 +126,25 @@ export default function App() {
               : 'Not synced yet'}
           </span>
           {updateState.currentVersion && (
-            <span className="text-xs text-gray-600">v{updateState.currentVersion}</span>
+            updateState.status === 'downloaded' ? (
+              <button
+                onClick={() => setPage('settings')}
+                className="text-xs text-green-400 hover:text-green-300 transition-colors"
+                title="Update ready — click to install"
+              >
+                v{updateState.currentVersion} ⬆️
+              </button>
+            ) : (updateState.status === 'available' || updateState.status === 'downloading') ? (
+              <button
+                onClick={() => setPage('settings')}
+                className="text-xs text-amber-400 hover:text-amber-300 transition-colors animate-pulse"
+                title={`Update v${updateState.availableVersion} available`}
+              >
+                v{updateState.currentVersion} ↑
+              </button>
+            ) : (
+              <span className="text-xs text-gray-600">v{updateState.currentVersion}</span>
+            )
           )}
         </div>
         <button
