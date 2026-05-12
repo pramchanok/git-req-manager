@@ -427,6 +427,18 @@ export default function SettingsPage({
           </p>
         )}
 
+        {updateState.releaseNotes && (updateState.status === 'available' || updateState.status === 'downloaded' || updateState.status === 'downloading') && (
+          <details className="text-xs">
+            <summary className="text-gray-400 cursor-pointer select-none hover:text-gray-300 transition-colors">
+              สิ่งที่เปลี่ยนแปลงใน v{updateState.availableVersion}
+            </summary>
+            <div
+              className="mt-2 p-2 bg-gray-800 rounded text-gray-400 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: updateState.releaseNotes }}
+            />
+          </details>
+        )}
+
         <p className="text-xs text-gray-600">
           Packaged apps check for updates automatically on startup.
         </p>

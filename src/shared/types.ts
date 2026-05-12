@@ -92,6 +92,7 @@ export interface UpdateState {
   progressPercent: number | null
   message: string | null
   releaseDate: string | null
+  releaseNotes: string | null
 }
 
 export type IpcChannel =

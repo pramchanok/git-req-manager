@@ -17,6 +17,7 @@ let updateState: UpdateState = {
   progressPercent: null,
   message: null,
   releaseDate: null,
+  releaseNotes: null,
 }
 
 function getMainWindow(): BrowserWindow | null {
@@ -47,6 +48,19 @@ function normalizeErrorMessage(error: unknown): string {
   return 'Unknown update error'
 }
 
+function extractReleaseNotes(info: UpdateInfo): string | null {
+  const notes = info.releaseNotes
+  if (!notes) return null
+  if (typeof notes === 'string') return notes
+  if (Array.isArray(notes)) {
+    return notes
+      .map((n) => (typeof n === 'string' ? n : (n.note ?? '')))
+      .filter(Boolean)
+      .join('\n\n')
+  }
+  return null
+}
+
 function setNotAvailableState(info?: UpdateInfo): void {
   setUpdateState({
     status: 'not-available',
@@ -54,6 +68,7 @@ function setNotAvailableState(info?: UpdateInfo): void {
     downloadedVersion: null,
     progressPercent: null,
     releaseDate: info?.releaseDate ?? null,
+    releaseNotes: null,
     message: 'You already have the latest version.',
   })
 }
@@ -65,6 +80,7 @@ function setDownloadedState(info: UpdateDownloadedEvent): void {
     downloadedVersion: info.version,
     progressPercent: 100,
     releaseDate: info.releaseDate ?? null,
+    releaseNotes: extractReleaseNotes(info),
     message: `Version ${info.version} is ready to install.`,
   })
 }
@@ -159,6 +175,7 @@ export function initializeUpdater(): void {
       downloadedVersion: null,
       progressPercent: 0,
       releaseDate: info.releaseDate ?? null,
+      releaseNotes: extractReleaseNotes(info),
       message: `Update ${info.version} found. Downloading…`,
     })
   })

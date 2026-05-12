@@ -2,72 +2,72 @@
 
 ## [1.2.3] - 2026-05-12
 
-### Bug Fixes
+### แก้ไข Bug
 
-- **Windows: window not showing on launch (regression fix)** — adds migration that removes old-format startup registry entries (set by ≤v1.2.2 without the `--openedAtLogin` arg); without this, the sync check on first run incorrectly reset `launchAtStartup` to false, and stale registry entries caused the window to appear at login instead of staying hidden
+- **Windows: หน้าต่างไม่แสดงขึ้นมาตอน launch (regression fix)** — เพิ่ม migration ที่ลบ registry entry รูปแบบเก่าของ startup (ที่ตั้งโดย v1.2.2 หรือก่อนหน้า โดยไม่มี argument `--openedAtLogin`); หากไม่มีการ migrate ค่า `launchAtStartup` จะถูก reset เป็น false ผิดพลาดตอน run ครั้งแรก และ registry entry เก่าจะทำให้หน้าต่างโผล่ขึ้นมาตอน login แทนที่จะซ่อนอยู่
 
 ## [1.2.2] - 2026-05-12
 
-### Bug Fixes
+### แก้ไข Bug
 
-- **Windows: window not showing on launch** — replaced unreliable `wasOpenedAtLogin` API with an explicit `--openedAtLogin` command-line arg; the window was being hidden on every manual launch for users who had "Launch at Startup" enabled
-- **macOS: startup/login item not working** — fixed `release-all.yml` CI workflow that incorrectly set `CSC_IDENTITY_AUTO_DISCOVERY=false` on the macOS job, producing unsigned/unnotarized builds that Gatekeeper and macOS Login Items (13+) reject
-- **macOS: window not focused after tray click** — `app.dock.show()` is now properly awaited before `app.focus()` and `win.show()`, so the window receives focus correctly when revealed from a startup-hidden state
-- **Recreated window stuck hidden** — added `isInitialLaunch` guard so startup-hidden logic only applies on first launch; windows recreated after being destroyed always show as expected
+- **Windows: หน้าต่างไม่แสดงขึ้นมาตอน launch** — เปลี่ยนจาก API `wasOpenedAtLogin` ที่ไม่เสถียร มาใช้ command-line argument `--openedAtLogin` แทน; หน้าต่างถูกซ่อนทุกครั้งที่เปิดแบบ manual สำหรับผู้ใช้ที่เปิด "Launch at Startup" ไว้
+- **macOS: startup/login item ไม่ทำงาน** — แก้ workflow `release-all.yml` ที่ตั้ง `CSC_IDENTITY_AUTO_DISCOVERY=false` ผิด job ทำให้ build macOS ออกมาไม่มี code signing/notarization จนถูก Gatekeeper และ macOS Login Items (13+) ปฏิเสธ
+- **macOS: หน้าต่างไม่ได้ focus หลัง tray click** — รอ `app.dock.show()` ให้เสร็จก่อน จึงค่อย `app.focus()` และ `win.show()` เพื่อให้หน้าต่างได้รับ focus อย่างถูกต้องเมื่อถูกเรียกจาก startup-hidden state
+- **หน้าต่างที่ recreate ใหม่ติดค้างในสถานะซ่อน** — เพิ่ม guard `isInitialLaunch` เพื่อให้ logic การซ่อนตอน startup ใช้เฉพาะการ launch ครั้งแรกเท่านั้น; หน้าต่างที่ recreate ภายหลังจะแสดงขึ้นมาปกติ
 
 ---
 
 ## [1.2.0] - 2026-05-11
 
-### Performance
+### ปรับปรุงประสิทธิภาพ
 
-- **Pipeline fetch parallelization** — pipeline status fetching now starts immediately when review MRs resolve, running in parallel with `getAllOpenMRs` instead of waiting for it to finish
-- **Pipeline API throttling** — pipeline calls are batched in chunks of 5 (instead of firing all N calls at once) to avoid GitLab rate limit bursts
-- **Cache current user** — `getCurrentUser()` is cached per scheduler run; saves 1 API call every sync cycle, resets when settings change
-- **Reduce pipeline payload** — `getMRPipelines` now requests `per_page=1` since only the latest pipeline status is needed
-- **Memoize TeamReport list** — `filtered` and `sorted` in TeamReport are wrapped in `useMemo`, preventing unnecessary recalculation on card expand/collapse
-- **Prune notifiedMRIds** — `notifiedMRIds` in the store is pruned after each sync to only keep active open MR IDs (capped at 500), preventing unbounded disk/memory growth over time
+- **Pipeline fetch แบบ parallel** — การดึงสถานะ pipeline เริ่มทันทีพร้อมกับ `getAllOpenMRs` แทนที่จะรอให้เสร็จก่อน
+- **Pipeline API throttling** — เรียก pipeline API เป็น batch ทีละ 5 รายการ เพื่อหลีกเลี่ยง rate limit ของ GitLab
+- **Cache current user** — `getCurrentUser()` ถูก cache ต่อ 1 รอบ sync; ประหยัด 1 API call ต่อรอบ และ reset เมื่อเปลี่ยน settings
+- **ลด payload ของ pipeline** — `getMRPipelines` ขอแค่ `per_page=1` เนื่องจากต้องการเฉพาะสถานะ pipeline ล่าสุด
+- **Memoize TeamReport** — รายการ `filtered` และ `sorted` ใน TeamReport ใช้ `useMemo` เพื่อป้องกันการคำนวณซ้ำเมื่อ expand/collapse card
+- **ตัด notifiedMRIds ที่ไม่ใช้** — `notifiedMRIds` ถูก prune หลังแต่ละรอบ sync ให้เหลือเฉพาะ MR ที่ยังเปิดอยู่ (สูงสุด 500) ป้องกันการ leak หน่วยความจำและ disk ในระยะยาว
 
 ---
 
 ## [1.1.1] - 2026-05-11
 
-### Bug Fixes
+### แก้ไข Bug
 
-- **macOS auto-update restart** — fixed app not reopening after installing an update on macOS; now uses `quitAndInstall(false, true)` to properly relaunch
-- **macOS tray icon** — fixed tray icon invisible on macOS by using `createFromBuffer(fs.readFileSync())` instead of `createFromPath()` (incompatible with `.asar` archives)
-- **macOS Retina tray icon** — added explicit `addRepresentation({ scaleFactor: 2 })` for crisp @2x display
-- **macOS startup window** — app no longer shows window on login startup; starts hidden in tray as expected
+- **macOS auto-update restart** — แก้ app ไม่เปิดขึ้นมาใหม่หลัง install update บน macOS; ใช้ `quitAndInstall(false, true)` เพื่อ relaunch อย่างถูกต้อง
+- **macOS tray icon** — แก้ tray icon ไม่แสดงบน macOS โดยเปลี่ยนมาใช้ `createFromBuffer(fs.readFileSync())` แทน `createFromPath()` ซึ่งไม่รองรับ `.asar` archive
+- **macOS Retina tray icon** — เพิ่ม `addRepresentation({ scaleFactor: 2 })` แบบ explicit เพื่อให้ icon คมชัดบนจอ Retina
+- **macOS startup window** — app ไม่แสดงหน้าต่างตอน login startup อีกต่อไป; เริ่มต้นซ่อนอยู่ใน tray ตามที่ควรจะเป็น
 
-### Features
+### ฟีเจอร์ใหม่
 
-- **Team Report group filter** — added group selector to filter the Team Report to members of a specific GitLab group; preference is saved and restored on next launch
+- **Team Report group filter** — เพิ่มตัวเลือก group สำหรับกรอง Team Report ให้แสดงเฉพาะสมาชิกใน GitLab group ที่เลือก; ค่าที่เลือกจะถูกบันทึกและโหลดคืนในครั้งถัดไป
 
 ---
 
 ## [1.1.0] - 2026-05-07
 
-### Features
+### ฟีเจอร์ใหม่
 
-- **Team Report** — new tab showing all developers with open MR activity (authored, reviewing, assigned, merged in last 30 days)
-- **CI pipeline status** — pipeline status badge (`running` / `success` / `failed` / `canceled`) shown on each review MR card
-- **CI failure notification** — desktop notification when a pipeline transitions from `running` → `failed` on a MR you're reviewing
-- **Auto-update polling** — updater checks for new releases hourly in addition to on launch
+- **Team Report** — แท็บใหม่แสดง developer ทุกคนที่มี MR activity (เปิด, review, assigned, merge ในช่วง 30 วันที่ผ่านมา)
+- **CI pipeline status** — แสดง badge สถานะ pipeline (`running` / `success` / `failed` / `canceled`) บนแต่ละ MR card
+- **แจ้งเตือน CI failure** — แจ้งเตือน desktop เมื่อ pipeline เปลี่ยนจาก `running` → `failed` บน MR ที่กำลัง review อยู่
+- **Auto-update polling** — updater ตรวจสอบ release ใหม่ทุก 1 ชั่วโมง นอกเหนือจากตอนเปิดแอป
 
-### Bug Fixes
+### แก้ไข Bug
 
-- **Duplicate process on launch** — fixed multiple Electron processes spawning when the app is opened while already running (single-instance lock on both macOS and Windows)
-- **GitHub release draft** — releases are now published as public (set `releaseType: "release"` in electron-builder config)
-- **Windows NSIS target** — switched to NSIS installer so auto-update works correctly on Windows
+- **Duplicate process ตอน launch** — แก้ Electron process หลายตัวเปิดขึ้นพร้อมกันเมื่อเปิดแอปซ้ำ (single-instance lock ทั้ง macOS และ Windows)
+- **GitHub release draft** — release ถูก publish เป็น public แล้ว (ตั้ง `releaseType: "release"` ใน electron-builder config)
+- **Windows NSIS target** — เปลี่ยนมาใช้ NSIS installer เพื่อให้ auto-update ทำงานได้อย่างถูกต้องบน Windows
 
 ---
 
 ## [1.0.0] - 2026-05-06
 
-- Initial release
-- Dashboard showing GitLab MRs assigned for review
+- Release แรก
+- Dashboard แสดง GitLab MR ที่ได้รับมอบหมายให้ review
 - Settings: GitLab URL, access token, refresh interval, project filter
 - Webhook mode (local server, Cloudflare tunnel, Socket.IO relay)
 - Polling mode fallback
-- Desktop notifications for newly assigned MRs
-- macOS and Windows builds via GitHub Actions
+- Desktop notification สำหรับ MR ที่ได้รับมอบหมายใหม่
+- Build สำหรับ macOS และ Windows ผ่าน GitHub Actions
