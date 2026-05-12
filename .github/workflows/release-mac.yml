@@ -1,4 +1,13 @@
-name: Release All Platforms
+# Backup workflow for macOS release.
+# Re-enable by adding the required secrets:
+#   CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD
+#
+# When re-enabling Mac support:
+#   1. Set releaseType to "draft" in package.json
+#   2. Add finalize job (see finalize-release.yml) to release-all.yml after both platforms publish
+#   3. Re-add publish-mac job below to release-all.yml
+
+name: Release macOS
 
 on:
   workflow_dispatch:
@@ -7,8 +16,8 @@ permissions:
   contents: write
 
 jobs:
-  publish-windows:
-    runs-on: windows-latest
+  publish-mac:
+    runs-on: macos-14
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,19 +34,20 @@ jobs:
         run: npm ci
 
       - name: Extract release notes from CHANGELOG.md
-        shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
           awk "/^## \[${VERSION}\]/{flag=1; next} /^---$/{if(flag) exit} flag" CHANGELOG.md > release-notes.txt
 
-      - name: Publish Windows release
+      - name: Publish macOS release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run publish:win
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: npm run publish:mac
 
       - name: Update GitHub release notes
-        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

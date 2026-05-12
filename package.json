@@ -20,7 +20,6 @@
     "publish:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --publish always",
     "publish:mac": "npm run build && electron-builder --mac dmg zip --publish always",
     "publish:all": "npm run build && electron-builder --mac dmg zip --publish always && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win nsis --arch x64 --publish always",
-    "finalize:release": "node -e \"const v=require('./package.json').version;require('child_process').execSync('gh release edit v'+v+' --draft=false --repo pramchanok/git-req-manager',{stdio:'inherit'})\"",
     "start": "electron ."
   },
   "build": {
@@ -47,7 +46,7 @@
       "provider": "github",
       "owner": "pramchanok",
       "repo": "git-req-manager",
-      "releaseType": "draft"
+      "releaseType": "release"
     },
     "win": {
       "icon": "assets/icon.ico",
