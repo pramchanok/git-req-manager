@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.3] - 2026-05-12
+
+### Bug Fixes
+
+- **Windows: window not showing on launch (regression fix)** — adds migration that removes old-format startup registry entries (set by ≤v1.2.2 without the `--openedAtLogin` arg); without this, the sync check on first run incorrectly reset `launchAtStartup` to false, and stale registry entries caused the window to appear at login instead of staying hidden
+
 ## [1.2.2] - 2026-05-12
 
 ### Bug Fixes
