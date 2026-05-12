@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { marked } from 'marked'
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
 export default function Changelog({ onBack, currentVersion }: Props) {
   const [html, setHtml] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.electronAPI.getChangelog().then((md) => {
@@ -21,6 +22,19 @@ export default function Changelog({ onBack, currentVersion }: Props) {
     // Mark current version as seen
     void window.electronAPI.setLastSeenVersion()
   }, [])
+
+  // Scroll to current version heading after HTML is rendered
+  useEffect(() => {
+    if (!html || !currentVersion || !contentRef.current) return
+    const headings = contentRef.current.querySelectorAll('h2')
+    for (const h of headings) {
+      if (h.textContent?.includes(currentVersion)) {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        h.classList.add('changelog-current-version')
+        break
+      }
+    }
+  }, [html, currentVersion])
 
   return (
     <div className="flex flex-col h-full">
@@ -42,6 +56,7 @@ export default function Changelog({ onBack, currentVersion }: Props) {
           <p className="text-xs text-gray-500 animate-pulse">กำลังโหลด…</p>
         ) : html ? (
           <div
+            ref={contentRef}
             className="changelog-content text-xs text-gray-300 leading-relaxed"
             dangerouslySetInnerHTML={{ __html: html }}
           />

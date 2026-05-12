@@ -49,3 +49,6 @@ body {
 .changelog-content p {
   @apply mb-1;
 }
+.changelog-current-version {
+  @apply text-blue-300 border-l-2 border-blue-400 pl-2 -ml-2;
+}

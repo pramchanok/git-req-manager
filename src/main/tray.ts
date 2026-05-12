@@ -21,8 +21,11 @@ function getOrCreateWindow(): BrowserWindow | null {
   return null
 }
 
-function createIcon(active: boolean): Electron.NativeImage {
-  const baseName = active ? 'tray-icon-active' : 'tray-icon'
+function createIcon(state: 'default' | 'active' | 'update'): Electron.NativeImage {
+  const baseName =
+    state === 'update' ? 'tray-icon-update' :
+    state === 'active' ? 'tray-icon-active' :
+    'tray-icon'
   const assetsDir = path.join(app.getAppPath(), 'assets')
 
   // Use fs.readFileSync so we can read from inside an asar archive, then
@@ -41,8 +44,8 @@ function createIcon(active: boolean): Electron.NativeImage {
   tryAdd(`${baseName}@2x.png`, 2.0)
 
   // Inactive icon: use template so macOS auto-adapts to light/dark mode
-  // Active icon: keep colored (orange + red badge) so it stands out visually
-  if (process.platform === 'darwin' && !active) {
+  // Active/update icons: keep colored so they stand out visually
+  if (process.platform === 'darwin' && state === 'default') {
     icon.setTemplateImage(true)
   }
   return icon
@@ -50,7 +53,7 @@ function createIcon(active: boolean): Electron.NativeImage {
 
 export function createTray(mainWindow: BrowserWindow): Tray {
   windowRef = mainWindow
-  tray = new Tray(createIcon(false))
+  tray = new Tray(createIcon('default'))
   tray.setToolTip('GitLab MR Manager')
   updateTrayMenu()
 
@@ -79,17 +82,26 @@ export function setWindowFactory(factory: () => BrowserWindow): void {
 export function updateTrayUpdate(status: UpdateStatus, version: string | null): void {
   updateStatus = status
   updateVersion = version
+  refreshTrayIcon()
   updateTrayMenu()
 }
 
 export function updateTrayBadge(count: number): void {
   if (!tray) return
   pendingCount = count
-  tray.setImage(createIcon(count > 0))
+  refreshTrayIcon()
   tray.setToolTip(
     count > 0 ? `GitLab MR Manager — ${count} MR(s) need review` : 'GitLab MR Manager'
   )
   updateTrayMenu()
+}
+
+function refreshTrayIcon(): void {
+  if (!tray) return
+  // Priority: update (blue) > pending MRs (orange) > default (grey)
+  const hasUpdate = updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'downloaded'
+  const state = hasUpdate ? 'update' : pendingCount > 0 ? 'active' : 'default'
+  tray.setImage(createIcon(state))
 }
 
 export function updateTrayMRs(mrs: MergeRequest[]): void {

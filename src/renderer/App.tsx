@@ -135,25 +135,21 @@ export default function App() {
               : 'Not synced yet'}
           </span>
           {updateState.currentVersion && (
-            updateState.status === 'downloaded' ? (
-              <button
-                onClick={() => setPage('settings')}
-                className="text-xs text-green-400 hover:text-green-300 transition-colors"
-                title="Update ready — click to install"
-              >
-                v{updateState.currentVersion} ⬆️
-              </button>
-            ) : (updateState.status === 'available' || updateState.status === 'downloading') ? (
-              <button
-                onClick={() => setPage('settings')}
-                className="text-xs text-amber-400 hover:text-amber-300 transition-colors animate-pulse"
-                title={`Update v${updateState.availableVersion} available`}
-              >
-                v{updateState.currentVersion} ↑
-              </button>
-            ) : (
-              <span className="text-xs text-gray-600">v{updateState.currentVersion}</span>
-            )
+            <button
+              onClick={() => setPage('changelog')}
+              className={`text-xs transition-colors ${
+                updateState.status === 'downloaded'
+                  ? 'text-green-400 hover:text-green-300'
+                  : updateState.status === 'available' || updateState.status === 'downloading'
+                  ? 'text-amber-400 hover:text-amber-300 animate-pulse'
+                  : 'text-gray-600 hover:text-gray-400'
+              }`}
+              title="ดูสิ่งที่เปลี่ยนแปลง"
+            >
+              v{updateState.currentVersion}
+              {updateState.status === 'downloaded' && ' ⬆️'}
+              {(updateState.status === 'available' || updateState.status === 'downloading') && ' ↑'}
+            </button>
           )}
         </div>
         <button

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.7] - 2026-05-12
+
+### ฟีเจอร์ใหม่
+
+- **Tray icon เปลี่ยนสีเมื่อมีอัปเดท** — icon กลายเป็นสีฟ้า/cyan เมื่อมี version ใหม่พร้อม (สีส้มยังคงแสดงเมื่อมี MR รอ review)
+- **กด version ที่ footer เพื่อดู Changelog** — text `v1.x.x` ที่มุมล่างซ้ายกดได้เสมอ เปิดหน้า Changelog
+- **Changelog scroll ไปที่ version ปัจจุบัน** — เปิดหน้า Changelog แล้วจะ scroll อัตโนมัติและ highlight version ที่ใช้อยู่
+
 ## [1.2.6] - 2026-05-12
 
 ### ฟีเจอร์ใหม่
