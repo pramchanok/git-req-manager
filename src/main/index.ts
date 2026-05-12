@@ -46,6 +46,7 @@ import type { AppState, Settings } from '../shared/types'
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 let revealWindowOnReady = false
+let isInitialLaunch = true
 const windowsAppUserModelId = 'com.gitlab-req-manager.app'
 
 if (process.platform === 'win32') {
@@ -77,8 +78,11 @@ async function startApp(): Promise<void> {
   }
 
   app.whenReady().then(() => {
-    // Sync login item status from OS to store on startup
-    const loginSettings = app.getLoginItemSettings()
+    // Sync login item status from OS to store on startup.
+    // Pass the same args used in setLoginItemSettings so Windows can match the registry entry.
+    const loginSettings = app.getLoginItemSettings(
+      process.platform === 'win32' ? { args: ['--openedAtLogin'] } : {}
+    )
     const storedSettings = getSettings()
     if (storedSettings.launchAtStartup !== loginSettings.openAtLogin) {
       storedSettings.launchAtStartup = loginSettings.openAtLogin
@@ -198,11 +202,19 @@ function registerMainWindow(win: BrowserWindow): BrowserWindow {
   setUpdaterWindowGetter(() => mainWindow)
 
   win.webContents.once('did-finish-load', () => {
-    const { wasOpenedAsHidden, wasOpenedAtLogin } = app.getLoginItemSettings()
+    // Only apply startup-hidden logic on the very first window.
+    // Recreated windows (after the original is destroyed) should always show.
+    if (!isInitialLaunch) {
+      showTrayWindow(win)
+      return
+    }
+    isInitialLaunch = false
+
+    const { wasOpenedAsHidden } = app.getLoginItemSettings()
     // On macOS: wasOpenedAsHidden = launched from login item with openAsHidden:true
-    // On Windows: wasOpenedAtLogin  = launched from startup entry
+    // On Windows: check --openedAtLogin arg (more reliable than wasOpenedAtLogin)
     const startHidden =
-      wasOpenedAsHidden || (process.platform === 'win32' && wasOpenedAtLogin)
+      wasOpenedAsHidden || (process.platform === 'win32' && process.argv.includes('--openedAtLogin'))
 
     if (startHidden) {
       // Stay in tray only — do not show window or Dock icon
@@ -268,6 +280,9 @@ function setupIPC(): void {
     app.setLoginItemSettings({
       openAtLogin: settings.launchAtStartup,
       openAsHidden: true,   // start minimized to tray, not visible
+      // Pass explicit arg on Windows so we can reliably detect startup launches
+      // via process.argv instead of the unreliable wasOpenedAtLogin property.
+      args: process.platform === 'win32' ? ['--openedAtLogin'] : [],
     })
 
     if (settings.webhookEnabled) {

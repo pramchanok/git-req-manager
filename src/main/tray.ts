@@ -179,12 +179,13 @@ function showWindow(win: BrowserWindow): void {
   }
 
   if (process.platform === 'darwin') {
-    app.dock.show()
-    // On macOS, app.dock.hide() puts the app in agent mode — must call app.focus()
-    // to make the app active before showing the window, otherwise it won't receive focus
-    app.focus({ steal: true })
-    win.show()
-    win.focus()
+    // app.dock.show() is async — await it so the app is fully out of agent mode
+    // before calling app.focus(), otherwise the window may not receive focus.
+    void app.dock.show().then(() => {
+      app.focus({ steal: true })
+      win.show()
+      win.focus()
+    })
   } else {
     // setAlwaysOnTop is needed on Windows to bypass focus-stealing prevention
     win.setAlwaysOnTop(true)
