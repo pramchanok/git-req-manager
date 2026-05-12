@@ -78,12 +78,28 @@ async function startApp(): Promise<void> {
   }
 
   app.whenReady().then(() => {
+    const storedSettings = getSettings()
+
+    if (process.platform === 'win32') {
+      // Migration from <=v1.2.1: registry entries were set without args, so
+      // wasOpenedAtLogin was unreliable (true on every launch, not just startup).
+      // Remove old-format entry (no args) and re-register with --openedAtLogin
+      // so startup launches can be detected reliably via process.argv.
+      app.setLoginItemSettings({ openAtLogin: false })
+      if (storedSettings.launchAtStartup) {
+        app.setLoginItemSettings({
+          openAtLogin: true,
+          openAsHidden: true,
+          args: ['--openedAtLogin'],
+        })
+      }
+    }
+
     // Sync login item status from OS to store on startup.
     // Pass the same args used in setLoginItemSettings so Windows can match the registry entry.
     const loginSettings = app.getLoginItemSettings(
       process.platform === 'win32' ? { args: ['--openedAtLogin'] } : {}
     )
-    const storedSettings = getSettings()
     if (storedSettings.launchAtStartup !== loginSettings.openAtLogin) {
       storedSettings.launchAtStartup = loginSettings.openAtLogin
       saveSettings(storedSettings)
