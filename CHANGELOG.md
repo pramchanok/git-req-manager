@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.4] - 2026-05-12
+
+### ฟีเจอร์ใหม่
+
+- **แสดง release notes ตอนมี update** — เพิ่ม section "สิ่งที่เปลี่ยนแปลง" ใน Settings ที่คลิก expand ดูได้ เมื่อมี version ใหม่พร้อม download หรือ install
+
+### ปรับปรุง
+
+- **CHANGELOG เป็นภาษาไทย** — release notes ทุก version เขียนเป็นภาษาไทย คำ technical คงเป็น English
+
+---
+
 ## [1.2.3] - 2026-05-12
 
 ### แก้ไข Bug
