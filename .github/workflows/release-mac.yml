@@ -37,7 +37,7 @@ jobs:
           client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           domain: "https://infisical.igenco.dev"
           env-slug: "prod"
-          project-slug: "gitlab-mr-manager"  # TODO: replace with actual project slug
+          project-slug: "gitlab-mr-manager-h-d-tb"  # TODO: replace with actual project slug
 
       - name: Install dependencies
         run: npm ci
