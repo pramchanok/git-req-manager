@@ -312,7 +312,13 @@ export class GitLabClient {
       downvotes: (mr.downvotes as number) ?? 0,
       userNotesCount: (mr.user_notes_count as number) ?? 0,
       pipelineStatus: null,
-      labels: ((mr.label_details as Record<string, unknown>[]) ?? []).map(this.mapLabel.bind(this)),
+      labels: Array.isArray(mr.labels)
+        ? (mr.labels as Array<Record<string, unknown> | string>).map((l) =>
+            typeof l === 'string'
+              ? { name: l, color: '#6b7280', textColor: '#ffffff' }
+              : this.mapLabel(l as Record<string, unknown>)
+          )
+        : [],
     }
   }
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1] - 2026-05-14
+
+### แก้ไข Bug
+
+- **Labels ไม่แสดงใน MR Card** — แก้ bug ที่ `mapMR` อ่านจาก field `label_details` แต่ GitLab API คืนค่า labels ที่ field ชื่อ `labels` (เป็น objects เมื่อใช้ `with_labels_details: true`) ทำให้ labels ไม่แสดงเลยแม้จะมีการ fetch มาถูกต้อง
+
+---
+
 ## [1.3.0] - 2026-05-14
 
 ### ฟีเจอร์ใหม่
