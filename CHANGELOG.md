@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.9] - 2026-05-14
+
+### แก้ไข Bug
+
+- **macOS: โปรแกรม version เก่าไม่ปิดเมื่ออัปเดท** — แก้ 3 จุดที่ทำให้ old version ไม่ยอม quit และ new version เปิดไม่ได้หลังอัปเดท:
+  - `window-all-closed` เรียก `e.preventDefault()` แม้ระหว่าง `quitAndInstall` ทำให้ quit ถูกบล็อกบน macOS; แก้โดย skip `preventDefault()` เมื่อ `isQuitting = true`
+  - `quitAndInstall()` ขาด `isForceRunAfter=true` ทำให้ helper ไม่ relaunch new version หลัง install
+  - `stopWebhookServer()` ใช้แค่ `server.close()` ที่ไม่ปิด existing connections ทำให้ Node.js event loop ค้างและ process ออกไม่ได้; เพิ่ม `server.closeAllConnections()`
+
+---
+
 ## [1.2.8] - 2026-05-14
 
 ### CI/CD
