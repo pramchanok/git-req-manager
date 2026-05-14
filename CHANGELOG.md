@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.8] - 2026-05-14
+
+### CI/CD
+
+- **Release All workflow** — เพิ่ม `release-all.yml` สำหรับ build และ publish macOS + Windows พร้อมกัน (parallel jobs) แล้ว update release notes ครั้งเดียวใน finalize job
+- **แก้ Infisical action** — เปลี่ยน input `site-url` เป็น `domain` ให้ถูกต้องตาม `Infisical/secrets-action@v1.0.7`; แก้ `project-slug` ให้ตรงกับ project จริงใน Infisical
+
+---
+
 ## [1.2.7] - 2026-05-12
 
 ### ฟีเจอร์ใหม่
