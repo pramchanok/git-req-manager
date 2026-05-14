@@ -11,6 +11,12 @@ export interface Settings {
   launchAtStartup: boolean
 }
 
+export interface MRLabel {
+  name: string
+  color: string
+  textColor: string
+}
+
 export interface MergeRequest {
   id: number
   iid: number
@@ -37,6 +43,7 @@ export interface MergeRequest {
   downvotes: number
   userNotesCount: number
   pipelineStatus: 'running' | 'success' | 'failed' | 'canceled' | null
+  labels: MRLabel[]
 }
 
 export interface GitLabUser {

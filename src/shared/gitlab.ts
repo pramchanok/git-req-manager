@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { GitLabUser, MergeRequest, GitLabProject, GitLabGroup } from './types'
+import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup } from './types'
 
 export class GitLabClient {
   private http: AxiosInstance
@@ -81,7 +81,7 @@ export class GitLabClient {
         state: 'opened',
         per_page: 100,
         scope: 'all',
-        with_labels_details: false,
+        with_labels_details: true,
       },
     })
     return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
@@ -210,6 +210,7 @@ export class GitLabClient {
           state: 'opened',
           per_page: 100,
           scope: 'all',
+          with_labels_details: true,
         },
       })
       return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
@@ -219,7 +220,7 @@ export class GitLabClient {
       projectIds.map((id) =>
         this.http
           .get(`/projects/${id}/merge_requests`, {
-            params: { state: 'opened', per_page: 100 },
+            params: { state: 'opened', per_page: 100, with_labels_details: true },
           })
           .then(({ data }) => data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
           .catch(() => [] as MergeRequest[])
@@ -227,6 +228,14 @@ export class GitLabClient {
     )
 
     return results.flat()
+  }
+
+  private mapLabel(l: Record<string, unknown>): MRLabel {
+    return {
+      name: l.name as string,
+      color: (l.color as string) ?? '#6b7280',
+      textColor: (l.text_color as string) ?? '#ffffff',
+    }
   }
 
   private mapGroup(g: Record<string, unknown>): GitLabGroup {
@@ -303,6 +312,7 @@ export class GitLabClient {
       downvotes: (mr.downvotes as number) ?? 0,
       userNotesCount: (mr.user_notes_count as number) ?? 0,
       pipelineStatus: null,
+      labels: ((mr.label_details as Record<string, unknown>[]) ?? []).map(this.mapLabel.bind(this)),
     }
   }
 }

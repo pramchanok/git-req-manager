@@ -1,4 +1,4 @@
-import type { GitLabUser, MergeRequest } from '../../../shared/types'
+import type { GitLabUser, MergeRequest, MRLabel } from '../../../shared/types'
 
 interface MRCardProps {
   mr: MergeRequest
@@ -46,6 +46,18 @@ function AvatarStack({ users, max = 3 }: { users: GitLabUser[]; max?: number }) 
         <span className="text-xs text-gray-500 pl-2">+{extra}</span>
       )}
     </div>
+  )
+}
+
+function LabelChip({ label }: { label: MRLabel }) {
+  return (
+    <span
+      className="inline-block text-xs px-1.5 py-0.5 rounded-full leading-none font-medium truncate max-w-[120px]"
+      style={{ backgroundColor: label.color, color: label.textColor }}
+      title={label.name}
+    >
+      {label.name}
+    </span>
   )
 }
 
@@ -97,6 +109,15 @@ export default function MRCard({ mr }: MRCardProps) {
               {mr.sourceBranch} → {mr.targetBranch}
             </span>
           </div>
+
+          {/* Labels */}
+          {mr.labels.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {mr.labels.map((label) => (
+                <LabelChip key={label.name} label={label} />
+              ))}
+            </div>
+          )}
 
           {/* Reviewers + Assignees */}
           {(mr.reviewers.length > 0 || mr.assignees.length > 0) && (

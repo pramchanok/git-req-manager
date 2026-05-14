@@ -1,13 +1,14 @@
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, GitLabUser, MergeRequest } from '../shared/types'
 import { getSettings, isConfigured, pruneNotifiedMRIds } from './store'
-import { notifyNewMRs, notifyCIPipelineFailed } from './notifier'
+import { notifyNewMRs, notifyCIPipelineFailed, notifyLabelsChanged } from './notifier'
 
 type StateChangeCallback = (state: AppState) => void
 
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 let previousReviewMRIds = new Set<number>()
 let previousPipelineStatuses = new Map<number, MergeRequest['pipelineStatus']>()
+let previousMRLabels = new Map<number, string[]>()
 let cachedUser: GitLabUser | null = null
 
 async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[], chunkSize = 5): Promise<void> {
@@ -87,6 +88,22 @@ export async function syncNow(): Promise<void> {
       notifyNewMRs(newReviewMRs)
     }
     previousReviewMRIds = new Set(reviewMRs.map((mr: MergeRequest) => mr.id))
+
+    // Detect label changes across all tracked MRs
+    const allTrackedMRs = [...reviewMRs, ...allOpenMRs.filter((mr) => !reviewMRs.some((r) => r.id === mr.id))]
+    if (previousMRLabels.size > 0) {
+      for (const mr of allTrackedMRs) {
+        const prev = previousMRLabels.get(mr.id)
+        if (prev === undefined) continue
+        const currentNames = mr.labels.map((l) => l.name)
+        const added = currentNames.filter((n) => !prev.includes(n))
+        const removed = prev.filter((n) => !currentNames.includes(n))
+        if (added.length > 0 || removed.length > 0) {
+          notifyLabelsChanged(mr, added, removed)
+        }
+      }
+    }
+    previousMRLabels = new Map(allTrackedMRs.map((mr) => [mr.id, mr.labels.map((l) => l.name)]))
 
     currentState.myReviewMRs = reviewMRs
     currentState.allOpenMRs = allOpenMRs

@@ -50,6 +50,26 @@ export function notifyCIPipelineFailed(mrs: MergeRequest[]): void {
   }
 }
 
+export function notifyLabelsChanged(mr: MergeRequest, added: string[], removed: string[]): void {
+  if (!Notification.isSupported()) return
+
+  const parts: string[] = []
+  if (added.length > 0) parts.push(`+ ${added.join(', ')}`)
+  if (removed.length > 0) parts.push(`- ${removed.join(', ')}`)
+
+  const notification = new Notification({
+    title: '🏷️ Label Changed',
+    body: `${mr.title}\n${parts.join(' · ')}`,
+    silent: false,
+  })
+
+  notification.on('click', () => {
+    shell.openExternal(mr.webUrl)
+  })
+
+  notification.show()
+}
+
 export function clearTrackedMRs(): void {
   getTracked().clear()
   clearNotifiedMRIds()
