@@ -80,6 +80,7 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
 
 export function stopWebhookServer(): void {
   if (server) {
+    server.closeAllConnections()
     server.close()
     server = null
     currentPort = 0

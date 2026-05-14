@@ -171,7 +171,9 @@ async function startApp(): Promise<void> {
   })
 
   app.on('window-all-closed', (e: Event) => {
-    // Prevent quitting when all windows closed (tray app)
+    // When quitting intentionally (e.g. quitAndInstall), let the quit proceed.
+    // Otherwise keep the app alive in the tray when all windows are closed.
+    if (isQuitting) return
     e.preventDefault()
   })
 

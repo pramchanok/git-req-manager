@@ -135,7 +135,7 @@ export function installDownloadedUpdate(): void {
     throw new Error('No downloaded update is ready to install.')
   }
 
-  autoUpdater.quitAndInstall()
+  autoUpdater.quitAndInstall(false, true)
 }
 
 export function initializeUpdater(): void {
