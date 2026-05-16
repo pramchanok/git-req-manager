@@ -7,7 +7,7 @@ interface MRCardProps {
 const FALLBACK_AVATAR =
   'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="%236b7280"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="%236b7280"/></svg>'
 
-function timeAgo(dateStr: string): { text: string; colorClass: string } {
+export function timeAgo(dateStr: string): { text: string; colorClass: string } {
   const diff = Date.now() - new Date(dateStr).getTime()
   const hours = Math.floor(diff / 3_600_000)
   if (hours < 1) return { text: 'just now', colorClass: 'text-gray-500' }

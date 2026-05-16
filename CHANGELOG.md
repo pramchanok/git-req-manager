@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.3] - 2026-05-17
+
+### ปรับปรุง UI
+
+- **Toast notifications** — แสดง toast เมื่อบันทึก Settings หรือ copy Webhook URL สำเร็จ; auto-dismiss ใน 2 วินาที
+- **Page transitions** — fade-in animation เมื่อเปลี่ยน page
+- **Keyboard shortcuts** — `Esc` กลับ Dashboard, `Ctrl/Cmd+R` sync, `Ctrl/Cmd+,` เปิด Settings
+- **TeamReport last-activity** — แสดง "Active Xd ago" ใต้ชื่อ developer จาก open MR ล่าสุด
+- **Empty state illustrations** — TeamReport empty state มี SVG icon แทนข้อความเปล่า
+- **Scrollbar hide-until-hover** — scrollbar ซ่อนจนกว่าจะ hover container
+- **Text color consistency** — ปรับ secondary text เป็น `text-gray-400`, tertiary เป็น `text-gray-600` ให้ consistent ทั้ง app
+- **Fix close button** — nav tabs ไม่ push ปุ่มปิดออกนอกหน้าจอบน window แคบ
+
+---
+
 ## [1.3.2] - 2026-05-17
 
 ### ปรับปรุง UI

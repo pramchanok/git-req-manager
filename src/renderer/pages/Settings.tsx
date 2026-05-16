@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import type { Settings, UpdateState } from '../../../shared/types'
+import type { ToastType } from '../components/Toast'
 
 interface SettingsPageProps {
   onSaved: () => void
+  onToast?: (message: string, type?: ToastType) => void
   onShowChangelog: () => void
   updateState: UpdateState
   onCheckForUpdates: () => Promise<unknown>
@@ -42,6 +44,7 @@ function getUpdateMessageClass(status: UpdateState['status']): string {
 
 export default function SettingsPage({
   onSaved,
+  onToast,
   onShowChangelog,
   updateState,
   onCheckForUpdates,
@@ -88,8 +91,7 @@ export default function SettingsPage({
     const url = tunnelUrl ? `${tunnelUrl}/webhook` : (settings.webhookPublicUrl.trim() || webhookUrl)
     if (url) {
       navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      onToast ? onToast('Webhook URL copied') : (setCopied(true), setTimeout(() => setCopied(false), 2000))
     }
   }
 
@@ -118,6 +120,7 @@ export default function SettingsPage({
       }
       const url = await window.electronAPI.getWebhookUrl()
       setWebhookUrl(url)
+      onToast?.('Settings saved')
       onSaved()
     } catch {
       setError('Failed to save settings. Please try again.')
@@ -138,7 +141,7 @@ export default function SettingsPage({
       : 'Check for Updates'
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-4 py-4 gap-4">
+    <div className="flex flex-col h-full overflow-y-auto scroll-hide px-4 py-4 gap-4">
       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Settings</h2>
 
       {/* GitLab */}

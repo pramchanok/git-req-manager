@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { AppState, UpdateState } from '../../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TeamReport from './pages/TeamReport'
 import Changelog from './pages/Changelog'
+import Toast, { type ToastData, type ToastType } from './components/Toast'
 
 type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog'
 
@@ -13,32 +14,63 @@ interface NavTabProps {
   label: string
   active: boolean
   onClick: () => void
+  icon: React.ReactNode
   badge?: BadgeColor
 }
 
-function NavTab({ label, active, onClick, badge }: NavTabProps) {
+function NavTab({ label, active, onClick, icon, badge }: NavTabProps) {
   return (
     <button
       onClick={onClick}
-      className={`relative px-3 h-full text-xs font-medium transition-colors border-b-2 whitespace-nowrap ${
+      title={label}
+      className={`relative flex items-center justify-center px-3 h-full transition-colors border-b-2 ${
         active
           ? 'text-orange-400 border-orange-400'
           : 'text-gray-500 hover:text-gray-300 border-transparent'
       }`}
     >
-      {label}
+      {icon}
       {badge === 'green' && (
-        <span className="absolute top-1.5 right-0.5 w-1.5 h-1.5 rounded-full bg-green-400" />
+        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-green-400" />
       )}
       {badge === 'amber' && (
-        <span className="absolute top-1.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
       )}
     </button>
   )
 }
 
+function DashboardIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  )
+}
+
+function TeamIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  )
+}
+
+function SettingsIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
+  const [toast, setToast] = useState<ToastData | null>(null)
+  const showToast = useCallback((message: string, type: ToastType = 'success') => {
+    setToast({ message, type })
+  }, [])
   const [appState, setAppState] = useState<AppState>({
     myReviewMRs: [],
     allOpenMRs: [],
@@ -88,6 +120,22 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && page !== 'dashboard') {
+        setPage('dashboard')
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+        e.preventDefault()
+        window.electronAPI.triggerSync()
+      } else if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault()
+        setPage('settings')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [page])
+
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white rounded-xl overflow-hidden shadow-2xl border border-gray-700">
       {/* Title + nav bar (single row, drag region) */}
@@ -95,33 +143,36 @@ export default function App() {
         className="flex items-stretch h-10 bg-gray-800 border-b border-gray-700 flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* App name (drag zone) */}
-        <div className="flex items-center gap-2 pl-3 pr-2 flex-shrink-0 select-none">
-          <span className="text-orange-400 text-sm font-bold">🦊 GitLab MR</span>
+        {/* App name (drag zone - takes remaining space) */}
+        <div className="flex flex-1 items-center gap-2 pl-3 pr-2 select-none">
+          <span className="text-orange-400 text-sm font-bold">🦊 GitLab MR Manager</span>
           {appState.isSyncing && (
             <span className="text-xs text-gray-400 animate-pulse">syncing…</span>
           )}
         </div>
 
-        {/* Nav tabs (no-drag) */}
+        {/* Nav tabs right-aligned (no-drag) */}
         <div
-          className="flex flex-1 items-stretch"
+          className="flex items-stretch flex-shrink-0"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <NavTab
             label="Dashboard"
             active={page === 'dashboard' || page === 'changelog'}
             onClick={() => setPage('dashboard')}
+            icon={<DashboardIcon />}
           />
           <NavTab
             label="Team"
             active={page === 'team-report'}
             onClick={() => setPage('team-report')}
+            icon={<TeamIcon />}
           />
           <NavTab
             label="Settings"
             active={page === 'settings'}
             onClick={() => setPage('settings')}
+            icon={<SettingsIcon />}
             badge={
               updateState.status === 'downloaded'
                 ? 'green'
@@ -134,7 +185,7 @@ export default function App() {
 
         {/* Close button (no-drag) */}
         <div
-          className="flex items-center px-2"
+          className="flex items-center px-2 flex-shrink-0"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <button
@@ -148,7 +199,7 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div key={page} className="flex-1 overflow-hidden page-fade">
         {page === 'dashboard' ? (
           <Dashboard appState={appState} />
         ) : page === 'team-report' ? (
@@ -158,6 +209,7 @@ export default function App() {
         ) : (
           <Settings
             onSaved={() => setPage('dashboard')}
+            onToast={showToast}
             onShowChangelog={() => setPage('changelog')}
             updateState={updateState}
             onCheckForUpdates={() => window.electronAPI.checkForUpdates()}
@@ -200,6 +252,10 @@ export default function App() {
           {appState.isSyncing ? 'Syncing…' : '↻ Refresh'}
         </button>
       </div>
+
+      {toast && (
+        <Toast {...toast} onDismiss={() => setToast(null)} />
+      )}
     </div>
   )
 }

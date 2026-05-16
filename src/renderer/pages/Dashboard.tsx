@@ -18,10 +18,10 @@ export default function Dashboard({ appState }: DashboardProps) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
         <div className="text-4xl">🔧</div>
-        <p className="text-gray-300 text-sm">
+        <p className="text-gray-400 text-sm">
           Configure your GitLab URL and Personal Access Token to get started.
         </p>
-        <p className="text-gray-500 text-xs">Open the Settings tab to get started.</p>
+        <p className="text-gray-600 text-xs">Open the Settings tab to get started.</p>
       </div>
     )
   }
@@ -61,7 +61,7 @@ export default function Dashboard({ appState }: DashboardProps) {
       </div>
 
       {/* MR List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scroll-hide">
         {appState.isSyncing && mrs.length === 0 ? (
           <div className="flex flex-col">
             {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
