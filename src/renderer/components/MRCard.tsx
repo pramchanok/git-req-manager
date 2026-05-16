@@ -7,13 +7,15 @@ interface MRCardProps {
 const FALLBACK_AVATAR =
   'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="%236b7280"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="%236b7280"/></svg>'
 
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string): { text: string; colorClass: string } {
   const diff = Date.now() - new Date(dateStr).getTime()
   const hours = Math.floor(diff / 3_600_000)
-  if (hours < 1) return 'just now'
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 1) return { text: 'just now', colorClass: 'text-gray-500' }
+  if (hours < 24) return { text: `${hours}h ago`, colorClass: 'text-gray-500' }
   const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  if (days >= 7) return { text: `${days}d ago`, colorClass: 'text-red-400' }
+  if (days >= 3) return { text: `${days}d ago`, colorClass: 'text-yellow-500' }
+  return { text: `${days}d ago`, colorClass: 'text-gray-500' }
 }
 
 function Avatar({ user, size = 'sm' }: { user: GitLabUser; size?: 'sm' | 'xs' }) {
@@ -71,10 +73,11 @@ export default function MRCard({ mr }: MRCardProps) {
   const needsApproval = approvalsRequired > 0 && approvalsLeft > 0
 
   const wasUpdated = mr.updatedAt && mr.updatedAt !== mr.createdAt
+  const timestamp = wasUpdated ? timeAgo(mr.updatedAt) : timeAgo(mr.createdAt)
 
   return (
     <div
-      className="px-3 py-2.5 border-b border-gray-700 hover:bg-gray-750 cursor-pointer group transition-colors"
+      className="pl-[10px] pr-3 py-2.5 border-b border-gray-700 border-l-2 border-l-transparent hover:bg-gray-700/50 hover:border-l-orange-400 cursor-pointer group transition-colors"
       onClick={handleOpen}
     >
       <div className="flex items-start gap-2">
@@ -86,7 +89,11 @@ export default function MRCard({ mr }: MRCardProps) {
         <div className="flex-1 min-w-0">
           {/* Title */}
           <p className="text-sm text-white font-medium leading-snug truncate group-hover:text-blue-300 transition-colors">
-            {mr.draft && <span className="text-yellow-500 mr-1 text-xs">Draft</span>}
+            {mr.draft && (
+              <span className="inline-block bg-yellow-900/60 text-yellow-400 text-[10px] font-medium px-1.5 py-0.5 rounded-full mr-1 leading-none align-middle">
+                Draft
+              </span>
+            )}
             {mr.title}
           </p>
 
@@ -98,8 +105,8 @@ export default function MRCard({ mr }: MRCardProps) {
             <span className="text-gray-600 text-xs">·</span>
             <span className="text-xs text-gray-500">!{mr.iid}</span>
             <span className="text-gray-600 text-xs">·</span>
-            <span className="text-xs text-gray-500" title={wasUpdated ? `updated ${timeAgo(mr.updatedAt)}` : undefined}>
-              {wasUpdated ? `↻ ${timeAgo(mr.updatedAt)}` : timeAgo(mr.createdAt)}
+            <span className={`text-xs ${timestamp.colorClass}`} title={wasUpdated ? `updated ${timestamp.text}` : undefined}>
+              {wasUpdated ? `↻ ${timestamp.text}` : timestamp.text}
             </span>
           </div>
 
@@ -172,7 +179,7 @@ export default function MRCard({ mr }: MRCardProps) {
           )}
           {mr.pipelineStatus && mr.pipelineStatus !== 'canceled' && (
             <span
-              className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+              className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium ${
                 mr.pipelineStatus === 'success'
                   ? 'bg-green-900 text-green-300'
                   : mr.pipelineStatus === 'failed'
@@ -181,7 +188,16 @@ export default function MRCard({ mr }: MRCardProps) {
               }`}
               title={`Pipeline: ${mr.pipelineStatus}`}
             >
-              {mr.pipelineStatus === 'success' ? '🟢 CI' : mr.pipelineStatus === 'failed' ? '🔴 CI' : '🟡 CI'}
+              <span
+                className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                  mr.pipelineStatus === 'success'
+                    ? 'bg-green-400'
+                    : mr.pipelineStatus === 'failed'
+                    ? 'bg-red-400'
+                    : 'bg-yellow-400'
+                }`}
+              />
+              {' CI'}
             </span>
           )}
         </div>

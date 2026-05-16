@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.2] - 2026-05-17
+
+### ปรับปรุง UI
+
+- **แก้ hover bug `gray-750`** — `hover:bg-gray-750` ไม่ใช่ Tailwind class จริง ทำให้ hover ไม่มี feedback; แก้เป็น `hover:bg-gray-700/50`
+- **CSS CI badge แทน emoji** — แทน 🟢/🔴/🟡 ด้วย CSS dot + ข้อความ "CI" เพื่อให้ sharp และ consistent ทุก platform
+- **Hover accent border** — card ที่ hover จะมี orange left-border 2px โดยไม่มี layout shift (padding compensated)
+- **Draft pill badge** — แทน inline text สีเหลืองด้วย rounded pill badge `Draft` ที่อ่านง่ายขึ้น
+- **Age-based urgency บน timestamp** — MR ที่ค้างนาน ≥ 3 วัน แสดง timestamp สีเหลือง; ≥ 7 วัน แสดงสีแดง เพื่อให้เห็น stale MR ได้ทันที
+- **Skeleton loading** — แทน "Loading…" text ด้วย shimmer skeleton cards ใน Dashboard และ skeleton dev rows ใน TeamReport ขณะโหลดข้อมูลครั้งแรก
+- **Navigation bar** — เพิ่ม nav bar icon + label (Dashboard / Team / Settings) แทนปุ่ม emoji ที่ซ่อนอยู่ใน title bar ให้ค้นหาและใช้งานได้ง่ายขึ้น พร้อม active state และ update badge บน Settings tab
+
+---
+
 ## [1.3.1] - 2026-05-14
 
 ### แก้ไข Bug

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../../../shared/types'
 import MRCard from '../components/MRCard'
+import { SkeletonDevRow } from '../components/SkeletonCard'
 
 interface TeamReportProps {
   appState: AppState
@@ -226,8 +227,8 @@ export default function TeamReport({ appState }: TeamReportProps) {
       {/* Dev list */}
       <div className="flex-1 overflow-y-auto">
         {membersLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500 text-sm animate-pulse">Loading members…</p>
+          <div className="flex flex-col">
+            {[...Array(5)].map((_, i) => <SkeletonDevRow key={i} />)}
           </div>
         ) : sorted.length === 0 ? (
           <div className="flex items-center justify-center h-full">

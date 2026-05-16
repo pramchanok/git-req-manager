@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AppState, MRTab } from '../../../shared/types'
 import MRCard from '../components/MRCard'
+import SkeletonCard from '../components/SkeletonCard'
 
 interface DashboardProps {
   appState: AppState
@@ -20,7 +21,7 @@ export default function Dashboard({ appState }: DashboardProps) {
         <p className="text-gray-300 text-sm">
           Configure your GitLab URL and Personal Access Token to get started.
         </p>
-        <p className="text-gray-500 text-xs">Click ⚙️ in the top-right corner.</p>
+        <p className="text-gray-500 text-xs">Open the Settings tab to get started.</p>
       </div>
     )
   }
@@ -62,8 +63,8 @@ export default function Dashboard({ appState }: DashboardProps) {
       {/* MR List */}
       <div className="flex-1 overflow-y-auto">
         {appState.isSyncing && mrs.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <span className="text-gray-500 text-sm animate-pulse">Loading…</span>
+          <div className="flex flex-col">
+            {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : mrs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
