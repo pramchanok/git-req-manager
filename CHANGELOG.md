@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.4] - 2026-05-21
+
+### ปรับปรุง
+
+- **allOpenMRs pagination** — ดึง MR เปิดทั้งหมดแบบ paginated แทนที่จะ hard-cap ที่ 100 รายการ รองรับ project ที่มี open MR มากกว่า 100 รายการ ทั้งในโหมด "All projects" และโหมดระบุ Project IDs
+
+---
+
 ## [1.3.3] - 2026-05-17
 
 ### ปรับปรุง UI

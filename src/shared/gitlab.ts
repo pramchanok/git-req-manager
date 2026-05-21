@@ -204,27 +204,45 @@ export class GitLabClient {
 
   async getAllOpenMRs(projectIds: number[]): Promise<MergeRequest[]> {
     if (projectIds.length === 0) {
-      // Fetch from all accessible projects
-      const { data } = await this.http.get('/merge_requests', {
-        params: {
-          state: 'opened',
-          per_page: 100,
-          scope: 'all',
-          with_labels_details: true,
-        },
-      })
-      return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+      const mrs: MergeRequest[] = []
+      let page = 1
+      while (true) {
+        const { data } = await this.http.get('/merge_requests', {
+          params: {
+            state: 'opened',
+            per_page: 100,
+            page,
+            scope: 'all',
+            with_labels_details: true,
+          },
+        })
+        if (data.length === 0) break
+        mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
+        if (data.length < 100) break
+        page++
+      }
+      return mrs
     }
 
     const results = await Promise.all(
-      projectIds.map((id) =>
-        this.http
-          .get(`/projects/${id}/merge_requests`, {
-            params: { state: 'opened', per_page: 100, with_labels_details: true },
-          })
-          .then(({ data }) => data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
-          .catch(() => [] as MergeRequest[])
-      )
+      projectIds.map(async (id) => {
+        const mrs: MergeRequest[] = []
+        let page = 1
+        try {
+          while (true) {
+            const { data } = await this.http.get(`/projects/${id}/merge_requests`, {
+              params: { state: 'opened', per_page: 100, page, with_labels_details: true },
+            })
+            if (data.length === 0) break
+            mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
+            if (data.length < 100) break
+            page++
+          }
+        } catch {
+          // silent: skip failed projects
+        }
+        return mrs
+      })
     )
 
     return results.flat()
