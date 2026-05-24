@@ -13,6 +13,7 @@ interface StoreSchema {
   webhookPublicUrl: string
   webhookUseTunnel: boolean
   launchAtStartup: boolean
+  notifyOwnerGroupIds: number[]
   notifiedMRIds: number[]
   teamReportGroupId: number
   lastSeenVersion: string
@@ -30,6 +31,7 @@ const store = new Store<StoreSchema>({
     webhookPublicUrl: 'https://ig-server-eoffice.igenco.dev/gitlab-webhook',
     webhookUseTunnel: false,
     launchAtStartup: false,
+    notifyOwnerGroupIds: [],
     notifiedMRIds: [],
     teamReportGroupId: 0,
     lastSeenVersion: '',
@@ -60,6 +62,7 @@ export function getSettings(): Settings {
     webhookPublicUrl: store.get('webhookPublicUrl', 'https://ig-server-eoffice.igenco.dev/gitlab-webhook'),
     webhookUseTunnel: store.get('webhookUseTunnel', false),
     launchAtStartup: store.get('launchAtStartup', false),
+    notifyOwnerGroupIds: store.get('notifyOwnerGroupIds', []),
   }
 }
 
@@ -73,6 +76,7 @@ export function saveSettings(settings: Settings): void {
   store.set('webhookPublicUrl', settings.webhookPublicUrl)
   store.set('webhookUseTunnel', settings.webhookUseTunnel)
   store.set('launchAtStartup', settings.launchAtStartup)
+  store.set('notifyOwnerGroupIds', settings.notifyOwnerGroupIds ?? [])
 
   if (settings.accessToken) {
     const encrypted = safeStorage.encryptString(settings.accessToken)

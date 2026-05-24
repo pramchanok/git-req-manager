@@ -59,6 +59,36 @@ export class GitLabClient {
     return groups
   }
 
+  async getOwnerGroups(): Promise<GitLabGroup[]> {
+    const groups: GitLabGroup[] = []
+    let page = 1
+    while (true) {
+      const { data } = await this.http.get('/groups', {
+        params: { min_access_level: 50, per_page: 100, page, order_by: 'name', sort: 'asc' },
+      })
+      if (data.length === 0) break
+      groups.push(...data.map((g: Record<string, unknown>) => this.mapGroup(g)))
+      if (data.length < 100) break
+      page++
+    }
+    return groups
+  }
+
+  async getGroupOpenMRs(groupId: number): Promise<MergeRequest[]> {
+    const mrs: MergeRequest[] = []
+    let page = 1
+    while (true) {
+      const { data } = await this.http.get(`/groups/${groupId}/merge_requests`, {
+        params: { state: 'opened', per_page: 100, page, with_labels_details: true },
+      })
+      if (data.length === 0) break
+      mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
+      if (data.length < 100) break
+      page++
+    }
+    return mrs
+  }
+
   async getGroupMembers(groupId: number): Promise<GitLabUser[]> {
     const members: GitLabUser[] = []
     let page = 1

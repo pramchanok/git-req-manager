@@ -9,6 +9,7 @@ export interface Settings {
   webhookPublicUrl: string
   webhookUseTunnel: boolean
   launchAtStartup: boolean
+  notifyOwnerGroupIds: number[]
 }
 
 export interface MRLabel {
@@ -79,6 +80,7 @@ export interface AppState {
   error: string | null
   currentUser: GitLabUser | null
   isConfigured: boolean
+  ownerGroups: GitLabGroup[]
 }
 
 export type UpdateStatus =
@@ -123,3 +125,4 @@ export type IpcChannel =
   | 'get-changelog'
   | 'set-last-seen-version'
   | 'show-changelog'
+  | 'get-owner-groups'

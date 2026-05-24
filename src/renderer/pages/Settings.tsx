@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Settings, UpdateState } from '../../../shared/types'
+import type { GitLabGroup, Settings, UpdateState } from '../../../shared/types'
 import type { ToastType } from '../components/Toast'
 
 interface SettingsPageProps {
@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS: Settings = {
   webhookPublicUrl: 'https://ig-server-eoffice.igenco.dev/gitlab-webhook',
   webhookUseTunnel: false,
   launchAtStartup: false,
+  notifyOwnerGroupIds: [],
 }
 
 function getUpdateMessageClass(status: UpdateState['status']): string {
@@ -60,12 +61,15 @@ export default function SettingsPage({
   const [tunnelStatus, setTunnelStatus] = useState<TunnelStatus>('idle')
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null)
   const [syncInfo, setSyncInfo] = useState<SyncInfo | null>(null)
+  const [ownerGroups, setOwnerGroups] = useState<GitLabGroup[]>([])
+  const [ownerGroupsLoading, setOwnerGroupsLoading] = useState(false)
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s) => {
       setSettings({
         ...s,
         webhookPublicUrl: s.webhookPublicUrl || DEFAULT_SETTINGS.webhookPublicUrl,
+        notifyOwnerGroupIds: s.notifyOwnerGroupIds ?? [],
       })
       setProjectIdsText(s.projectIds.join(', '))
     })
@@ -73,6 +77,12 @@ export default function SettingsPage({
     window.electronAPI.checkCloudflared().then(({ available }) => {
       setCloudflaredAvailable(available)
     })
+
+    setOwnerGroupsLoading(true)
+    window.electronAPI.getOwnerGroups()
+      .then(setOwnerGroups)
+      .catch(() => {})
+      .finally(() => setOwnerGroupsLoading(false))
 
     const cleanup = window.electronAPI.onTunnelStatus((data) => {
       setTunnelStatus(data.status as TunnelStatus)
@@ -93,6 +103,14 @@ export default function SettingsPage({
       navigator.clipboard.writeText(url)
       onToast ? onToast('Webhook URL copied') : (setCopied(true), setTimeout(() => setCopied(false), 2000))
     }
+  }
+
+  const toggleOwnerGroup = (groupId: number) => {
+    const current = settings.notifyOwnerGroupIds ?? []
+    const updated = current.includes(groupId)
+      ? current.filter((id) => id !== groupId)
+      : [...current, groupId]
+    setSettings({ ...settings, notifyOwnerGroupIds: updated })
   }
 
   const handleSave = async () => {
@@ -220,6 +238,41 @@ export default function SettingsPage({
           }`} />
         </button>
       </div>
+
+      {/* Owner Group Notifications */}
+      {(ownerGroupsLoading || ownerGroups.length > 0) && (
+        <div className="border-t border-gray-700 pt-2 flex flex-col gap-2">
+          <div>
+            <p className="text-xs font-semibold text-gray-300">👑 Owner Group Notifications</p>
+            <p className="text-xs text-gray-600 mt-0.5">แจ้งเตือน MR ใหม่ทุกอันใน Group ที่คุณเป็น Owner</p>
+          </div>
+          {ownerGroupsLoading ? (
+            <p className="text-xs text-gray-600 animate-pulse">กำลังโหลด Groups…</p>
+          ) : (
+            ownerGroups.map((group) => {
+              const enabled = (settings.notifyOwnerGroupIds ?? []).includes(group.id)
+              return (
+                <div key={group.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-300 truncate">{group.name}</p>
+                    <p className="text-xs text-gray-600 truncate">{group.fullPath}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleOwnerGroup(group.id)}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+                      enabled ? 'bg-orange-500' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      enabled ? 'translate-x-4' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
 
       {/* Webhook */}
       <div className="border-t border-gray-700 pt-2">

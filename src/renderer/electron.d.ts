@@ -20,6 +20,7 @@ declare global {
       setTeamReportGroup: (id: number | null) => Promise<void>
       getChangelog: () => Promise<string | null>
       setLastSeenVersion: () => Promise<void>
+      getOwnerGroups: () => Promise<GitLabGroup[]>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void

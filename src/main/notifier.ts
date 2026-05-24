@@ -1,5 +1,5 @@
 import { Notification, shell } from 'electron'
-import type { MergeRequest } from '../shared/types'
+import type { GitLabGroup, MergeRequest } from '../shared/types'
 import { addNotifiedMRId, clearNotifiedMRIds, getNotifiedMRIds, removeNotifiedMRId } from './store'
 
 // Lazy-initialized from persisted store so we don't re-notify after restart
@@ -68,6 +68,43 @@ export function notifyLabelsChanged(mr: MergeRequest, added: string[], removed: 
   })
 
   notification.show()
+}
+
+export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): void {
+  const toNotify = newMRs.filter((mr) => !getTracked().has(mr.id))
+  if (toNotify.length === 0) return
+
+  toNotify.forEach((mr) => {
+    getTracked().add(mr.id)
+    addNotifiedMRId(mr.id)
+  })
+
+  if (!Notification.isSupported()) return
+
+  if (toNotify.length > 5) {
+    // Bulk summary to avoid notification spam
+    const notification = new Notification({
+      title: `🔔 ${group.name}`,
+      body: `${toNotify.length} new merge requests`,
+      silent: false,
+    })
+    notification.on('click', () => {
+      shell.openExternal(`${group.webUrl}/-/merge_requests`)
+    })
+    notification.show()
+  } else {
+    for (const mr of toNotify) {
+      const notification = new Notification({
+        title: `🔔 ${group.name}`,
+        body: `${mr.author.name}: ${mr.title}`,
+        silent: false,
+      })
+      notification.on('click', () => {
+        shell.openExternal(mr.webUrl)
+      })
+      notification.show()
+    }
+  }
 }
 
 export function clearTrackedMRs(): void {

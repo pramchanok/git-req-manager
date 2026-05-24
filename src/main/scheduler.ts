@@ -1,7 +1,7 @@
 import { GitLabClient } from '../shared/gitlab'
-import type { AppState, GitLabUser, MergeRequest } from '../shared/types'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../shared/types'
 import { getSettings, isConfigured, pruneNotifiedMRIds } from './store'
-import { notifyNewMRs, notifyCIPipelineFailed, notifyLabelsChanged } from './notifier'
+import { notifyNewMRs, notifyCIPipelineFailed, notifyLabelsChanged, notifyNewGroupMRs } from './notifier'
 
 type StateChangeCallback = (state: AppState) => void
 
@@ -9,6 +9,7 @@ let intervalHandle: ReturnType<typeof setInterval> | null = null
 let previousReviewMRIds = new Set<number>()
 let previousPipelineStatuses = new Map<number, MergeRequest['pipelineStatus']>()
 let previousMRLabels = new Map<number, string[]>()
+let previousGroupMRIds = new Map<number, Set<number>>()
 let cachedUser: GitLabUser | null = null
 
 async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[], chunkSize = 5): Promise<void> {
@@ -29,6 +30,7 @@ const currentState: AppState = {
   error: null,
   currentUser: null,
   isConfigured: false,
+  ownerGroups: [],
 }
 
 let onStateChange: StateChangeCallback = () => {}
@@ -109,6 +111,24 @@ export async function syncNow(): Promise<void> {
     currentState.allOpenMRs = allOpenMRs
     currentState.lastSyncedAt = new Date().toISOString()
     currentState.error = null
+
+    // Fetch groups where user is Owner, and notify new MRs for enabled ones
+    const ownerGroups = await client.getOwnerGroups().catch((): GitLabGroup[] => [])
+    currentState.ownerGroups = ownerGroups
+
+    const notifyGroupIds = settings.notifyOwnerGroupIds ?? []
+    for (const groupId of notifyGroupIds) {
+      const group = ownerGroups.find((g) => g.id === groupId)
+      if (!group) continue
+
+      const groupMRs = await client.getGroupOpenMRs(groupId).catch((): MergeRequest[] => [])
+      const prevIds = previousGroupMRIds.get(groupId) ?? new Set<number>()
+      const newGroupMRs = groupMRs.filter((mr) => !prevIds.has(mr.id))
+      if (newGroupMRs.length > 0) {
+        notifyNewGroupMRs(group, newGroupMRs)
+      }
+      previousGroupMRIds.set(groupId, new Set(groupMRs.map((mr) => mr.id)))
+    }
 
     // Prune notifiedMRIds to only active open MRs (cap 500) to prevent unbounded growth
     const activeMRIds = new Set([...reviewMRs, ...allOpenMRs].map((mr) => mr.id))

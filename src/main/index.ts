@@ -402,4 +402,11 @@ function setupIPC(): void {
   ipcMain.handle('set-last-seen-version', () => {
     setLastSeenVersion(app.getVersion())
   })
+
+  ipcMain.handle('get-owner-groups', async () => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getOwnerGroups().catch(() => [])
+  })
 }
