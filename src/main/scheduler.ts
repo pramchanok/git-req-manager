@@ -16,7 +16,10 @@ async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[]
   for (let i = 0; i < mrs.length; i += chunkSize) {
     const chunk = mrs.slice(i, i + chunkSize)
     const statuses = await Promise.all(
-      chunk.map((mr) => client.getMRPipelines(mr.projectId, mr.iid))
+      chunk.map((mr) => client.getMRPipelines(mr.projectId, mr.iid).catch((err) => {
+        console.error(`[scheduler] Failed to fetch pipeline for MR !${mr.iid}:`, err instanceof Error ? err.message : String(err))
+        return null
+      }))
     )
     chunk.forEach((mr, j) => { mr.pipelineStatus = statuses[j] })
   }
@@ -65,13 +68,22 @@ export async function syncNow(): Promise<void> {
     const user = cachedUser ?? (cachedUser = await client.getCurrentUser())
     currentState.currentUser = user
 
-    const [reviewMRs, allOpenMRs] = await Promise.all([
+    const [reviewResult, allOpenResult] = await Promise.allSettled([
       client.getMRsForReview(user.id).then(async (mrs) => {
         await fetchPipelinesThrottled(client, mrs)
         return mrs
       }),
       client.getAllOpenMRs(settings.projectIds),
     ])
+
+    const reviewMRs = reviewResult.status === 'fulfilled' ? reviewResult.value : currentState.myReviewMRs
+    const allOpenMRs = allOpenResult.status === 'fulfilled' ? allOpenResult.value : currentState.allOpenMRs
+
+    const syncErrors: string[] = []
+    if (reviewResult.status === 'rejected') syncErrors.push(`[API Error] My Reviews: ${reviewResult.reason instanceof Error ? reviewResult.reason.message : String(reviewResult.reason)}`)
+    if (allOpenResult.status === 'rejected') syncErrors.push(`[API Error] All Open: ${allOpenResult.reason instanceof Error ? allOpenResult.reason.message : String(allOpenResult.reason)}`)
+    
+    currentState.error = syncErrors.length > 0 ? syncErrors.join(' | ') : null
 
     // Detect running→failed pipeline transitions
     const ciFailures: MergeRequest[] = []
@@ -110,10 +122,12 @@ export async function syncNow(): Promise<void> {
     currentState.myReviewMRs = reviewMRs
     currentState.allOpenMRs = allOpenMRs
     currentState.lastSyncedAt = new Date().toISOString()
-    currentState.error = null
 
     // Fetch groups where user is Owner, and notify new MRs for enabled ones
-    const ownerGroups = await client.getOwnerGroups().catch((): GitLabGroup[] => [])
+    const ownerGroups = await client.getOwnerGroups().catch((err): GitLabGroup[] => {
+      console.error('[scheduler] Failed to fetch owner groups:', err instanceof Error ? err.message : String(err))
+      return []
+    })
     currentState.ownerGroups = ownerGroups
 
     const notifyGroupIds = settings.notifyOwnerGroupIds ?? []
@@ -121,7 +135,10 @@ export async function syncNow(): Promise<void> {
       const group = ownerGroups.find((g) => g.id === groupId)
       if (!group) continue
 
-      const groupMRs = await client.getGroupOpenMRs(groupId).catch((): MergeRequest[] => [])
+      const groupMRs = await client.getGroupOpenMRs(groupId).catch((err): MergeRequest[] => {
+        console.error(`[scheduler] Failed to fetch open MRs for group ${groupId}:`, err instanceof Error ? err.message : String(err))
+        return []
+      })
       const prevIds = previousGroupMRIds.get(groupId) ?? new Set<number>()
       const newGroupMRs = groupMRs.filter((mr) => !prevIds.has(mr.id))
       if (newGroupMRs.length > 0) {

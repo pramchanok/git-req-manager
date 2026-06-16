@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.6] - 2026-06-16
+
+### ความเสถียรและระบบหลังบ้าน (Stability & Webhook Hardening)
+
+- **Webhook Payload Limit** — เพิ่มขีดจำกัดขนาดของ Webhook payload ที่ 5MB เพื่อป้องกันการโจมตีหรือหน่วยความจำเต็ม
+- **Webhook Timeout Guard** — ป้องกัน Webhook ค้างโดยการเพิ่ม Request Timeout ที่ 10 วินาที
+- **Partial-Success Sync** — ปรับโครงสร้างระบบการดึงข้อมูล `Promise.all` มาเป็น `Promise.allSettled` ทำให้ในกรณีที่ GitLab API สำหรับรายการหนึ่ง (เช่น All Open MRs) ล้มเหลว รายการอื่นๆ (เช่น My Reviews) จะยังคงอัปเดตและทำงานต่อได้ตามปกติ
+- **ลดการกลืน Error (Reduce Silent Failures)** — ปรับปรุงการจัดการ Error โดยให้แสดงผ่าน Error Category และ Log ข้อความความผิดพลาดที่เคยถูกซ่อนไป ให้โชว์อย่างชัดเจนในฝั่งของ `scheduler` และ `webhook`
+
+---
+
 ## [1.3.5] - 2026-05-24
 
 ### เพิ่มฟีเจอร์ใหม่

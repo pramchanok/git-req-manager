@@ -32,6 +32,14 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
   stopWebhookServer()
 
   server = http.createServer((req, res) => {
+    // Timeout guard: 10 seconds
+    req.setTimeout(10000, () => {
+      console.warn('[webhook] request timed out')
+      res.writeHead(408)
+      res.end('Request Timeout')
+      req.destroy()
+    })
+
     if (req.method !== 'POST' || req.url !== '/webhook') {
       res.writeHead(404)
       res.end()
@@ -41,6 +49,7 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
     // Verify secret token if configured
     const token = req.headers['x-gitlab-token']
     if (secret && token !== secret) {
+      console.warn('[webhook] unauthorized attempt')
       res.writeHead(401)
       res.end('Unauthorized')
       return
@@ -49,8 +58,24 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
     const eventType = req.headers['x-gitlab-event'] as string
 
     let body = ''
-    req.on('data', (chunk) => { body += chunk.toString() })
+    let totalSize = 0
+    const MAX_SIZE = 5 * 1024 * 1024 // 5MB
+
+    req.on('data', (chunk) => {
+      totalSize += chunk.length
+      if (totalSize > MAX_SIZE) {
+        console.warn(`[webhook] payload too large: ${totalSize} bytes`)
+        res.writeHead(413)
+        res.end('Payload Too Large')
+        req.destroy()
+        return
+      }
+      body += chunk.toString()
+    })
+
     req.on('end', () => {
+      if (req.destroyed) return
+
       try {
         const payload = JSON.parse(body)
 
@@ -61,7 +86,8 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
 
         res.writeHead(200)
         res.end('OK')
-      } catch {
+      } catch (err) {
+        console.error('[webhook] failed to parse payload:', err instanceof Error ? err.message : String(err))
         res.writeHead(400)
         res.end('Bad Request')
       }
