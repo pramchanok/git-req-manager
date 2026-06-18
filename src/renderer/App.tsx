@@ -10,7 +10,7 @@ type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog'
 
 type BadgeColor = 'green' | 'amber' | null
 
-interface NavTabProps {
+interface BottomTabProps {
   label: string
   active: boolean
   onClick: () => void
@@ -18,24 +18,24 @@ interface NavTabProps {
   badge?: BadgeColor
 }
 
-function NavTab({ label, active, onClick, icon, badge }: NavTabProps) {
+function BottomTab({ label, active, onClick, icon, badge }: BottomTabProps) {
   return (
     <button
       onClick={onClick}
-      title={label}
-      className={`relative flex items-center justify-center px-3 h-full transition-colors border-b-2 ${
-        active
-          ? 'text-orange-400 border-orange-400'
-          : 'text-gray-500 hover:text-gray-300 border-transparent'
+      className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 transition-all duration-200 relative ${
+        active ? 'text-orange-400' : 'text-gray-500 hover:text-gray-300'
       }`}
     >
-      {icon}
-      {badge === 'green' && (
-        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-green-400" />
-      )}
-      {badge === 'amber' && (
-        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-      )}
+      <div className="relative flex items-center justify-center">
+        {icon}
+        {badge === 'green' && (
+          <span className="absolute -top-1.5 -right-1.5 w-1.5 h-1.5 rounded-full bg-green-500" />
+        )}
+        {badge === 'amber' && (
+          <span className="absolute -top-1.5 -right-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+        )}
+      </div>
+      <span className="text-[9px] font-bold tracking-wide uppercase select-none">{label}</span>
     </button>
   )
 }
@@ -43,7 +43,7 @@ function NavTab({ label, active, onClick, icon, badge }: NavTabProps) {
 function DashboardIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
     </svg>
   )
 }
@@ -138,59 +138,36 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white rounded-xl overflow-hidden shadow-2xl border border-gray-700">
-      {/* Title + nav bar (single row, drag region) */}
+      {/* Title Bar (drag region) */}
       <div
-        className="flex items-stretch h-10 bg-gray-800 border-b border-gray-700 flex-shrink-0"
+        className="flex items-center justify-between h-9 bg-gray-900 border-b border-gray-950 px-4 flex-shrink-0 select-none"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* App name (drag zone - takes remaining space) */}
-        <div className="flex flex-1 items-center gap-2 pl-3 pr-2 select-none">
-          <span className="text-orange-400 text-sm font-bold">🦊 GitLab MR Manager</span>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-orange-400 font-bold">🦊 GitLab MR Manager</span>
+          {appState.lastSyncedAt && !appState.isSyncing && (
+            <span className="text-[10px] text-gray-500 font-medium">
+              · {new Date(appState.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
           {appState.isSyncing && (
-            <span className="text-xs text-gray-400 animate-pulse">syncing…</span>
+            <span className="text-[9px] text-orange-400 animate-pulse bg-orange-950/40 px-1.5 py-0.5 rounded-full font-semibold">syncing…</span>
           )}
         </div>
 
-        {/* Nav tabs right-aligned (no-drag) */}
-        <div
-          className="flex items-stretch flex-shrink-0"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <NavTab
-            label="Dashboard"
-            active={page === 'dashboard' || page === 'changelog'}
-            onClick={() => setPage('dashboard')}
-            icon={<DashboardIcon />}
-          />
-          <NavTab
-            label="Team"
-            active={page === 'team-report'}
-            onClick={() => setPage('team-report')}
-            icon={<TeamIcon />}
-          />
-          <NavTab
-            label="Settings"
-            active={page === 'settings'}
-            onClick={() => setPage('settings')}
-            icon={<SettingsIcon />}
-            badge={
-              updateState.status === 'downloaded'
-                ? 'green'
-                : updateState.status === 'available' || updateState.status === 'downloading'
-                ? 'amber'
-                : null
-            }
-          />
-        </div>
-
-        {/* Close button (no-drag) */}
-        <div
-          className="flex items-center px-2 flex-shrink-0"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
+        {/* Title bar controls (no-drag) */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button
+            onClick={() => window.electronAPI.triggerSync()}
+            disabled={appState.isSyncing}
+            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-800 text-gray-400 hover:text-white transition-colors text-xs disabled:opacity-30"
+            title="Refresh now"
+          >
+            ↻
+          </button>
           <button
             onClick={() => window.close()}
-            className="p-1 rounded hover:bg-red-700 text-gray-500 hover:text-white transition-colors text-xs"
+            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-600 hover:text-white text-gray-400 hover:text-white transition-colors text-[10px]"
             title="Hide to tray"
           >
             ✕
@@ -198,8 +175,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Content */}
-      <div key={page} className="flex-1 overflow-hidden page-fade">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden bg-gray-900 flex flex-col">
         {page === 'dashboard' ? (
           <Dashboard appState={appState} />
         ) : page === 'team-report' ? (
@@ -218,39 +195,33 @@ export default function App() {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-3 py-1.5 bg-gray-800 border-t border-gray-700 flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-xs text-gray-500">
-            {appState.lastSyncedAt
-              ? `Last sync: ${new Date(appState.lastSyncedAt).toLocaleTimeString()}`
-              : 'Not synced yet'}
-          </span>
-          {updateState.currentVersion && (
-            <button
-              onClick={() => setPage('changelog')}
-              className={`text-xs transition-colors ${
-                updateState.status === 'downloaded'
-                  ? 'text-green-400 hover:text-green-300'
-                  : updateState.status === 'available' || updateState.status === 'downloading'
-                  ? 'text-amber-400 hover:text-amber-300 animate-pulse'
-                  : 'text-gray-600 hover:text-gray-400'
-              }`}
-              title="ดูสิ่งที่เปลี่ยนแปลง"
-            >
-              v{updateState.currentVersion}
-              {updateState.status === 'downloaded' && ' ⬆️'}
-              {(updateState.status === 'available' || updateState.status === 'downloading') && ' ↑'}
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => window.electronAPI.triggerSync()}
-          disabled={appState.isSyncing}
-          className="text-xs text-blue-400 hover:text-blue-300 disabled:text-gray-600 transition-colors"
-        >
-          {appState.isSyncing ? 'Syncing…' : '↻ Refresh'}
-        </button>
+      {/* Bottom Navigation Bar */}
+      <div className="h-12 bg-gray-950 border-t border-gray-900 flex items-stretch flex-shrink-0">
+        <BottomTab
+          label="Dashboard"
+          active={page === 'dashboard' || page === 'changelog'}
+          onClick={() => setPage('dashboard')}
+          icon={<DashboardIcon />}
+        />
+        <BottomTab
+          label="Team"
+          active={page === 'team-report'}
+          onClick={() => setPage('team-report')}
+          icon={<TeamIcon />}
+        />
+        <BottomTab
+          label="Settings"
+          active={page === 'settings'}
+          onClick={() => setPage('settings')}
+          icon={<SettingsIcon />}
+          badge={
+            updateState.status === 'downloaded'
+              ? 'green'
+              : updateState.status === 'available' || updateState.status === 'downloading'
+              ? 'amber'
+              : null
+          }
+        />
       </div>
 
       {toast && (
