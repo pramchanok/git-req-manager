@@ -347,7 +347,10 @@ function setupIPC(): void {
   ipcMain.handle('open-url', (_event, url: string) => shell.openExternal(url))
   ipcMain.handle('get-update-state', () => getUpdateState())
   ipcMain.handle('check-for-updates', () => checkForUpdates())
-  ipcMain.handle('install-update', () => installDownloadedUpdate())
+  ipcMain.handle('install-update', () => {
+    isQuitting = true
+    installDownloadedUpdate()
+  })
 
   ipcMain.handle('get-webhook-url', () => {
     const settings = getSettings()

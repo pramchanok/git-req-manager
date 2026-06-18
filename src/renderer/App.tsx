@@ -145,6 +145,24 @@ export default function App() {
       >
         <div className="flex items-center gap-2 text-xs">
           <span className="text-orange-400 font-bold">🦊 GitLab MR Manager</span>
+          {updateState.currentVersion && (
+            <button
+              onClick={() => setPage('changelog')}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className={`text-[10px] font-medium transition-colors select-none ${
+                updateState.status === 'downloaded'
+                  ? 'text-green-400 hover:text-green-300'
+                  : updateState.status === 'available' || updateState.status === 'downloading'
+                  ? 'text-amber-400 hover:text-amber-300 animate-pulse'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+              title="ดูสิ่งที่เปลี่ยนแปลง"
+            >
+              v{updateState.currentVersion}
+              {updateState.status === 'downloaded' && ' ⬆️'}
+              {(updateState.status === 'available' || updateState.status === 'downloading') && ' ↑'}
+            </button>
+          )}
           {appState.lastSyncedAt && !appState.isSyncing && (
             <span className="text-[10px] text-gray-500 font-medium">
               · {new Date(appState.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
