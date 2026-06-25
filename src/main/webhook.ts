@@ -1,7 +1,16 @@
 import http from 'http'
 import os from 'os'
 
-type WebhookCallback = (mrId: number | null) => void
+type WebhookPayload = {
+  mrId: number | null
+  action: string | null       // 'open' | 'merge' | 'close' | 'update' | 'reopen'
+  authorId: number | null     // object_attributes.author_id
+  projectId: number | null    // object_attributes.target_project_id
+  mrIid: number | null        // object_attributes.iid
+  targetBranch: string | null // object_attributes.target_branch
+}
+
+type WebhookCallback = (payload: WebhookPayload) => void
 
 let server: http.Server | null = null
 let currentPort = 0
@@ -80,8 +89,15 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
         const payload = JSON.parse(body)
 
         if (eventType === GITLAB_MR_HOOK) {
-          const mrId = payload?.object_attributes?.id ?? null
-          onEvent(mrId)
+          const attrs = payload?.object_attributes ?? {}
+          onEvent({
+            mrId: attrs.id ?? null,
+            action: attrs.action ?? null,
+            authorId: attrs.author_id ?? null,
+            projectId: attrs.target_project_id ?? null,
+            mrIid: attrs.iid ?? null,
+            targetBranch: attrs.target_branch ?? null,
+          })
         }
 
         res.writeHead(200)
@@ -93,6 +109,7 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
       }
     })
   })
+
 
   server.listen(port, '0.0.0.0', () => {
     currentPort = port

@@ -32,6 +32,23 @@ export function notifyNewMRs(newMRs: MergeRequest[]): void {
   }
 }
 
+export function notifyMRMerged(mr: MergeRequest): void {
+  if (!Notification.isSupported()) return
+
+  const notification = new Notification({
+    title: '✅ MR Merged!',
+    body: `"${mr.title}" ถูก merge เข้า ${mr.targetBranch} แล้ว`,
+    silent: false,
+  })
+
+  notification.on('click', () => {
+    shell.openExternal(mr.webUrl)
+  })
+
+  notification.show()
+}
+
+
 export function notifyCIPipelineFailed(mrs: MergeRequest[]): void {
   for (const mr of mrs) {
     if (!Notification.isSupported()) continue

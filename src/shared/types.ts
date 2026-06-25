@@ -10,6 +10,7 @@ export interface Settings {
   webhookUseTunnel: boolean
   launchAtStartup: boolean
   notifyOwnerGroupIds: number[]
+  notifyOnMyMRMerged: boolean
 }
 
 export interface MRLabel {

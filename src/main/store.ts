@@ -15,8 +15,10 @@ interface StoreSchema {
   launchAtStartup: boolean
   notifyOwnerGroupIds: number[]
   notifiedMRIds: number[]
+  notifiedMergedMRIds: number[]
   teamReportGroupId: number
   lastSeenVersion: string
+  notifyOnMyMRMerged: boolean
 }
 
 const store = new Store<StoreSchema>({
@@ -33,8 +35,10 @@ const store = new Store<StoreSchema>({
     launchAtStartup: false,
     notifyOwnerGroupIds: [],
     notifiedMRIds: [],
+    notifiedMergedMRIds: [],
     teamReportGroupId: 0,
     lastSeenVersion: '',
+    notifyOnMyMRMerged: true,
   },
 })
 
@@ -63,6 +67,7 @@ export function getSettings(): Settings {
     webhookUseTunnel: store.get('webhookUseTunnel', false),
     launchAtStartup: store.get('launchAtStartup', false),
     notifyOwnerGroupIds: store.get('notifyOwnerGroupIds', []),
+    notifyOnMyMRMerged: store.get('notifyOnMyMRMerged', true),
   }
 }
 
@@ -77,6 +82,7 @@ export function saveSettings(settings: Settings): void {
   store.set('webhookUseTunnel', settings.webhookUseTunnel)
   store.set('launchAtStartup', settings.launchAtStartup)
   store.set('notifyOwnerGroupIds', settings.notifyOwnerGroupIds ?? [])
+  store.set('notifyOnMyMRMerged', settings.notifyOnMyMRMerged ?? true)
 
   if (settings.accessToken) {
     const encrypted = safeStorage.encryptString(settings.accessToken)
@@ -134,4 +140,21 @@ export function getTeamReportGroupId(): number | null {
 
 export function saveTeamReportGroupId(id: number | null): void {
   store.set('teamReportGroupId', id ?? 0)
+}
+
+export function getNotifiedMergedMRIds(): Set<number> {
+  return new Set(store.get('notifiedMergedMRIds', []))
+}
+
+export function hasNotifiedMergedMRId(id: number): boolean {
+  return store.get('notifiedMergedMRIds', []).includes(id)
+}
+
+export function addNotifiedMergedMRId(id: number): void {
+  const ids = store.get('notifiedMergedMRIds', [])
+  if (!ids.includes(id)) {
+    // Keep only last 500 to prevent unbounded growth
+    const updated = [...ids, id].slice(-500)
+    store.set('notifiedMergedMRIds', updated)
+  }
 }

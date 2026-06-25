@@ -117,6 +117,31 @@ export class GitLabClient {
     return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
   }
 
+  async getAuthoredOpenMRs(authorId: number): Promise<MergeRequest[]> {
+    const { data } = await this.http.get('/merge_requests', {
+      params: {
+        author_id: authorId,
+        state: 'opened',
+        per_page: 100,
+        scope: 'all',
+        with_labels_details: true,
+      },
+    })
+    return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+  }
+
+  async getMRByIid(projectId: number, mrIid: number): Promise<MergeRequest | null> {
+    try {
+      const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}`, {
+        params: { with_labels_details: true },
+      })
+      return this.mapMR(data as Record<string, unknown>)
+    } catch {
+      return null
+    }
+  }
+
+
   // ────── Webhook Management ──────
 
   private static readonly HOOK_PREFIX = 'gitlab-mr-manager:'

@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS: Settings = {
   webhookUseTunnel: false,
   launchAtStartup: false,
   notifyOwnerGroupIds: [],
+  notifyOnMyMRMerged: true,
 }
 
 function getUpdateMessageClass(status: UpdateState['status']): string {
@@ -237,6 +238,29 @@ export default function SettingsPage({
             settings.launchAtStartup ? 'translate-x-4' : 'translate-x-1'
           }`} />
         </button>
+      </div>
+
+      {/* Notifications section */}
+      <div className="border-t border-gray-700 pt-2 flex flex-col gap-3">
+        <p className="text-xs font-semibold text-gray-300">🔔 Notifications</p>
+
+        {/* Notify when my MR is merged */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-gray-300">✅ แจ้งเตือนเมื่อ MR ของเราถูก Merge</p>
+            <p className="text-xs text-gray-600 mt-0.5">รับแจ้งเตือนเมื่อ Merge Request ที่เราสร้างถูก merge แล้ว</p>
+          </div>
+          <button
+            onClick={() => setSettings({ ...settings, notifyOnMyMRMerged: !settings.notifyOnMyMRMerged })}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+              settings.notifyOnMyMRMerged ? 'bg-orange-500' : 'bg-gray-600'
+            }`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+              settings.notifyOnMyMRMerged ? 'translate-x-4' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
       </div>
 
       {/* Owner Group Notifications */}

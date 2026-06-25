@@ -1,7 +1,7 @@
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../shared/types'
-import { getSettings, isConfigured, pruneNotifiedMRIds } from './store'
-import { notifyNewMRs, notifyCIPipelineFailed, notifyLabelsChanged, notifyNewGroupMRs } from './notifier'
+import { getSettings, isConfigured, pruneNotifiedMRIds, hasNotifiedMergedMRId, addNotifiedMergedMRId } from './store'
+import { notifyNewMRs, notifyMRMerged, notifyCIPipelineFailed, notifyLabelsChanged, notifyNewGroupMRs } from './notifier'
 
 type StateChangeCallback = (state: AppState) => void
 
@@ -10,6 +10,8 @@ let previousReviewMRIds = new Set<number>()
 let previousPipelineStatuses = new Map<number, MergeRequest['pipelineStatus']>()
 let previousMRLabels = new Map<number, string[]>()
 let previousGroupMRIds = new Map<number, Set<number>>()
+// Track user's authored open MRs — used to detect when one gets merged/closed
+let previousAuthoredOpenMRIds = new Map<number, { projectId: number; iid: number }>()
 let cachedUser: GitLabUser | null = null
 
 async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[], chunkSize = 5): Promise<void> {
@@ -68,21 +70,26 @@ export async function syncNow(): Promise<void> {
     const user = cachedUser ?? (cachedUser = await client.getCurrentUser())
     currentState.currentUser = user
 
-    const [reviewResult, allOpenResult] = await Promise.allSettled([
+    const [reviewResult, allOpenResult, authoredResult] = await Promise.allSettled([
       client.getMRsForReview(user.id).then(async (mrs) => {
         await fetchPipelinesThrottled(client, mrs)
         return mrs
       }),
       client.getAllOpenMRs(settings.projectIds),
+      // Fetch MRs authored by current user — to detect merged ones
+      settings.notifyOnMyMRMerged
+        ? client.getAuthoredOpenMRs(user.id)
+        : Promise.resolve(null),
     ])
 
     const reviewMRs = reviewResult.status === 'fulfilled' ? reviewResult.value : currentState.myReviewMRs
     const allOpenMRs = allOpenResult.status === 'fulfilled' ? allOpenResult.value : currentState.allOpenMRs
+    const authoredOpenMRs = authoredResult.status === 'fulfilled' ? authoredResult.value : null
 
     const syncErrors: string[] = []
     if (reviewResult.status === 'rejected') syncErrors.push(`[API Error] My Reviews: ${reviewResult.reason instanceof Error ? reviewResult.reason.message : String(reviewResult.reason)}`)
     if (allOpenResult.status === 'rejected') syncErrors.push(`[API Error] All Open: ${allOpenResult.reason instanceof Error ? allOpenResult.reason.message : String(allOpenResult.reason)}`)
-    
+
     currentState.error = syncErrors.length > 0 ? syncErrors.join(' | ') : null
 
     // Detect running→failed pipeline transitions
@@ -118,6 +125,30 @@ export async function syncNow(): Promise<void> {
       }
     }
     previousMRLabels = new Map(allTrackedMRs.map((mr) => [mr.id, mr.labels.map((l) => l.name)]))
+
+    // ── Detect authored MRs that got merged ──
+    if (settings.notifyOnMyMRMerged && authoredOpenMRs !== null && previousAuthoredOpenMRIds.size > 0) {
+      const currentAuthoredIds = new Set(authoredOpenMRs.map((mr) => mr.id))
+      // Find MR IDs that were open last cycle but are now gone
+      const disappeared = [...previousAuthoredOpenMRIds.entries()].filter(([id]) => !currentAuthoredIds.has(id))
+
+      for (const [id, { projectId, iid }] of disappeared) {
+        if (hasNotifiedMergedMRId(id)) continue
+        // Verify actual state via API (could be close, not merge)
+        const mr = await client.getMRByIid(projectId, iid).catch(() => null)
+        if (mr?.state === 'merged') {
+          addNotifiedMergedMRId(id)
+          notifyMRMerged(mr)
+          console.log(`[scheduler] MR !${iid} merged — notified author`)
+        }
+      }
+    }
+    // Update authored open MR tracking map
+    if (authoredOpenMRs !== null) {
+      previousAuthoredOpenMRIds = new Map(
+        authoredOpenMRs.map((mr) => [mr.id, { projectId: mr.projectId, iid: mr.iid }])
+      )
+    }
 
     currentState.myReviewMRs = reviewMRs
     currentState.allOpenMRs = allOpenMRs
@@ -179,3 +210,28 @@ export function restartScheduler(): void {
   const settings = getSettings()
   startScheduler(settings.refreshIntervalMinutes)
 }
+
+/**
+ * Called from webhook handler when action=merge is received in real-time.
+ * Immediately notifies the author without waiting for next sync cycle.
+ */
+export async function handleWebhookMerge(authorId: number, projectId: number, mrIid: number): Promise<void> {
+  const settings = getSettings()
+  if (!settings.notifyOnMyMRMerged) return
+
+  const currentUserId = cachedUser?.id
+  if (!currentUserId || currentUserId !== authorId) return
+
+  const mr = await ((): Promise<MergeRequest | null> => {
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getMRByIid(projectId, mrIid).catch(() => null)
+  })()
+
+  if (!mr) return
+  if (hasNotifiedMergedMRId(mr.id)) return
+
+  addNotifiedMergedMRId(mr.id)
+  notifyMRMerged(mr)
+  console.log(`[webhook] MR !${mrIid} merged (real-time) — notified author`)
+}
+

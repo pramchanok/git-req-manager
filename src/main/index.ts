@@ -19,6 +19,7 @@ import {
   syncNow,
   getAppState,
   setStateChangeCallback,
+  handleWebhookMerge,
 } from './scheduler'
 import { startWebhookServer, stopWebhookServer, getWebhookAddress } from './webhook'
 import {
@@ -153,7 +154,13 @@ async function startApp(): Promise<void> {
       const settings = getSettings()
       if (settings.webhookEnabled) {
         syncNow()
-        startWebhookServer(settings.webhookPort, settings.webhookSecret, () => { syncNow() })
+        startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
+          // Real-time merge notification for the MR author
+          if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+            void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
+          }
+          syncNow()
+        })
         if (settings.webhookUseTunnel) {
           startTunnel(settings.webhookPort)
         } else if (settings.webhookPublicUrl.trim()) {
@@ -322,7 +329,13 @@ function setupIPC(): void {
       // Webhook active — ปิด polling, sync ครั้งเดียวตอนเริ่ม
       stopScheduler()
       syncNow()
-      startWebhookServer(settings.webhookPort, settings.webhookSecret, () => { syncNow() })
+      startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
+        // Real-time merge notification for the MR author
+        if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+          void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
+        }
+        syncNow()
+      })
       if (settings.webhookUseTunnel) {
         disconnectSocketClient()
         startTunnel(settings.webhookPort)

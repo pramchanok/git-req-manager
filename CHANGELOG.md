@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.9] - 2026-06-25
+
+### ฟีเจอร์ใหม่ (New Feature)
+
+- **แจ้งเตือนเมื่อ MR ของเราถูก Merge** — เพิ่มการแจ้งเตือน `✅ MR Merged!` สำหรับเจ้าของ MR เมื่อ Merge Request ที่ตัวเองสร้างถูก merge แล้ว รองรับทั้งสองโหมด:
+  - **Polling Mode** — ตรวจจับทุกรอบ sync โดย track MR ที่ยัง open อยู่ และยืนยัน state ผ่าน API ก่อนแจ้งเตือน (กันแจ้งเตือนเมื่อ MR ถูก close แทน)
+  - **Webhook Mode (Real-time)** — รับ event `action=merge` จาก GitLab Webhook และแจ้งเตือนทันทีโดยไม่ต้องรอรอบ sync ถัดไป
+  - มีปุ่ม toggle ในหน้า Settings เพื่อเปิด/ปิดฟีเจอร์นี้ได้ (ค่าเริ่มต้น: เปิด)
+  - ระบบ guard ป้องกันการแจ้งเตือนซ้ำ ด้วยการบันทึก MR ID ที่แจ้งไปแล้วใน persistent store
+
+---
+
 ## [1.3.8] - 2026-06-18
 
 ### แก้ไขบั๊ก & ปรับปรุง (Bug Fixes & Improvements)
