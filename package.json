@@ -83,9 +83,7 @@
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "57TK5HXL9A"
-      }
+      "notarize": true
     },
     "nsis": {
       "oneClick": true,
@@ -104,7 +102,7 @@
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
     "electron": "^30.0.9",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "26.15.3",
     "postcss": "^8.4.38",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.4",

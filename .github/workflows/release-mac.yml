@@ -50,6 +50,8 @@ jobs:
       - name: Publish macOS release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # electron-builder v26: notarize:true reads teamId from APPLE_TEAM_ID env
+          APPLE_TEAM_ID: "57TK5HXL9A"
         run: npm run publish:mac
 
       - name: Update GitHub release notes
