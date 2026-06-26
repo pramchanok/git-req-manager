@@ -51,6 +51,7 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+            release/*.blockmap
             release/latest-mac.yml
 
   publish-windows:
@@ -88,6 +89,7 @@ jobs:
           name: windows-artifacts
           path: |
             release/*.exe
+            release/*.blockmap
             release/latest.yml
 
   finalize:
@@ -112,10 +114,14 @@ jobs:
         with:
           path: artifacts
 
-      - name: Flatten artifacts directory
+      - name: Flatten and rename artifacts
         run: |
           mkdir release-files
-          find artifacts -type f -exec cp {} release-files/ \;
+          find artifacts -type f | while read -r file; do
+            name=$(basename "$file")
+            new_name=$(echo "$name" | tr ' ' '-')
+            cp "$file" "release-files/$new_name"
+          done
 
       - name: Create GitHub Release
         env:
