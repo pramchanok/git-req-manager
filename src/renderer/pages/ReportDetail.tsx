@@ -616,13 +616,13 @@ ${formatMRList(developerData.reviewed)}
             <div className="flex-1 flex flex-col bg-gray-800/30 border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
               
               {/* Header row of Right Column: Dashboard vs Raw MD, and Timeframe navigation */}
-              <div className="px-6 py-4 bg-gray-950/30 border-b border-gray-850 flex items-center justify-between flex-shrink-0 gap-4">
+              <div className="px-6 py-3.5 bg-gray-950/30 border-b border-gray-850 flex items-center justify-between flex-shrink-0 gap-4">
                 
-                {/* 1. Left: View Tabs Selector (Dashboard / Raw MD) with gap-1.5 and padding p-1 */}
-                <div className="flex gap-1.5 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-shrink-0">
+                {/* 1. Left: View Tabs Selector (Dashboard / Raw MD) */}
+                <div className="flex gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-shrink-0">
                   <button
                     onClick={() => setActiveViewTab('dashboard')}
-                    className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
                       activeViewTab === 'dashboard'
                         ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
                         : 'text-gray-400 hover:text-gray-200'
@@ -632,7 +632,7 @@ ${formatMRList(developerData.reviewed)}
                   </button>
                   <button
                     onClick={() => setActiveViewTab('markdown')}
-                    className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
                       activeViewTab === 'markdown'
                         ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
                         : 'text-gray-400 hover:text-gray-200'
@@ -642,37 +642,40 @@ ${formatMRList(developerData.reviewed)}
                   </button>
                 </div>
 
-                {/* 2. Center: Date Navigation Toolbar & Label (Easy to navigate date range inside large window) */}
-                <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleNavigateTimeframe('prev')}
-                      className="w-6 h-6 flex items-center justify-center bg-gray-900 border border-gray-800 hover:bg-gray-800 rounded-md text-xs transition-colors"
-                      title="Previous Period"
-                    >
-                      ◀
-                    </button>
-                    <button
-                      onClick={() => setReferenceDate(new Date())}
-                      className="px-2.5 py-1 text-[10px] font-bold bg-gray-900 border border-gray-800 hover:bg-gray-800 rounded-md transition-colors"
-                    >
-                      {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}
-                    </button>
-                    <button
-                      onClick={() => handleNavigateTimeframe('next')}
-                      className="w-6 h-6 flex items-center justify-center bg-gray-900 border border-gray-800 hover:bg-gray-800 rounded-md text-xs transition-colors"
-                      title="Next Period"
-                    >
-                      ▶
-                    </button>
-                  </div>
-                  <span className="text-[10px] font-bold text-orange-400 tracking-wide truncate max-w-full">
+                {/* 2. Center: Dynamic Date Navigation (Pill-shaped Unified Controller) */}
+                <div className="flex items-center gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-1 max-w-[440px] justify-between">
+                  <button
+                    onClick={() => handleNavigateTimeframe('prev')}
+                    className="w-7 h-7 flex items-center justify-center hover:bg-gray-800 rounded-lg text-xs transition-colors text-gray-400 hover:text-white flex-shrink-0"
+                    title="Previous Period"
+                  >
+                    ◀
+                  </button>
+                  
+                  <span className="text-[10px] font-bold text-orange-400 tracking-wide px-3 text-center truncate select-none flex-1">
                     {timeframeLabel}
                   </span>
+                  
+                  <button
+                    onClick={() => handleNavigateTimeframe('next')}
+                    className="w-7 h-7 flex items-center justify-center hover:bg-gray-800 rounded-lg text-xs transition-colors text-gray-400 hover:text-white flex-shrink-0"
+                    title="Next Period"
+                  >
+                    ▶
+                  </button>
+
+                  <div className="w-px h-4 bg-gray-800 mx-1 flex-shrink-0"></div>
+
+                  <button
+                    onClick={() => setReferenceDate(new Date())}
+                    className="px-2.5 h-7 flex items-center justify-center text-[9px] font-bold bg-gray-850 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/5 flex-shrink-0"
+                  >
+                    {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}
+                  </button>
                 </div>
 
-                {/* 3. Right: Timeframe Selector (Day / Week / Month) inside large window */}
-                <div className="flex gap-1.5 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-shrink-0">
+                {/* 3. Right: Timeframe Selector (Day / Week / Month) */}
+                <div className="flex gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-shrink-0">
                   {(['daily', 'weekly', 'monthly'] as const).map((t) => (
                     <button
                       key={t}
@@ -680,7 +683,7 @@ ${formatMRList(developerData.reviewed)}
                         setTimeframe(t)
                         setReferenceDate(new Date())
                       }}
-                      className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all duration-200 ${
                         timeframe === t
                           ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
                           : 'text-gray-400 hover:text-gray-200'
