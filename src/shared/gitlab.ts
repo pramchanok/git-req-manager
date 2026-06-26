@@ -89,6 +89,30 @@ export class GitLabClient {
     return mrs
   }
 
+  async getGroupMRsInTimeframe(groupId: number, since: string, until?: string): Promise<MergeRequest[]> {
+    const mrs: MergeRequest[] = []
+    let page = 1
+    const params: Record<string, unknown> = {
+      state: 'all',
+      per_page: 100,
+      updated_after: since,
+      with_labels_details: true,
+    }
+    if (until) {
+      params.updated_before = until
+    }
+    while (true) {
+      const { data } = await this.http.get(`/groups/${groupId}/merge_requests`, {
+        params: { ...params, page },
+      })
+      if (data.length === 0) break
+      mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
+      if (data.length < 100) break
+      page++
+    }
+    return mrs
+  }
+
   async getGroupMembers(groupId: number): Promise<GitLabUser[]> {
     const members: GitLabUser[] = []
     let page = 1
@@ -327,6 +351,7 @@ export class GitLabClient {
       username: u.username as string,
       avatarUrl: u.avatar_url as string,
       webUrl: u.web_url as string,
+      isAdmin: u.is_admin as boolean | undefined,
     }
   }
 

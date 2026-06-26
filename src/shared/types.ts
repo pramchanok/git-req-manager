@@ -54,6 +54,7 @@ export interface GitLabUser {
   username: string
   avatarUrl: string
   webUrl: string
+  isAdmin?: boolean
 }
 
 export interface GitLabGroup {

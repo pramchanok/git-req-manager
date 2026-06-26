@@ -1,193 +1,258 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../../../shared/types'
-import MRCard from '../components/MRCard'
-import { timeAgo } from '../components/MRCard'
 import { SkeletonDevRow } from '../components/SkeletonCard'
 
 interface TeamReportProps {
   appState: AppState
 }
 
-type DetailTab = 'authored' | 'reviewing' | 'assigned' | 'merged'
-
-interface DevSummary {
-  user: GitLabUser
-  authored: MergeRequest[]
-  reviewing: MergeRequest[]
-  assigned: MergeRequest[]
-}
-
 const FALLBACK_AVATAR =
   'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="%236b7280"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="%236b7280"/></svg>'
 
-function buildDevSummary(mrs: MergeRequest[]): Map<string, DevSummary> {
-  const map = new Map<string, DevSummary>()
-
-  const getOrCreate = (user: GitLabUser): DevSummary => {
-    if (!map.has(user.username)) {
-      map.set(user.username, { user, authored: [], reviewing: [], assigned: [] })
-    }
-    return map.get(user.username)!
-  }
-
-  for (const mr of mrs) {
-    getOrCreate(mr.author).authored.push(mr)
-    for (const reviewer of mr.reviewers) getOrCreate(reviewer).reviewing.push(mr)
-    for (const assignee of mr.assignees) getOrCreate(assignee).assigned.push(mr)
-  }
-
-  return map
-}
-
 export default function TeamReport({ appState }: TeamReportProps) {
   const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [activeDetailTab, setActiveDetailTab] = useState<Map<string, DetailTab>>(new Map())
-  const [mergedData, setMergedData] = useState<Map<string, MergeRequest[] | 'loading'>>(new Map())
-  const loadedSet = useRef(new Set<string>())
-
-  // ── Group filter ──────────────────────────────────────────────────────────
   const [groups, setGroups] = useState<GitLabGroup[]>([])
-  const [groupsLoading, setGroupsLoading] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
   const [groupMembers, setGroupMembers] = useState<GitLabUser[]>([])
+  const [groupMRs, setGroupMRs] = useState<MergeRequest[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
   const [membersLoading, setMembersLoading] = useState(false)
+  const [mrsLoading, setMrsLoading] = useState(false)
 
-  // Load groups + saved group preference once when the app is configured
+  // Timeframe and Navigation State
+  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const [referenceDate, setReferenceDate] = useState<Date>(new Date())
+
+  // Access Control Checks
+  const isAdmin = appState.currentUser?.isAdmin === true
+  const isOwner = appState.ownerGroups && appState.ownerGroups.length > 0
+  const hasAccess = isAdmin || isOwner
+
+  // 1. Fetch GitLab groups on mount
   useEffect(() => {
-    if (!appState.isConfigured) return
-    let cancelled = false
+    if (!appState.isConfigured || !hasAccess) return
     setGroupsLoading(true)
-    Promise.all([
-      window.electronAPI.getGitLabGroups(),
-      window.electronAPI.getTeamReportGroup(),
-    ])
-      .then(([loadedGroups, savedId]) => {
-        if (cancelled) return
-        setGroups(loadedGroups)
-        setGroupsLoading(false)
-        if (savedId !== null) {
+    window.electronAPI
+      .getGitLabGroups()
+      .then(setGroups)
+      .catch(console.error)
+      .finally(() => setGroupsLoading(false))
+  }, [appState.isConfigured, hasAccess])
+
+  // Filter groups selectable by the user: Admins see all, Owners see only owned groups
+  const selectableGroups = useMemo(() => {
+    if (isAdmin) return groups
+    return appState.ownerGroups || []
+  }, [groups, appState.ownerGroups, isAdmin])
+
+  // Auto-select first group or load saved preference
+  useEffect(() => {
+    if (selectedGroupId === null && selectableGroups.length > 0) {
+      window.electronAPI.getTeamReportGroup().then((savedId) => {
+        if (savedId && selectableGroups.some((g) => g.id === savedId)) {
           setSelectedGroupId(savedId)
-          setMembersLoading(true)
-          return window.electronAPI
-            .getGroupMembers(savedId)
-            .then((members) => { if (!cancelled) setGroupMembers(members) })
-            .finally(() => { if (!cancelled) setMembersLoading(false) })
+        } else {
+          setSelectedGroupId(selectableGroups[0].id)
         }
       })
-      .catch(() => { if (!cancelled) setGroupsLoading(false) })
-    return () => { cancelled = true }
-  }, [appState.isConfigured])
+    }
+  }, [selectableGroups, selectedGroupId])
 
-  const handleGroupChange = async (groupId: number | null) => {
+  // Save selected group preference & reset sub-states
+  const handleGroupChange = (groupId: number) => {
     setSelectedGroupId(groupId)
     void window.electronAPI.setTeamReportGroup(groupId)
-    // Reset expanded/detail state so stale panels don't show
-    setExpanded(new Set())
-    setActiveDetailTab(new Map())
-    setMergedData(new Map())
-    loadedSet.current.clear()
-    if (groupId !== null) {
-      setMembersLoading(true)
-      try {
-        const members = await window.electronAPI.getGroupMembers(groupId)
-        setGroupMembers(members)
-      } catch {
-        setGroupMembers([])
-      }
-      setMembersLoading(false)
-    } else {
-      setGroupMembers([])
-    }
+    setGroupMRs([])
   }
 
-  // ── MR data ───────────────────────────────────────────────────────────────
-
-  // Merge allOpenMRs + myReviewMRs (deduplicated) so the current user always appears
-  const allMRs = useMemo(() => {
-    const seen = new Set<number>()
-    const combined: MergeRequest[] = []
-    for (const mr of [...appState.allOpenMRs, ...appState.myReviewMRs]) {
-      if (!seen.has(mr.id)) {
-        seen.add(mr.id)
-        combined.push(mr)
-      }
+  // 2. Fetch Group Members
+  useEffect(() => {
+    if (selectedGroupId === null) {
+      setGroupMembers([])
+      return
     }
-    return combined
-  }, [appState.allOpenMRs, appState.myReviewMRs])
+    setMembersLoading(true)
+    window.electronAPI
+      .getGroupMembers(selectedGroupId)
+      .then(setGroupMembers)
+      .catch(() => setGroupMembers([]))
+      .finally(() => setMembersLoading(false))
+  }, [selectedGroupId])
 
-  const devSummaries = useMemo(() => {
-    const summaries = buildDevSummary(allMRs)
+  // 3. Compute date range (sinceIso & label)
+  const { sinceIso, timeframeLabel } = useMemo(() => {
+    const d = new Date(referenceDate)
+    let label = ''
 
-    if (selectedGroupId !== null && groupMembers.length > 0) {
-      const memberSet = new Set(groupMembers.map((m) => m.username))
-      // Ensure every group member has a row (even if they have no open MRs)
-      for (const member of groupMembers) {
-        if (!summaries.has(member.username)) {
-          summaries.set(member.username, { user: member, authored: [], reviewing: [], assigned: [] })
+    if (timeframe === 'daily') {
+      d.setHours(0, 0, 0, 0)
+      label = d.toLocaleDateString()
+    } else if (timeframe === 'weekly') {
+      // Find Monday
+      const day = d.getDay()
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+      d.setDate(diff)
+      d.setHours(0, 0, 0, 0)
+      const end = new Date(d)
+      end.setDate(end.getDate() + 6)
+      end.setHours(23, 59, 59, 999)
+      label = `${d.toLocaleDateString()} - ${end.toLocaleDateString()}`
+    } else if (timeframe === 'monthly') {
+      d.setDate(1)
+      d.setHours(0, 0, 0, 0)
+      label = d.toLocaleString('default', { month: 'long', year: 'numeric' })
+    }
+
+    return {
+      sinceIso: d.toISOString(),
+      timeframeLabel: label,
+    }
+  }, [timeframe, referenceDate])
+
+  // 4. Fetch Group MRs based on date range
+  useEffect(() => {
+    if (selectedGroupId === null || !hasAccess) return
+    let active = true
+    setMrsLoading(true)
+
+    window.electronAPI
+      .getGroupMRsInTimeframe(selectedGroupId, sinceIso)
+      .then((mrs) => {
+        if (active) {
+          setGroupMRs(mrs)
         }
+      })
+      .catch((err) => {
+        console.error(err)
+        if (active) setGroupMRs([])
+      })
+      .finally(() => {
+        if (active) setMrsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [selectedGroupId, sinceIso, hasAccess])
+
+  // 5. Navigate timeframe (previous/next)
+  const handleNavigateTimeframe = (direction: 'prev' | 'next') => {
+    const offset = direction === 'prev' ? -1 : 1
+    const newDate = new Date(referenceDate)
+
+    if (timeframe === 'daily') {
+      newDate.setDate(newDate.getDate() + offset)
+    } else if (timeframe === 'weekly') {
+      newDate.setDate(newDate.getDate() + offset * 7)
+    } else if (timeframe === 'monthly') {
+      newDate.setMonth(newDate.getMonth() + offset)
+    }
+
+    setReferenceDate(newDate)
+  }
+
+  // 6. Aggregate Group metrics
+  const groupStats = useMemo(() => {
+    const created = groupMRs.filter((mr) => mr.createdAt >= sinceIso).length
+    const merged = groupMRs.filter(
+      (mr) => mr.state === 'merged' && mr.mergedAt && mr.mergedAt >= sinceIso
+    ).length
+
+    // Active developers: has authored, merged, or been assigned/reviewer of updated MR
+    const activeUsernames = new Set<string>()
+    groupMRs.forEach((mr) => {
+      if (mr.createdAt >= sinceIso) activeUsernames.add(mr.author.username)
+      if (mr.state === 'merged' && mr.mergedAt && mr.mergedAt >= sinceIso) {
+        activeUsernames.add(mr.author.username)
       }
-      // Filter to group members only
-      return Array.from(summaries.values()).filter((d) => memberSet.has(d.user.username))
-    }
-
-    return Array.from(summaries.values())
-  }, [allMRs, selectedGroupId, groupMembers])
-
-  const filtered = useMemo(
-    () =>
-      search.trim()
-        ? devSummaries.filter(
-            (d) =>
-              d.user.name.toLowerCase().includes(search.toLowerCase()) ||
-              d.user.username.toLowerCase().includes(search.toLowerCase())
-          )
-        : devSummaries,
-    [devSummaries, search]
-  )
-  const sorted = useMemo(
-    () =>
-      [...filtered].sort((a, b) => {
-        const total = (s: DevSummary) => s.authored.length + s.reviewing.length + s.assigned.length
-        return total(b) - total(a)
-      }),
-    [filtered]
-  )
-
-  const loadMerged = useCallback(async (username: string) => {
-    if (loadedSet.current.has(username)) return
-    loadedSet.current.add(username)
-    setMergedData((prev) => new Map(prev).set(username, 'loading'))
-    try {
-      const mrs = await window.electronAPI.getMergedMRsByAuthor(username)
-      setMergedData((prev) => new Map(prev).set(username, mrs))
-    } catch {
-      setMergedData((prev) => new Map(prev).set(username, []))
-    }
-  }, [])
-
-  const toggleExpand = useCallback((username: string, summary: DevSummary) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(username)) next.delete(username)
-      else next.add(username)
-      return next
+      mr.assignees.forEach((a) => activeUsernames.add(a.username))
+      mr.reviewers.forEach((r) => activeUsernames.add(r.username))
     })
-    // Default to whichever role has the most MRs
-    setActiveDetailTab((prev) => {
-      if (prev.has(username)) return prev
-      const best = (['authored', 'reviewing', 'assigned'] as const).reduce(
-        (a, b) => (summary[a].length >= summary[b].length ? a : b)
+
+    const activeCount = groupMembers.filter((m) => activeUsernames.has(m.username)).length
+
+    return { created, merged, activeCount }
+  }, [groupMRs, groupMembers, sinceIso])
+
+  // 7. Aggregate data per developer
+  const devReportRows = useMemo(() => {
+    const rows = groupMembers.map((member) => {
+      const authored = groupMRs.filter(
+        (mr) => mr.author.username === member.username && mr.createdAt >= sinceIso
       )
-      return new Map(prev).set(username, best)
-    })
-    // Pre-fetch merged MRs in background so count is ready when tab is clicked
-    void loadMerged(username)
-  }, [loadMerged])
 
-  const handleDetailTab = (username: string, tab: DetailTab) => {
-    setActiveDetailTab((prev) => new Map(prev).set(username, tab))
-    if (tab === 'merged') void loadMerged(username)
+      const merged = groupMRs.filter(
+        (mr) =>
+          mr.author.username === member.username &&
+          mr.state === 'merged' &&
+          mr.mergedAt &&
+          mr.mergedAt >= sinceIso
+      )
+
+      const reviewed = groupMRs.filter(
+        (mr) =>
+          mr.author.username !== member.username &&
+          (mr.reviewers.some((r) => r.username === member.username) ||
+            mr.assignees.some((a) => a.username === member.username)) &&
+          mr.updatedAt >= sinceIso
+      )
+
+      const totalActivity = authored.length + merged.length + reviewed.length
+
+      return {
+        user: member,
+        created: authored.length,
+        merged: merged.length,
+        reviewed: reviewed.length,
+        totalActivity,
+      }
+    })
+
+    // Filter by search query
+    const filtered = search.trim()
+      ? rows.filter(
+          (r) =>
+            r.user.name.toLowerCase().includes(search.toLowerCase()) ||
+            r.user.username.toLowerCase().includes(search.toLowerCase())
+        )
+      : rows
+
+    // Sort by activity descending
+    return [...filtered].sort((a, b) => b.totalActivity - a.totalActivity)
+  }, [groupMembers, groupMRs, sinceIso, search])
+
+  const maxActivity = useMemo(() => {
+    const max = Math.max(...devReportRows.map((r) => r.totalActivity), 0)
+    return max === 0 ? 1 : max
+  }, [devReportRows])
+
+  // Open detailed report window
+  const openDetailReport = (user: GitLabUser) => {
+    if (selectedGroupId === null) return
+    window.electronAPI.openReportWindow(
+      user.username,
+      user.name,
+      user.avatarUrl,
+      timeframe,
+      selectedGroupId
+    )
+  }
+
+  // ── Access Denied Screen ───────────────────────────────────────────────────
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-8 bg-gray-900">
+        <div className="w-16 h-16 bg-red-950/40 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        </div>
+        <h2 className="text-base font-bold text-white mb-2">Access Restricted</h2>
+        <p className="text-gray-400 text-xs max-w-xs leading-relaxed">
+          This report is only accessible to GitLab Administrators or Group Owners.
+        </p>
+      </div>
+    )
   }
 
   if (!appState.isConfigured) {
@@ -199,183 +264,171 @@ export default function TeamReport({ appState }: TeamReportProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Search + Group filter */}
-      <div className="px-3 py-2 border-b border-gray-700 flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Search developer…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-0 bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 placeholder-gray-500"
-        />
+    <div className="flex flex-col h-full bg-gray-900 text-white page-fade">
+      {/* Group Selector & Search */}
+      <div className="px-3 py-2 border-b border-gray-950 bg-gray-900/60 flex items-center gap-2 flex-shrink-0">
         <select
           value={selectedGroupId ?? ''}
-          onChange={(e) => void handleGroupChange(e.target.value ? Number(e.target.value) : null)}
-          disabled={groupsLoading}
-          title={groups.find((g) => g.id === selectedGroupId)?.fullPath ?? 'Filter by group'}
-          className="max-w-[130px] bg-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50 cursor-pointer"
+          onChange={(e) => handleGroupChange(Number(e.target.value))}
+          disabled={groupsLoading || selectableGroups.length === 0}
+          className="flex-1 bg-gray-800 border border-gray-700 text-white text-xs rounded px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50 cursor-pointer"
         >
-          <option value="">All groups</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
+          {selectableGroups.length === 0 ? (
+            <option value="">No Groups Owned</option>
+          ) : (
+            selectableGroups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))
+          )}
         </select>
+        <input
+          type="text"
+          placeholder="Search dev…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-28 bg-gray-800 border border-gray-700 text-white text-xs rounded px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 placeholder-gray-500"
+        />
       </div>
 
-      {/* Dev list */}
-      <div className="flex-1 overflow-y-auto scroll-hide">
-        {membersLoading ? (
-          <div className="flex flex-col">
-            {[...Array(5)].map((_, i) => <SkeletonDevRow key={i} />)}
+      {/* Timeframe Controller Toolbar */}
+      <div className="px-3 py-2 bg-gray-950/40 border-b border-gray-950 flex flex-col gap-2 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex bg-gray-800 rounded p-0.5 border border-gray-700">
+            {(['daily', 'weekly', 'monthly'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTimeframe(t)
+                  setReferenceDate(new Date())
+                }}
+                className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all ${
+                  timeframe === t
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {t === 'daily' ? 'Day' : t === 'weekly' ? 'Week' : 'Month'}
+              </button>
+            ))}
           </div>
-        ) : sorted.length === 0 ? (
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => handleNavigateTimeframe('prev')}
+              className="w-6 h-6 flex items-center justify-center bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded text-xs transition-colors"
+            >
+              ◀
+            </button>
+            <button
+              onClick={() => setReferenceDate(new Date())}
+              className="px-2 py-1 text-[10px] font-semibold bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded transition-colors"
+            >
+              Today
+            </button>
+            <button
+              onClick={() => handleNavigateTimeframe('next')}
+              className="w-6 h-6 flex items-center justify-center bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded text-xs transition-colors"
+            >
+              ▶
+            </button>
+          </div>
+        </div>
+
+        <div className="text-center">
+          <span className="text-xs font-semibold text-orange-400 tracking-wide">
+            {timeframeLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Group Overview Stats Card Grid */}
+      {selectedGroupId !== null && (
+        <div className="grid grid-cols-3 gap-2 px-3 py-2 bg-gray-950/20 border-b border-gray-950 flex-shrink-0">
+          <div className="bg-gray-800/20 border border-gray-800/60 rounded p-2 text-center backdrop-blur-sm">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Created</p>
+            <p className="text-sm font-bold text-orange-400 mt-0.5">{groupStats.created}</p>
+          </div>
+          <div className="bg-gray-800/20 border border-gray-800/60 rounded p-2 text-center backdrop-blur-sm">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Merged</p>
+            <p className="text-sm font-bold text-green-400 mt-0.5">{groupStats.merged}</p>
+          </div>
+          <div className="bg-gray-800/20 border border-gray-800/60 rounded p-2 text-center backdrop-blur-sm">
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Active Devs</p>
+            <p className="text-sm font-bold text-blue-400 mt-0.5">{groupStats.activeCount}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Dev performance list */}
+      <div className="flex-1 overflow-y-auto scroll-hide">
+        {membersLoading || mrsLoading ? (
+          <div className="flex flex-col">
+            {[...Array(5)].map((_, i) => (
+              <SkeletonDevRow key={i} />
+            ))}
+          </div>
+        ) : devReportRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
-            <svg className="w-10 h-10 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <svg className="w-10 h-10 text-gray-700 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
             </svg>
             <p className="text-gray-400 text-sm">
-              {selectedGroupId !== null
-                ? 'No members found in this group.'
-                : appState.allOpenMRs.length === 0
-                ? 'No open MRs yet.'
-                : 'No developers found.'}
+              {selectedGroupId === null
+                ? 'Please select a group first.'
+                : 'No contributions recorded in this timeframe.'}
             </p>
           </div>
         ) : (
-          sorted.map((summary) => {
-            const { user, authored, reviewing, assigned } = summary
-            const isExpanded = expanded.has(user.username)
-            const detailTab = activeDetailTab.get(user.username) ?? 'authored'
-            const mergedEntry = mergedData.get(user.username)
-
-            const detailMrs =
-              detailTab === 'merged'
-                ? mergedEntry === 'loading' || mergedEntry === undefined
-                  ? []
-                  : mergedEntry
-                : summary[detailTab]
+          devReportRows.map((row) => {
+            const { user, created, merged, reviewed, totalActivity } = row
+            const activityPercent = (totalActivity / maxActivity) * 100
 
             return (
-              <div key={user.username} className="border-b border-gray-700">
-                {/* Dev row */}
-                <div
-                  className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-800 cursor-pointer"
-                  onClick={() => toggleExpand(user.username, summary)}
-                >
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.name}
-                    className="w-8 h-8 rounded-full flex-shrink-0"
-                    onError={(e) => {
-                      ;(e.target as HTMLImageElement).src = FALLBACK_AVATAR
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white font-medium truncate">{user.name}</p>
-                    <p className="text-xs text-gray-400">@{user.username}</p>
-                    {(() => {
-                      const allDevMrs = [...authored, ...reviewing, ...assigned]
-                      if (allDevMrs.length === 0) return null
-                      const latest = allDevMrs.reduce((a, b) =>
-                        new Date(a.updatedAt) > new Date(b.updatedAt) ? a : b
-                      )
-                      return (
-                        <p className="text-xs text-gray-600">
-                          Active {timeAgo(latest.updatedAt).text}
-                        </p>
-                      )
-                    })()}
+              <div
+                key={user.username}
+                onClick={() => openDetailReport(user)}
+                className="flex items-center gap-3 px-3 py-3 border-b border-gray-800 hover:bg-gray-800/60 transition-colors cursor-pointer"
+                title="คลิกเพื่อดูรายงานละเอียดแยกหน้าต่างใหญ่"
+              >
+                <img
+                  src={user.avatarUrl}
+                  alt={user.name}
+                  className="w-8 h-8 rounded-full flex-shrink-0 border border-gray-700"
+                  onError={(e) => {
+                    ;(e.target as HTMLImageElement).src = FALLBACK_AVATAR
+                  }}
+                />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-white font-bold truncate">{user.name}</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openDetailReport(user)
+                      }}
+                      className="text-[10px] text-orange-400 hover:text-orange-300 font-bold tracking-wide uppercase transition-colors"
+                    >
+                      Report ↗
+                    </button>
                   </div>
-                  {/* Role count badges */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {authored.length > 0 && (
-                      <span
-                        className="text-xs bg-orange-900 text-orange-300 px-1.5 py-0.5 rounded"
-                        title="Authored"
-                      >
-                        ✍️ {authored.length}
-                      </span>
-                    )}
-                    {reviewing.length > 0 && (
-                      <span
-                        className="text-xs bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded"
-                        title="Reviewing"
-                      >
-                        👁 {reviewing.length}
-                      </span>
-                    )}
-                    {assigned.length > 0 && (
-                      <span
-                        className="text-xs bg-green-900 text-green-300 px-1.5 py-0.5 rounded"
-                        title="Assigned"
-                      >
-                        📌 {assigned.length}
-                      </span>
-                    )}
-                    {authored.length === 0 && reviewing.length === 0 && assigned.length === 0 && (
-                      <span className="text-xs text-gray-600">no MRs</span>
-                    )}
-                    <span className="text-gray-600 text-xs ml-1">{isExpanded ? '▲' : '▼'}</span>
+
+                  <div className="flex gap-2.5 text-[9px] text-gray-400 font-medium mt-0.5">
+                    <span className={created > 0 ? 'text-orange-400' : ''}>✍️ {created} created</span>
+                    <span className={merged > 0 ? 'text-green-400' : ''}>🏆 {merged} merged</span>
+                    <span className={reviewed > 0 ? 'text-blue-400' : ''}>👁️ {reviewed} reviewed</span>
+                  </div>
+
+                  {/* Sleek Gradient Activity Meter */}
+                  <div className="w-full bg-gray-800/80 rounded-full h-1 mt-1.5 overflow-hidden">
+                    <div
+                      style={{ width: `${activityPercent}%` }}
+                      className="bg-gradient-to-r from-orange-500 to-green-500 h-full rounded-full transition-all duration-300"
+                    ></div>
                   </div>
                 </div>
-
-                {/* Detail panel */}
-                {isExpanded && (
-                  <div className="border-t border-gray-700">
-                    {/* Inner role tabs */}
-                    <div className="flex bg-gray-800 border-b border-gray-700">
-                      {(
-                        [
-                          { key: 'authored' as DetailTab, label: `✍️ ${authored.length}`, title: 'Authored' },
-                          { key: 'reviewing' as DetailTab, label: `👁 ${reviewing.length}`, title: 'Reviewing' },
-                          { key: 'assigned' as DetailTab, label: `📌 ${assigned.length}`, title: 'Assigned' },
-                          {
-                            key: 'merged' as DetailTab,
-                            label:
-                              mergedEntry === 'loading'
-                                ? '📋 …'
-                                : Array.isArray(mergedEntry)
-                                ? `📋 ${mergedEntry.length}`
-                                : '📋 Merged',
-                            title: 'Merged (30d)',
-                          },
-                        ]
-                      ).map(({ key, label, title }) => (
-                        <button
-                          key={key}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDetailTab(user.username, key)
-                          }}
-                          title={title}
-                          className={`flex-1 py-1.5 text-xs transition-colors ${
-                            detailTab === key
-                              ? 'text-white border-b-2 border-orange-400'
-                              : 'text-gray-500 hover:text-gray-300'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* MR list */}
-                    <div>
-                      {detailTab === 'merged' && mergedEntry === 'loading' ? (
-                        <p className="text-xs text-gray-500 px-4 py-3 text-center animate-pulse">
-                          Loading…
-                        </p>
-                      ) : detailMrs.length === 0 ? (
-                        <p className="text-xs text-gray-500 px-4 py-3 text-center">No MRs.</p>
-                      ) : (
-                        detailMrs.map((mr) => <MRCard key={mr.id} mr={mr} />)
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             )
           })

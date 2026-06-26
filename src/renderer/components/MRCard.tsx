@@ -77,7 +77,7 @@ export default function MRCard({ mr }: MRCardProps) {
 
   return (
     <div
-      className="pl-[10px] pr-3 py-2.5 border-b border-gray-700 border-l-2 border-l-transparent hover:bg-gray-700/50 hover:border-l-orange-400 cursor-pointer group transition-colors"
+      className="pl-[10px] pr-3 py-2.5 border-b border-gray-800 border-l-2 border-l-transparent hover:bg-gray-800/40 hover:border-l-orange-500 cursor-pointer group transition-all duration-200 ease-out"
       onClick={handleOpen}
     >
       <div className="flex items-start gap-2">

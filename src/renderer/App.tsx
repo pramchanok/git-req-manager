@@ -4,9 +4,10 @@ import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TeamReport from './pages/TeamReport'
 import Changelog from './pages/Changelog'
+import ReportDetail from './pages/ReportDetail'
 import Toast, { type ToastData, type ToastType } from './components/Toast'
 
-type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog'
+type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report'
 
 type BadgeColor = 'green' | 'amber' | null
 
@@ -66,7 +67,10 @@ function SettingsIcon() {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>(() => {
+    const params = new URLSearchParams(window.location.search)
+    return (params.get('page') as Page) || 'dashboard'
+  })
   const [toast, setToast] = useState<ToastData | null>(null)
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     setToast({ message, type })
@@ -135,6 +139,10 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [page])
+
+  if (page === 'report') {
+    return <ReportDetail appState={appState} />
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white rounded-xl overflow-hidden shadow-2xl border border-gray-700">

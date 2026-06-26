@@ -23,6 +23,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-team-report-group'),
   setTeamReportGroup: (id: number | null): Promise<void> =>
     ipcRenderer.invoke('set-team-report-group', id),
+  getGroupMRsInTimeframe: (groupId: number, since: string, until?: string): Promise<import('./shared/types').MergeRequest[]> =>
+    ipcRenderer.invoke('get-group-mrs-in-timeframe', groupId, since, until),
+  openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number): Promise<void> =>
+    ipcRenderer.invoke('open-report-window', username, name, avatarUrl, timeframe, groupId),
+  exportReportPDF: (): Promise<boolean> =>
+    ipcRenderer.invoke('export-report-pdf'),
+  saveReportFile: (filename: string, content: string): Promise<boolean> =>
+    ipcRenderer.invoke('save-report-file', filename, content),
   getChangelog: (): Promise<string | null> =>
     ipcRenderer.invoke('get-changelog'),
   setLastSeenVersion: (): Promise<void> =>

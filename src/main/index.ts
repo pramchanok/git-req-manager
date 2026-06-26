@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import {
@@ -424,5 +424,97 @@ function setupIPC(): void {
     const settings = getSettings()
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
     return client.getOwnerGroups().catch(() => [])
+  })
+
+  ipcMain.handle('get-group-mrs-in-timeframe', async (_event, groupId: number, since: string, until?: string) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getGroupMRsInTimeframe(groupId, since, until).catch(() => [])
+  })
+
+  ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => {
+    const reportWin = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      resizable: true,
+      frame: true,
+      title: `Developer Report: ${name}`,
+      icon: path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+      webPreferences: {
+        preload: path.join(__dirname, '../preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    })
+
+    reportWin.setMenuBarVisibility(false)
+
+    if (process.env.NODE_ENV === 'development') {
+      reportWin.loadURL(`http://localhost:5173/?page=report&username=${encodeURIComponent(username)}&name=${encodeURIComponent(name)}&avatarUrl=${encodeURIComponent(avatarUrl)}&timeframe=${encodeURIComponent(timeframe)}&groupId=${groupId}`)
+    } else {
+      reportWin.loadFile(path.join(__dirname, '../renderer/index.html'), {
+        query: {
+          page: 'report',
+          username,
+          name,
+          avatarUrl,
+          timeframe,
+          groupId: String(groupId),
+        }
+      })
+    }
+  })
+
+  ipcMain.handle('export-report-pdf', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+
+    const { filePath } = await dialog.showSaveDialog(win, {
+      title: 'Save PDF Report',
+      defaultPath: `Developer_Report.pdf`,
+      filters: [{ name: 'PDF Files', extensions: ['pdf'] }],
+    })
+
+    if (!filePath) return false
+
+    try {
+      const pdfBuffer = await win.webContents.printToPDF({
+        printBackground: true,
+        margins: { top: 30, bottom: 30, left: 30, right: 30 },
+        pageSize: 'A4',
+      })
+      fs.writeFileSync(filePath, pdfBuffer)
+      return true
+    } catch (err) {
+      console.error('[export-pdf] failed:', err)
+      return false
+    }
+  })
+
+  ipcMain.handle('save-report-file', async (event, filename: string, content: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+
+    const ext = filename.split('.').pop() || 'txt'
+    const filters = ext === 'csv'
+      ? [{ name: 'CSV (Excel) Files', extensions: ['csv'] }]
+      : [{ name: 'Markdown Files', extensions: ['md'] }]
+
+    const { filePath } = await dialog.showSaveDialog(win, {
+      title: `Save ${ext.toUpperCase()} Report`,
+      defaultPath: filename,
+      filters: filters,
+    })
+
+    if (!filePath) return false
+
+    try {
+      fs.writeFileSync(filePath, content, 'utf-8')
+      return true
+    } catch (err) {
+      console.error('[save-report-file] failed:', err)
+      return false
+    }
   })
 }
