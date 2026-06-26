@@ -49,6 +49,7 @@ jobs:
         run: npm run publish:mac
 
   publish-windows:
+    needs: publish-mac
     runs-on: windows-latest
     steps:
       - name: Checkout repository
