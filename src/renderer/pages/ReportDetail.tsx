@@ -615,83 +615,89 @@ ${formatMRList(developerData.reviewed)}
             {/* Right Panel: Content View (Spacious glassmorphic card) */}
             <div className="flex-1 flex flex-col bg-gray-800/30 border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
               
-              {/* Header row of Right Column: Dashboard vs Raw MD, and Timeframe navigation */}
-              <div className="px-6 py-3.5 bg-gray-950/30 border-b border-gray-850 flex items-center justify-between flex-shrink-0 gap-4">
-                
-                {/* 1. Left: View Tabs Selector (Dashboard / Raw MD) */}
-                <div className="flex gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-shrink-0">
-                  <button
-                    onClick={() => setActiveViewTab('dashboard')}
-                    className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                      activeViewTab === 'dashboard'
-                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
-                        : 'text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    📊 Dashboard
-                  </button>
-                  <button
-                    onClick={() => setActiveViewTab('markdown')}
-                    className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                      activeViewTab === 'markdown'
-                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
-                        : 'text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    📝 Raw MD
-                  </button>
-                </div>
+              {/* Header row of Right Column: Split into Title/View row and Controls row */}
+              <div className="bg-gray-950/30 border-b border-gray-850 flex flex-col flex-shrink-0">
+                {/* Row 1: Title & View Tabs */}
+                <div className="px-6 py-3 flex items-center justify-between border-b border-gray-850/50">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">
+                      Contribution Report
+                    </span>
+                    <h2 className="text-xs font-black text-orange-400 mt-0.5 tracking-wide truncate">
+                      {timeframeLabel}
+                    </h2>
+                  </div>
 
-                {/* 2. Center: Dynamic Date Navigation (Pill-shaped Unified Controller) */}
-                <div className="flex items-center gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-1 max-w-[440px] justify-between">
-                  <button
-                    onClick={() => handleNavigateTimeframe('prev')}
-                    className="w-7 h-7 flex items-center justify-center hover:bg-gray-800 rounded-lg text-xs transition-colors text-gray-400 hover:text-white flex-shrink-0"
-                    title="Previous Period"
-                  >
-                    ◀
-                  </button>
-                  
-                  <span className="text-[10px] font-bold text-orange-400 tracking-wide px-3 text-center truncate select-none flex-1">
-                    {timeframeLabel}
-                  </span>
-                  
-                  <button
-                    onClick={() => handleNavigateTimeframe('next')}
-                    className="w-7 h-7 flex items-center justify-center hover:bg-gray-800 rounded-lg text-xs transition-colors text-gray-400 hover:text-white flex-shrink-0"
-                    title="Next Period"
-                  >
-                    ▶
-                  </button>
-
-                  <div className="w-px h-4 bg-gray-800 mx-1 flex-shrink-0"></div>
-
-                  <button
-                    onClick={() => setReferenceDate(new Date())}
-                    className="px-2.5 h-7 flex items-center justify-center text-[9px] font-bold bg-gray-850 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg transition-colors border border-white/5 flex-shrink-0"
-                  >
-                    {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}
-                  </button>
-                </div>
-
-                {/* 3. Right: Timeframe Selector (Day / Week / Month) */}
-                <div className="flex gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner flex-shrink-0">
-                  {(['daily', 'weekly', 'monthly'] as const).map((t) => (
+                  {/* View Tabs Selector (Dashboard / Raw MD) */}
+                  <div className="flex gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner">
                     <button
-                      key={t}
-                      onClick={() => {
-                        setTimeframe(t)
-                        setReferenceDate(new Date())
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                        timeframe === t
+                      onClick={() => setActiveViewTab('dashboard')}
+                      className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                        activeViewTab === 'dashboard'
                           ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
                           : 'text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      {t === 'daily' ? 'Day' : t === 'weekly' ? 'Week' : 'Month'}
+                      📊 Dashboard
                     </button>
-                  ))}
+                    <button
+                      onClick={() => setActiveViewTab('markdown')}
+                      className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                        activeViewTab === 'markdown'
+                          ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      📝 Raw MD
+                    </button>
+                  </div>
+                </div>
+
+                {/* Row 2: Navigation & Timeframe Controls */}
+                <div className="px-6 py-2.5 flex items-center justify-between bg-gray-950/15">
+                  {/* Date Navigation Toolbar */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleNavigateTimeframe('prev')}
+                      className="w-7 h-7 flex items-center justify-center bg-gray-900 hover:bg-gray-800 border border-gray-800/60 rounded-lg text-xs transition-colors text-gray-400 hover:text-white"
+                      title="Previous Period"
+                    >
+                      ◀
+                    </button>
+                    <button
+                      onClick={() => setReferenceDate(new Date())}
+                      className="px-3 h-7 flex items-center justify-center text-[9px] font-bold bg-gray-900 hover:bg-gray-800 border border-gray-800/60 text-gray-300 hover:text-white rounded-lg transition-colors"
+                    >
+                      {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}
+                    </button>
+                    <button
+                      onClick={() => handleNavigateTimeframe('next')}
+                      className="w-7 h-7 flex items-center justify-center bg-gray-900 hover:bg-gray-800 border border-gray-800/60 rounded-lg text-xs transition-colors text-gray-400 hover:text-white"
+                      title="Next Period"
+                    >
+                      ▶
+                    </button>
+                  </div>
+
+                  {/* Timeframe Selector (Day / Week / Month) */}
+                  <div className="flex gap-1 bg-gray-900 border border-gray-800/80 rounded-xl p-1 shadow-inner">
+                    {(['daily', 'weekly', 'monthly'] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => {
+                          setTimeframe(t)
+                          setReferenceDate(new Date())
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                          timeframe === t
+                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/10'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        {t === 'daily' ? 'Day' : t === 'weekly' ? 'Week' : 'Month'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
