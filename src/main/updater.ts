@@ -55,6 +55,10 @@ function normalizeErrorMessage(error: unknown): string {
   return 'Unknown update error'
 }
 
+function isNotFoundError(message: string): boolean {
+  return /404|not found|cannot find.*yml|enoent|enotfound/i.test(message)
+}
+
 function extractReleaseNotes(info: UpdateInfo): string | null {
   const notes = info.releaseNotes
   if (!notes) return null
@@ -120,11 +124,16 @@ export async function checkForUpdates(): Promise<UpdateState> {
   try {
     await autoUpdater.checkForUpdates()
   } catch (error) {
-    setUpdateState({
-      status: 'error',
-      progressPercent: null,
-      message: normalizeErrorMessage(error),
-    })
+    const message = normalizeErrorMessage(error)
+    if (isNotFoundError(message)) {
+      setNotAvailableState()
+    } else {
+      setUpdateState({
+        status: 'error',
+        progressPercent: null,
+        message,
+      })
+    }
   }
 
   return getUpdateState()
@@ -223,8 +232,7 @@ export function initializeUpdater(): void {
     // artifacts (latest-mac.yml) haven't been uploaded yet. Treat these as
     // "no update available" to avoid showing confusing error UI to users.
     const message = normalizeErrorMessage(error)
-    const isNotFound = /404|not found|cannot find.*yml|enoent|enotfound/i.test(message)
-    if (isNotFound) {
+    if (isNotFoundError(message)) {
       setNotAvailableState()
       return
     }
