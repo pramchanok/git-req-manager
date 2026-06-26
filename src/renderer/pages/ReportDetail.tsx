@@ -656,7 +656,7 @@ ${formatMRList(developerData.reviewed)}
                       onClick={() => setReferenceDate(new Date())}
                       className="px-2.5 py-1 text-[10px] font-bold bg-gray-900 border border-gray-800 hover:bg-gray-800 rounded-md transition-colors"
                     >
-                      Today
+                      {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}
                     </button>
                     <button
                       onClick={() => handleNavigateTimeframe('next')}

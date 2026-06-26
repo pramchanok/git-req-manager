@@ -325,7 +325,7 @@ export default function TeamReport({ appState }: TeamReportProps) {
               onClick={() => setReferenceDate(new Date())}
               className="px-2 py-1 text-[10px] font-semibold bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded transition-colors"
             >
-              Today
+              {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}
             </button>
             <button
               onClick={() => handleNavigateTimeframe('next')}
