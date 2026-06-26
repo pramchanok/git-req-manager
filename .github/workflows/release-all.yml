@@ -41,12 +41,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Publish macOS release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # electron-builder v26: notarize:true reads teamId from APPLE_TEAM_ID env
-          APPLE_TEAM_ID: "57TK5HXL9A"
-        run: npm run publish:mac
+      - name: Build and package macOS app
+        run: npm run package:mac
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/latest-mac.yml
 
   publish-windows:
     needs: publish-mac
@@ -74,11 +79,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Publish Windows release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run publish:win
+      - name: Build and package Windows app
+        run: npm run package:win
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            release/*.exe
+            release/latest.yml
 
   finalize:
     needs: [publish-mac, publish-windows]
@@ -87,14 +97,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Extract release notes from CHANGELOG.md
         run: |
           VERSION=$(node -p "require('./package.json').version")
           awk "/^## \[${VERSION}\]/{flag=1; next} /^---$/{if(flag) exit} flag" CHANGELOG.md > release-notes.txt
 
-      - name: Update GitHub release notes
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts directory
+        run: |
+          mkdir release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+
+      - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          gh release edit "v${VERSION}" --notes-file release-notes.txt --draft=false --repo pramchanok/git-req-manager
+          gh release create "v${VERSION}" release-files/* --notes-file release-notes.txt --title "${VERSION}" --repo pramchanok/git-req-manager
