@@ -12,7 +12,7 @@ function DonutChart({ created, merged, reviewed }: { created: number; merged: nu
 
   if (total === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 bg-gray-955/20 border border-white/5 rounded-2xl p-5">
+      <div className="flex flex-col items-center justify-center py-8 bg-gray-950/20 border border-white/5 rounded-2xl p-5">
         <svg width="80" height="80" viewBox="0 0 36 36" className="animate-pulse">
           <circle cx="18" cy="18" r="15.915" fill="none" stroke="#27272a" strokeWidth="3" />
         </svg>
@@ -109,7 +109,7 @@ function ActivityBarChart({ data }: { data: { timestamp: number; dayLabel: strin
           const heightPct = (d.count / maxVal) * 100
           return (
             <div key={idx} className="flex flex-col items-center justify-end flex-1 h-full group relative">
-              <span className="absolute -top-8 scale-0 group-hover:scale-100 transition-all bg-gray-950 border border-gray-850 text-[9px] font-bold text-orange-400 px-2 py-0.5 rounded-md shadow-xl pointer-events-none z-10 whitespace-nowrap">
+              <span className="absolute -top-8 scale-0 group-hover:scale-100 transition-all bg-gray-950 border border-gray-800 text-[9px] font-bold text-orange-400 px-2 py-0.5 rounded-md shadow-xl pointer-events-none z-10 whitespace-nowrap">
                 {d.count} MRs {d.dateLabel ? `(${d.dateLabel})` : ''}
               </span>
 
@@ -532,7 +532,7 @@ ${formatMRList(developerData.reviewed)}
           <button
             onClick={handleExportMarkdown}
             disabled={loading || isExporting !== null}
-            className="flex items-center gap-1.5 bg-gray-850 hover:bg-gray-755 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-lg border border-gray-700/80 transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-lg border border-gray-700/80 transition-all disabled:opacity-50"
           >
             Export MD
           </button>
@@ -616,9 +616,9 @@ ${formatMRList(developerData.reviewed)}
             <div className="flex-1 flex flex-col bg-gray-800/30 border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
               
               {/* Header row of Right Column: Split into Title/View row and Controls row */}
-              <div className="bg-gray-950/30 border-b border-gray-850 flex flex-col flex-shrink-0">
+              <div className="bg-gray-950/30 border-b border-gray-800 flex flex-col flex-shrink-0">
                 {/* Row 1: Title & View Tabs */}
-                <div className="px-6 py-3 flex items-center justify-between border-b border-gray-850/50">
+                <div className="px-6 py-3 flex items-center justify-between border-b border-gray-800/50">
                   <div className="min-w-0">
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">
                       Contribution Report
@@ -711,7 +711,7 @@ ${formatMRList(developerData.reviewed)}
               ) : (
                 <div className="flex-1 flex flex-col overflow-hidden">
                   {/* Category tabs and Search bar */}
-                  <div className="px-6 py-4 border-b border-gray-855/80 bg-gray-950/10 flex items-center justify-between flex-shrink-0 gap-3">
+                  <div className="px-6 py-4 border-b border-gray-800/80 bg-gray-950/10 flex items-center justify-between flex-shrink-0 gap-3">
                     {/* Fixed Category Tabs overlapping spacing: Added gap-1.5 and padding p-1 */}
                     <div className="flex gap-1.5 bg-gray-900 rounded-xl p-1 border border-gray-800/80">
                       <button
@@ -766,7 +766,7 @@ ${formatMRList(developerData.reviewed)}
                         <div
                           key={mr.id}
                           onClick={() => window.electronAPI.openUrl(mr.webUrl)}
-                          className={`bg-gray-850/30 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700/80 rounded-xl p-4 transition-all duration-350 cursor-pointer flex flex-col gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group ${tabColorClass}`}
+                          className={`bg-gray-800/30 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700/80 rounded-xl p-4 transition-all duration-350 cursor-pointer flex flex-col gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group ${tabColorClass}`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <span className="text-[10px] text-gray-400 font-bold font-mono bg-gray-955/40 px-2 py-0.5 rounded-md flex-shrink-0">
@@ -789,7 +789,7 @@ ${formatMRList(developerData.reviewed)}
                           </div>
 
                           <div className="flex items-center justify-between mt-0.5 text-[9px] text-gray-500 font-semibold">
-                            <span className="bg-gray-955/20 text-gray-400 px-2 py-0.5 rounded-md truncate max-w-[280px]">
+                            <span className="bg-gray-950/20 text-gray-400 px-2 py-0.5 rounded-md truncate max-w-[280px]">
                               📁 {mr.projectNamespace || 'Unknown Project'}
                             </span>
                             <span className="text-gray-500">
