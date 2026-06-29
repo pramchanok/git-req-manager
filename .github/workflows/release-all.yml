@@ -92,8 +92,45 @@ jobs:
             release/*.blockmap
             release/latest.yml
 
+  publish-linux:
+    needs: publish-mac
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            electron-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package Linux app
+        run: npm run package:linux
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            release/*.AppImage
+            release/*.deb
+
   finalize:
-    needs: [publish-mac, publish-windows]
+    needs: [publish-mac, publish-windows, publish-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -1,8 +1,8 @@
 # 🦊 GitLab MR Manager
 
-Desktop app สำหรับติดตาม GitLab Merge Requests ที่รอ review หรือ merge — รองรับ Windows และ macOS
+Desktop app สำหรับติดตาม GitLab Merge Requests ที่รอ review หรือ merge — รองรับ Windows, macOS และ Linux
 
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Tech](https://img.shields.io/badge/built%20with-Electron%20%2B%20TypeScript%20%2B%20React-orange)
 
 ---
@@ -40,6 +40,7 @@ Desktop app สำหรับติดตาม GitLab Merge Requests ที่
 3. ดาวน์โหลดไฟล์ตาม OS:
    - **Windows**: `GitLab.MR.Manager-x.x.x-Setup.exe`
    - **macOS**: `GitLab.MR.Manager-x.x.x.dmg`
+   - **Linux**: `GitLab.MR.Manager-x.x.x.AppImage` หรือ `gitlab-mr-manager_x.x.x_amd64.deb`
 4. ติดตั้งและรัน
 
 > **macOS**: ถ้าขึ้น "unidentified developer" ให้ไป System Preferences → Security & Privacy → Open Anyway
@@ -163,7 +164,10 @@ npm run package:win
 # macOS (.dmg)
 npm run package:mac
 
-# ทั้งสองแพลตฟอร์ม
+# Linux (.AppImage, .deb)
+npm run package:linux
+
+# ทุกแพลตฟอร์ม
 npm run package
 ```
 
@@ -182,8 +186,10 @@ npm run package
 | `npm start` | รัน app จาก dist/ |
 | `npm run package:win` | Package เป็น Windows installer |
 | `npm run package:mac` | Package เป็น macOS .dmg |
+| `npm run package:linux` | Package เป็น Linux .AppImage และ .deb |
 | `npm run publish:win` | Build + publish Windows release ไป GitHub Releases |
 | `npm run publish:mac` | Build + publish macOS release ไป GitHub Releases |
+| `npm run publish:linux` | Build + publish Linux release ไป GitHub Releases |
 
 ### OTA Update ผ่าน GitHub Releases
 
