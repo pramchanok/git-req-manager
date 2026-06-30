@@ -93,9 +93,7 @@
         "deb"
       ],
       "category": "Development",
-      "icon": "assets/icon.png",
-      "maintainer": "Pramchanok <pramchanok@users.noreply.github.com>",
-      "desktopName": "gitlab-req-manager"
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": true,
