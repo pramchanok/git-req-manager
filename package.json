@@ -103,7 +103,10 @@
     }
   },
   "keywords": [],
-  "author": "Pramchanok <pramchanok@users.noreply.github.com>",
+  "author": {
+    "name": "Pramchanok",
+    "email": "pramchanok@users.noreply.github.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "@types/react": "^18.3.3",
