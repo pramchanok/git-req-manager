@@ -93,7 +93,9 @@
         "deb"
       ],
       "category": "Development",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "maintainer": "Pramchanok <pramchanok@users.noreply.github.com>",
+      "desktopName": "gitlab-req-manager"
     },
     "nsis": {
       "oneClick": true,
@@ -101,7 +103,7 @@
     }
   },
   "keywords": [],
-  "author": "",
+  "author": "Pramchanok <pramchanok@users.noreply.github.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/react": "^18.3.3",
