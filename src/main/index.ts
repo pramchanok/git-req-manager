@@ -177,11 +177,10 @@ async function startApp(): Promise<void> {
     revealMainWindow()
   })
 
-  app.on('window-all-closed', (e: Event) => {
+  app.on('window-all-closed', () => {
     // When quitting intentionally (e.g. quitAndInstall), let the quit proceed.
     // Otherwise keep the app alive in the tray when all windows are closed.
-    if (isQuitting) return
-    e.preventDefault()
+    if (isQuitting) app.quit()
   })
 
   app.on('before-quit', () => {
@@ -258,7 +257,7 @@ function registerMainWindow(win: BrowserWindow): BrowserWindow {
 
     if (startHidden) {
       // Stay in tray only — do not show window or Dock icon
-      if (process.platform === 'darwin') app.dock.hide()
+      if (process.platform === 'darwin') app.dock?.hide()
     } else {
       showTrayWindow(win)
     }

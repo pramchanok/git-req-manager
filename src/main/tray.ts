@@ -229,11 +229,17 @@ function showWindow(win: BrowserWindow): void {
   if (process.platform === 'darwin') {
     // app.dock.show() is async — await it so the app is fully out of agent mode
     // before calling app.focus(), otherwise the window may not receive focus.
-    void app.dock.show().then(() => {
+    if (app.dock) {
+      void app.dock.show().then(() => {
+        app.focus({ steal: true })
+        win.show()
+        win.focus()
+      })
+    } else {
       app.focus({ steal: true })
       win.show()
       win.focus()
-    })
+    }
   } else {
     // setAlwaysOnTop is needed on Windows to bypass focus-stealing prevention
     win.setAlwaysOnTop(true)
@@ -251,7 +257,7 @@ export function hideWindow(win: BrowserWindow): void {
   win.hide()
 
   if (process.platform === 'darwin') {
-    app.dock.hide()
+    app.dock?.hide()
   }
 }
 
