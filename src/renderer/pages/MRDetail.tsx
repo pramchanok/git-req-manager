@@ -1,7 +1,52 @@
 import { useState, useEffect } from 'react'
 import type { MergeRequest, MRDiff, MRDiscussion, MRNote } from '../../shared/types'
 import { marked } from 'marked'
-import ReactDiffViewer from 'react-diff-viewer-continued'
+import parseDiff from 'parse-diff'
+import { CustomDiffViewer } from '../components/CustomDiffViewer'
+import { buildFileTree, FileTreeNode } from '../utils/pathTree'
+
+const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) => {
+  const [expanded, setExpanded] = useState(true)
+  
+  if (node.isDirectory) {
+    return (
+      <div>
+        <div 
+          className="flex items-center gap-1.5 py-1 px-2 hover:bg-white/5 cursor-pointer text-gray-300 select-none rounded"
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          onClick={() => setExpanded(!expanded)}
+        >
+          <svg className={`w-3.5 h-3.5 text-gray-500 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+          <span className="text-xs truncate">{node.name}</span>
+        </div>
+        {expanded && node.children?.map((child, i) => (
+          <FileTreeNodeView key={i} node={child} depth={depth + 1} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div 
+      className={`flex items-center justify-between py-1 px-2 hover:bg-white/5 cursor-pointer select-none rounded group ${node.isViewed ? 'opacity-50' : ''}`}
+      style={{ paddingLeft: `${depth * 12 + 20}px` }}
+      onClick={() => {
+        document.getElementById(`diff-${node.path}`)?.scrollIntoView({ behavior: 'smooth' })
+      }}
+    >
+      <div className="flex items-center gap-1.5 overflow-hidden">
+        <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+        <span className={`text-xs truncate ${node.isViewed ? 'line-through text-gray-500' : 'text-gray-300'}`}>{node.name}</span>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0 opacity-100 transition-opacity">
+        {(node.additions ?? 0) > 0 && <span className="text-[10px] text-green-400">+{node.additions}</span>}
+        {(node.deletions ?? 0) > 0 && <span className="text-[10px] text-red-400">-{node.deletions}</span>}
+        {node.isViewed && <svg className="w-3 h-3 text-orange-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+      </div>
+    </div>
+  )
+}
 
 interface MRDetailProps {
   projectId: number
@@ -36,6 +81,25 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(Array.from(viewedFiles)))
   }, [viewedFiles, storageKey])
+
+  const diffStats = React.useMemo(() => {
+    const stats = new Map<string, { additions: number; deletions: number }>()
+    for (const d of diffs) {
+      try {
+        const parsed = parseDiff(d.diff)
+        if (parsed.length > 0) {
+          stats.set(d.newPath, { additions: parsed[0].additions, deletions: parsed[0].deletions })
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return stats
+  }, [diffs])
+
+  const fileTree = React.useMemo(() => {
+    return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
+  }, [diffs, viewedFiles, diffStats])
 
   const fetchDiffs = async () => {
     setLoadingDiffs(true)
@@ -236,10 +300,25 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
         </div>
       </header>
 
-      {/* Main Scrollable Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-        <div className="max-w-5xl mx-auto p-6 pb-32">
-          {activeTab === 'overview' ? (
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden relative flex">
+        {activeTab === 'changes' && (
+          <div className="w-72 shrink-0 border-r border-gray-800 bg-[#0d1117] flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-400">Files</span>
+              <span className="text-xs text-gray-500">{diffs.length}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+              {fileTree.map((node, i) => (
+                <FileTreeNodeView key={i} node={node} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+          <div className={`${activeTab === 'changes' ? 'w-full' : 'max-w-5xl mx-auto'} p-6 pb-32`}>
+            {activeTab === 'overview' ? (
             <div className="space-y-8 animate-fade-in">
               {/* Description Box */}
               <div className="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm">
@@ -344,68 +423,50 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   <p className="text-gray-500 text-sm">No changes found in this merge request.</p>
                 </div>
               ) : (
-                diffs.map((diff, index) => {
-                  const isViewed = viewedFiles.has(diff.newPath)
-                  return (
-                  <div key={index} className={`bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-all`}>
-                    {/* File Header */}
-                    <div className="bg-gray-800/50 px-4 py-2 text-sm font-mono text-gray-300 border-b border-gray-800 flex justify-between items-center group">
-                      <div className="flex items-center gap-3">
-                        <svg className="w-4 h-4 text-gray-500 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        <span className={isViewed ? 'line-through text-gray-500' : ''}>{diff.newPath}</span>
-                        {diff.newFile && <span className="bg-green-500/10 text-green-400 text-[10px] px-2 py-0.5 rounded-full uppercase font-bold border border-green-500/20">New</span>}
-                        {diff.deletedFile && <span className="bg-red-500/10 text-red-400 text-[10px] px-2 py-0.5 rounded-full uppercase font-bold border border-red-500/20">Deleted</span>}
+                <div className="space-y-6">
+                  {diffs.map((diff, index) => {
+                    const isViewed = viewedFiles.has(diff.newPath)
+                    const stats = diffStats.get(diff.newPath)
+                    return (
+                    <div id={`diff-${diff.newPath}`} key={index} className={`bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-all`}>
+                      {/* File Header */}
+                      <div className="bg-gray-800/50 px-4 py-2 text-sm font-mono text-gray-300 border-b border-gray-800 flex justify-between items-center group">
+                        <div className="flex items-center gap-3">
+                          <svg className="w-4 h-4 text-gray-500 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          <span className={isViewed ? 'line-through text-gray-500' : ''}>{diff.newPath}</span>
+                          {stats && (
+                            <span className="flex items-center gap-1.5 ml-2">
+                              {stats.additions > 0 && <span className="text-[10px] text-green-400 font-bold">+{stats.additions}</span>}
+                              {stats.deletions > 0 && <span className="text-[10px] text-red-400 font-bold">-{stats.deletions}</span>}
+                            </span>
+                          )}
+                          {diff.newFile && <span className="bg-green-500/10 text-green-400 text-[10px] px-2 py-0.5 rounded-full uppercase font-bold border border-green-500/20">New</span>}
+                          {diff.deletedFile && <span className="bg-red-500/10 text-red-400 text-[10px] px-2 py-0.5 rounded-full uppercase font-bold border border-red-500/20">Deleted</span>}
+                        </div>
+                        <label className="flex items-center gap-2 text-xs font-sans text-gray-400 hover:text-gray-200 cursor-pointer select-none">
+                          Viewed
+                          <input 
+                            type="checkbox" 
+                            checked={isViewed}
+                            onChange={() => toggleViewedFile(diff.newPath)}
+                            className="w-4 h-4 rounded border-gray-600 bg-gray-900 text-orange-500 focus:ring-orange-500/50 cursor-pointer" 
+                          />
+                        </label>
                       </div>
-                      <label className="flex items-center gap-2 text-xs font-sans text-gray-400 hover:text-gray-200 cursor-pointer select-none">
-                        Viewed
-                        <input 
-                          type="checkbox" 
-                          checked={isViewed}
-                          onChange={() => toggleViewedFile(diff.newPath)}
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-900 text-orange-500 focus:ring-orange-500/50 cursor-pointer" 
-                        />
-                      </label>
+                      {/* Diff Viewer Wrapper */}
+                      {!isViewed && (
+                        <CustomDiffViewer diffString={diff.diff} />
+                      )}
                     </div>
-                    {/* Diff Viewer Wrapper */}
-                    {!isViewed && (
-                      <div className="text-[12px] overflow-x-auto bg-[#0d1117] custom-diff-viewer">
-                        <ReactDiffViewer
-                          oldValue={''} 
-                          newValue={diff.diff}
-                          splitView={false}
-                          useDarkTheme={true}
-                          hideLineNumbers={true}
-                          styles={{
-                            variables: {
-                              dark: {
-                                diffViewerBackground: 'transparent',
-                                diffViewerTitleBackground: '#161b22',
-                                diffViewerTitleColor: '#8b949e',
-                                addedBackground: 'rgba(46, 160, 67, 0.15)',
-                                addedColor: '#e6ffec',
-                                removedBackground: 'rgba(248, 81, 73, 0.15)',
-                                removedColor: '#ffebe9',
-                                wordAddedBackground: 'rgba(46, 160, 67, 0.4)',
-                                wordRemovedBackground: 'rgba(248, 81, 73, 0.4)',
-                                emptyLineBackground: 'transparent',
-                              }
-                            },
-                            line: {
-                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                              lineHeight: '1.5',
-                            }
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
-              })
-            )}
-          </div>
+                  )
+                })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
+    </div>
 
       {/* Glassmorphic Sticky Action Bar */}
       <div className="absolute bottom-0 left-0 right-0 bg-[#0d1117]/80 backdrop-blur-xl border-t border-gray-800 p-4 z-30 shadow-[0_-20px_40px_-20px_rgba(0,0,0,0.5)]">
