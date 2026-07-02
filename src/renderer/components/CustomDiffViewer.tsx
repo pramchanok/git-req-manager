@@ -1,5 +1,18 @@
 import React, { useMemo } from 'react'
-import parseDiff, { Chunk, Change } from 'parse-diff'
+import parseDiff from 'parse-diff'
+
+interface Change {
+  type: string
+  content: string
+  ln?: number
+  ln1?: number
+  ln2?: number
+}
+
+interface Chunk {
+  content: string
+  changes: Change[]
+}
 
 interface CustomDiffViewerProps {
   diffString: string
