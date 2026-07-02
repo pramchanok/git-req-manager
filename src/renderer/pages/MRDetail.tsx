@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { MergeRequest, MRDiff, MRDiscussion, MRNote } from '../../shared/types'
 import { marked } from 'marked'
 import parseDiff from 'parse-diff'
@@ -82,7 +82,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     localStorage.setItem(storageKey, JSON.stringify(Array.from(viewedFiles)))
   }, [viewedFiles, storageKey])
 
-  const diffStats = React.useMemo(() => {
+  const diffStats = useMemo(() => {
     const stats = new Map<string, { additions: number; deletions: number }>()
     for (const d of diffs) {
       try {
@@ -97,7 +97,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     return stats
   }, [diffs])
 
-  const fileTree = React.useMemo(() => {
+  const fileTree = useMemo(() => {
     return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
   }, [diffs, viewedFiles, diffStats])
 
