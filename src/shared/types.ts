@@ -48,6 +48,35 @@ export interface MergeRequest {
   labels: MRLabel[]
 }
 
+export interface MRDiff {
+  diff: string
+  newPath: string
+  oldPath: string
+  aMode: string
+  bMode: string
+  newFile: boolean
+  renamedFile: boolean
+  deletedFile: boolean
+}
+
+export interface MRNote {
+  id: number
+  body: string
+  author: GitLabUser
+  createdAt: string
+  updatedAt: string
+  system: boolean
+  resolvable: boolean
+  resolved: boolean
+  type: string | null
+}
+
+export interface MRDiscussion {
+  id: string
+  replyId: string
+  notes: MRNote[]
+}
+
 export interface GitLabUser {
   id: number
   name: string
@@ -128,3 +157,10 @@ export type IpcChannel =
   | 'set-last-seen-version'
   | 'show-changelog'
   | 'get-owner-groups'
+  | 'get-mr-diffs'
+  | 'get-mr-discussions'
+  | 'add-mr-note'
+  | 'approve-mr'
+  | 'unapprove-mr'
+  | 'merge-mr'
+  | 'close-mr'

@@ -1,4 +1,4 @@
-import type { GitLabUser, MergeRequest, MRLabel } from '../../../shared/types'
+import type { GitLabUser, MergeRequest, MRLabel } from '../../shared/types'
 
 interface MRCardProps {
   mr: MergeRequest
@@ -64,7 +64,14 @@ function LabelChip({ label }: { label: MRLabel }) {
 }
 
 export default function MRCard({ mr }: MRCardProps) {
-  const handleOpen = () => window.electronAPI.openUrl(mr.webUrl)
+  const handleOpenApp = () => {
+    window.electronAPI.openMRWindow(mr.projectId, mr.iid)
+  }
+
+  const handleOpenWeb = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    window.electronAPI.openUrl(mr.webUrl)
+  }
 
   const approvalsRequired = mr.approvalsRequired ?? 0
   const approvalsLeft = mr.approvalsLeft ?? 0
@@ -77,10 +84,9 @@ export default function MRCard({ mr }: MRCardProps) {
 
   return (
     <div
-      className="pl-[10px] pr-3 py-2.5 border-b border-gray-800 border-l-2 border-l-transparent hover:bg-gray-800/40 hover:border-l-orange-500 cursor-pointer group transition-all duration-200 ease-out"
-      onClick={handleOpen}
+      onClick={handleOpenApp}
+      className="group flex items-start gap-2 pl-[10px] pr-3 py-2.5 border-b border-gray-800 border-l-2 border-l-transparent hover:bg-gray-800/40 hover:border-l-orange-500 cursor-pointer transition-all duration-200 ease-out"
     >
-      <div className="flex items-start gap-2">
         {/* Author avatar */}
         <div className="flex-shrink-0 mt-0.5">
           <Avatar user={mr.author} size="sm" />
@@ -120,7 +126,7 @@ export default function MRCard({ mr }: MRCardProps) {
           {/* Labels */}
           {mr.labels.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
-              {mr.labels.map((label) => (
+              {mr.labels.map((label: MRLabel) => (
                 <LabelChip key={label.name} label={label} />
               ))}
             </div>
@@ -200,8 +206,16 @@ export default function MRCard({ mr }: MRCardProps) {
               {' CI'}
             </span>
           )}
+          <button
+            onClick={handleOpenWeb}
+            className="text-gray-500 hover:text-orange-400 p-1.5 rounded hover:bg-gray-800 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+            title="Open in Web Browser"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </button>
         </div>
-      </div>
     </div>
   )
 }

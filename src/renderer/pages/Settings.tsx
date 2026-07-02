@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { GitLabGroup, Settings, UpdateState } from '../../../shared/types'
+import type { GitLabGroup, Settings, UpdateState } from '../../shared/types'
 import type { ToastType } from '../components/Toast'
 
 interface SettingsPageProps {
@@ -327,9 +327,10 @@ export default function SettingsPage({
                   min={1024}
                   max={65535}
                   value={settings.webhookPort}
-                  onChange={(e) =>
-                    setSettings({ ...settings, webhookPort: parseInt(e.target.value) || 3847 })
-                  }
+                  onChange={(e) => {
+                    const port = parseInt(e.target.value) || 3847
+                    setSettings({ ...settings, webhookPort: port })
+                  }}
                   className="bg-gray-800 border border-gray-600 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-orange-400"
                 />
               </div>

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { AppState, UpdateState } from '../../shared/types'
+import type { AppState, UpdateState } from '../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TeamReport from './pages/TeamReport'
 import Changelog from './pages/Changelog'
 import ReportDetail from './pages/ReportDetail'
+import MRDetail from './pages/MRDetail'
 import Toast, { type ToastData, type ToastType } from './components/Toast'
 
-type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report'
+type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report' | 'mr-detail'
 
 type BadgeColor = 'green' | 'amber' | null
 
@@ -83,6 +84,7 @@ export default function App() {
     error: null,
     currentUser: null,
     isConfigured: false,
+    ownerGroups: [],
   })
   const [updateState, setUpdateState] = useState<UpdateState>({
     currentVersion: '',
@@ -141,7 +143,22 @@ export default function App() {
   }, [page])
 
   if (page === 'report') {
-    return <ReportDetail appState={appState} />
+    return <ReportDetail />
+  }
+
+  if (page === 'mr-detail') {
+    return (
+      <MRDetail 
+        projectId={Number(new URLSearchParams(window.location.search).get('projectId'))}
+        mrIid={Number(new URLSearchParams(window.location.search).get('mrIid'))}
+        onBack={() => window.close()} 
+        onRefresh={() => {
+           // For a separate window, we might not trigger a global sync, but we can call it.
+           window.electronAPI.triggerSync()
+        }}
+        onToast={showToast}
+      />
+    )
   }
 
   return (

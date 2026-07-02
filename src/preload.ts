@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-group-mrs-in-timeframe', groupId, since, until),
   openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number): Promise<void> =>
     ipcRenderer.invoke('open-report-window', username, name, avatarUrl, timeframe, groupId),
+  openMRWindow: (projectId: number, mrIid: number): Promise<void> =>
+    ipcRenderer.invoke('open-mr-window', projectId, mrIid),
   exportReportPDF: (): Promise<boolean> =>
     ipcRenderer.invoke('export-report-pdf'),
   saveReportFile: (filename: string, content: string): Promise<boolean> =>
@@ -57,4 +59,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('show-changelog', () => callback())
     return () => ipcRenderer.removeAllListeners('show-changelog')
   },
+  getMRByIid: (projectId: number, mrIid: number): Promise<import('./shared/types').MergeRequest> =>
+    ipcRenderer.invoke('get-mr-by-iid', projectId, mrIid),
+  getMRDiffs: (projectId: number, mrIid: number): Promise<import('./shared/types').MRDiff[]> =>
+    ipcRenderer.invoke('get-mr-diffs', projectId, mrIid),
+  getMRDiscussions: (projectId: number, mrIid: number): Promise<import('./shared/types').MRDiscussion[]> =>
+    ipcRenderer.invoke('get-mr-discussions', projectId, mrIid),
+  addMRNote: (projectId: number, mrIid: number, body: string): Promise<void> =>
+    ipcRenderer.invoke('add-mr-note', projectId, mrIid, body),
+  approveMR: (projectId: number, mrIid: number): Promise<void> =>
+    ipcRenderer.invoke('approve-mr', projectId, mrIid),
+  unapproveMR: (projectId: number, mrIid: number): Promise<void> =>
+    ipcRenderer.invoke('unapprove-mr', projectId, mrIid),
+  mergeMR: (projectId: number, mrIid: number): Promise<void> =>
+    ipcRenderer.invoke('merge-mr', projectId, mrIid),
+  closeMR: (projectId: number, mrIid: number): Promise<void> =>
+    ipcRenderer.invoke('close-mr', projectId, mrIid),
 })

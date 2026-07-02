@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup } from './types'
+import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion } from './types'
 
 export class GitLabClient {
   private http: AxiosInstance
@@ -418,5 +418,65 @@ export class GitLabClient {
           )
         : [],
     }
+  }
+  // ────── In-App Review & MR Actions ──────
+
+  async getMRDiffs(projectId: number, mrIid: number): Promise<MRDiff[]> {
+    const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/changes`)
+    return (data.changes ?? []).map((change: Record<string, unknown>) => ({
+      diff: change.diff as string,
+      newPath: change.new_path as string,
+      oldPath: change.old_path as string,
+      aMode: change.a_mode as string,
+      bMode: change.b_mode as string,
+      newFile: change.new_file as boolean,
+      renamedFile: change.renamed_file as boolean,
+      deletedFile: change.deleted_file as boolean,
+    }))
+  }
+
+  async getMRDiscussions(projectId: number, mrIid: number): Promise<MRDiscussion[]> {
+    const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/discussions`, {
+      params: { per_page: 100 }
+    })
+    return data.map((d: Record<string, unknown>) => ({
+      id: d.id as string,
+      replyId: d.reply_id as string,
+      notes: (d.notes as Record<string, unknown>[]).map((n) => ({
+        id: n.id as number,
+        body: n.body as string,
+        author: this.mapUser(n.author as Record<string, unknown>),
+        createdAt: n.created_at as string,
+        updatedAt: n.updated_at as string,
+        system: n.system as boolean,
+        resolvable: n.resolvable as boolean,
+        resolved: n.resolved as boolean,
+        type: n.type as string | null,
+      })),
+    }))
+  }
+
+  async addMRNote(projectId: number, mrIid: number, body: string): Promise<void> {
+    await this.http.post(`/projects/${projectId}/merge_requests/${mrIid}/notes`, { body })
+  }
+
+  async approveMR(projectId: number, mrIid: number): Promise<void> {
+    await this.http.post(`/projects/${projectId}/merge_requests/${mrIid}/approve`)
+  }
+
+  async unapproveMR(projectId: number, mrIid: number): Promise<void> {
+    await this.http.post(`/projects/${projectId}/merge_requests/${mrIid}/unapprove`)
+  }
+
+  async mergeMR(projectId: number, mrIid: number): Promise<void> {
+    await this.http.put(`/projects/${projectId}/merge_requests/${mrIid}/merge`, {
+      should_remove_source_branch: true,
+    })
+  }
+
+  async closeMR(projectId: number, mrIid: number): Promise<void> {
+    await this.http.put(`/projects/${projectId}/merge_requests/${mrIid}`, {
+      state_event: 'close',
+    })
   }
 }

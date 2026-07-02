@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -130,6 +130,7 @@
     "electron-updater": "^6.8.3",
     "marked": "^18.0.3",
     "react": "^18.3.1",
+    "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "^18.3.1",
     "socket.io-client": "^4.8.3",
     "which": "^6.0.1"

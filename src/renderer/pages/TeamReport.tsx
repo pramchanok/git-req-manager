@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../../../shared/types'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../../shared/types'
 import { SkeletonDevRow } from '../components/SkeletonCard'
 
 interface TeamReportProps {
@@ -276,7 +276,7 @@ export default function TeamReport({ appState }: TeamReportProps) {
           {selectableGroups.length === 0 ? (
             <option value="">No Groups Owned</option>
           ) : (
-            selectableGroups.map((g) => (
+            selectableGroups.map((g: GitLabGroup) => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>

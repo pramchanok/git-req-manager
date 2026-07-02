@@ -466,6 +466,43 @@ function setupIPC(): void {
     }
   })
 
+  ipcMain.handle('open-mr-window', (_event, projectId: number, mrIid: number) => {
+    const mrWin = new BrowserWindow({
+      width: 900,
+      height: 700,
+      resizable: true,
+      frame: true,
+      title: `MR !${mrIid}`,
+      icon: path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+      webPreferences: {
+        preload: path.join(__dirname, '../preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    })
+
+    mrWin.setMenuBarVisibility(false)
+
+    if (process.env.NODE_ENV === 'development') {
+      mrWin.loadURL(`http://localhost:5173/?page=mr-detail&projectId=${projectId}&mrIid=${mrIid}`)
+    } else {
+      mrWin.loadFile(path.join(__dirname, '../renderer/index.html'), {
+        query: {
+          page: 'mr-detail',
+          projectId: String(projectId),
+          mrIid: String(mrIid),
+        }
+      })
+    }
+  })
+
+  ipcMain.handle('get-mr-by-iid', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) throw new Error('Not configured')
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getMRByIid(projectId, mrIid)
+  })
+
   ipcMain.handle('export-report-pdf', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return false
@@ -516,5 +553,56 @@ function setupIPC(): void {
       console.error('[save-report-file] failed:', err)
       return false
     }
+  })
+
+  // ────── In-App Review & MR Actions ──────
+
+  ipcMain.handle('get-mr-diffs', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getMRDiffs(projectId, mrIid)
+  })
+
+  ipcMain.handle('get-mr-discussions', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getMRDiscussions(projectId, mrIid)
+  })
+
+  ipcMain.handle('add-mr-note', async (_event, projectId: number, mrIid: number, body: string) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.addMRNote(projectId, mrIid, body)
+  })
+
+  ipcMain.handle('approve-mr', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.approveMR(projectId, mrIid)
+  })
+
+  ipcMain.handle('unapprove-mr', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.unapproveMR(projectId, mrIid)
+  })
+
+  ipcMain.handle('merge-mr', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.mergeMR(projectId, mrIid)
+  })
+
+  ipcMain.handle('close-mr', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.closeMR(projectId, mrIid)
   })
 }

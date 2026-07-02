@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AppState, MRTab } from '../../../shared/types'
+import type { AppState, MRTab, MergeRequest } from '../../shared/types'
 import MRCard from '../components/MRCard'
 import SkeletonCard from '../components/SkeletonCard'
 
@@ -120,7 +120,7 @@ export default function Dashboard({ appState }: DashboardProps) {
             </div>
           </div>
         ) : (
-          mrs.map((mr) => <MRCard key={mr.id} mr={mr} />)
+          mrs.map((mr: MergeRequest) => <MRCard key={mr.id} mr={mr} />)
         )}
       </div>
     </div>
@@ -135,7 +135,7 @@ interface TabButtonProps {
   highlightCount?: boolean
 }
 
-function TabButton({ label, count, active, onClick, highlightCount }: TabButtonProps) {
+function TabButton({ label, count, active, onClick }: TabButtonProps) {
   return (
     <button
       onClick={onClick}

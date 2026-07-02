@@ -1,10 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { marked } from 'marked'
-import type { MergeRequest, GitLabGroup, GitLabUser } from '../../shared/types'
-
-interface ReportDetailProps {
-  appState: any
-}
+import type { MergeRequest, GitLabGroup } from '../../shared/types'
 
 // ── SVG Donut Chart Component ────────────────────────────────────────────────
 function DonutChart({ created, merged, reviewed }: { created: number; merged: number; reviewed: number }) {
@@ -135,7 +131,7 @@ function ActivityBarChart({ data }: { data: { timestamp: number; dayLabel: strin
 }
 
 // ── Main Page Component ──────────────────────────────────────────────────────
-export default function ReportDetail({ appState }: ReportDetailProps) {
+export default function ReportDetail() {
   const [loading, setLoading] = useState(true)
   const [groupMRs, setGroupMRs] = useState<MergeRequest[]>([])
   const [groups, setGroups] = useState<GitLabGroup[]>([])
