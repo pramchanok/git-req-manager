@@ -128,6 +128,7 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
+            release/latest-linux.yml
 
   finalize:
     needs: [publish-mac, publish-windows, publish-linux]

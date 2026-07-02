@@ -44,7 +44,8 @@ function setUpdateState(patch: Partial<UpdateState>): void {
 
 function canUseAutoUpdates(): boolean {
   if (!app.isPackaged) return false
-  return process.platform === 'win32' || process.platform === 'darwin'
+  // Linux auto-update is only supported via AppImage
+  return process.platform === 'win32' || process.platform === 'darwin' || !!process.env.APPIMAGE
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -110,7 +111,7 @@ export async function checkForUpdates(): Promise<UpdateState> {
     setUpdateState({
       status: 'disabled',
       message: app.isPackaged
-        ? 'Auto update is only available on packaged Windows and macOS builds.'
+        ? 'Auto update is only available on packaged Windows, macOS, and Linux AppImage builds.'
         : 'Auto update works only in packaged builds.',
       progressPercent: null,
     })
@@ -164,7 +165,7 @@ export function initializeUpdater(): void {
     setUpdateState({
       status: 'disabled',
       message: app.isPackaged
-        ? 'Auto update is only available on packaged Windows and macOS builds.'
+        ? 'Auto update is only available on packaged Windows, macOS, and Linux AppImage builds.'
         : 'Auto update works only in packaged builds.',
     })
     return
