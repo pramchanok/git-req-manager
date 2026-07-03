@@ -503,11 +503,13 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 <button
                   onClick={() => handleAction('merge')}
                   disabled={processingAction || mr.hasConflicts || mr.pipelineStatus === 'failed'}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-2 px-6 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] disabled:opacity-50 disabled:shadow-none disabled:bg-gray-700 disabled:text-gray-400 flex items-center gap-2 border border-transparent disabled:border-gray-600"
-                  title={mr.hasConflicts ? 'Has conflicts' : mr.pipelineStatus === 'failed' ? 'Pipeline failed' : 'Merge'}
+                  className={`text-white text-sm font-semibold py-2 px-6 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] disabled:opacity-50 disabled:shadow-none disabled:bg-gray-700 disabled:text-gray-400 flex items-center gap-2 border border-transparent disabled:border-gray-600 ${
+                    mr.pipelineStatus === 'running' ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-blue-600 hover:bg-blue-500'
+                  }`}
+                  title={mr.hasConflicts ? 'Has conflicts' : mr.pipelineStatus === 'failed' ? 'Pipeline failed' : mr.pipelineStatus === 'running' ? 'Merge when pipeline succeeds' : 'Merge'}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-                  Merge
+                  {mr.pipelineStatus === 'running' ? 'Auto-Merge' : 'Merge'}
                 </button>
               </>
             )}
