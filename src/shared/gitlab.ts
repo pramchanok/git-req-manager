@@ -409,7 +409,9 @@ export class GitLabClient {
       upvotes: (mr.upvotes as number) ?? 0,
       downvotes: (mr.downvotes as number) ?? 0,
       userNotesCount: (mr.user_notes_count as number) ?? 0,
-      pipelineStatus: null,
+      pipelineStatus: (mr.head_pipeline as Record<string, unknown> | undefined)?.status as MergeRequest['pipelineStatus'] ?? null,
+      pipelineId: (mr.head_pipeline as Record<string, unknown> | undefined)?.id as number ?? null,
+      pipelineWebUrl: (mr.head_pipeline as Record<string, unknown> | undefined)?.web_url as string ?? null,
       labels: Array.isArray(mr.labels)
         ? (mr.labels as Array<Record<string, unknown> | string>).map((l) =>
             typeof l === 'string'
@@ -473,6 +475,10 @@ export class GitLabClient {
       should_remove_source_branch: true,
       merge_when_pipeline_succeeds: true,
     })
+  }
+
+  async cancelPipeline(projectId: number, pipelineId: number): Promise<void> {
+    await this.http.post(`/projects/${projectId}/pipelines/${pipelineId}/cancel`)
   }
 
   async closeMR(projectId: number, mrIid: number): Promise<void> {

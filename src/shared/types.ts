@@ -45,6 +45,8 @@ export interface MergeRequest {
   downvotes: number
   userNotesCount: number
   pipelineStatus: 'running' | 'success' | 'failed' | 'canceled' | null
+  pipelineId: number | null
+  pipelineWebUrl: string | null
   labels: MRLabel[]
 }
 

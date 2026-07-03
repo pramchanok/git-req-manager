@@ -34,6 +34,7 @@ declare global {
       unapproveMR: (projectId: number, mrIid: number) => Promise<void>
       mergeMR: (projectId: number, mrIid: number) => Promise<void>
       closeMR: (projectId: number, mrIid: number) => Promise<void>
+      cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void

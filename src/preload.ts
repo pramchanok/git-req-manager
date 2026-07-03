@@ -75,4 +75,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('merge-mr', projectId, mrIid),
   closeMR: (projectId: number, mrIid: number): Promise<void> =>
     ipcRenderer.invoke('close-mr', projectId, mrIid),
+  cancelPipeline: (projectId: number, pipelineId: number): Promise<void> =>
+    ipcRenderer.invoke('cancel-pipeline', projectId, pipelineId),
 })

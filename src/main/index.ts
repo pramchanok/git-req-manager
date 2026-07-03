@@ -604,4 +604,11 @@ function setupIPC(): void {
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
     await client.closeMR(projectId, mrIid)
   })
+
+  ipcMain.handle('cancel-pipeline', async (_event, projectId: number, pipelineId: number) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.cancelPipeline(projectId, pipelineId)
+  })
 }

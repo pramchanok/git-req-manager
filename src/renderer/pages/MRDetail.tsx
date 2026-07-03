@@ -158,7 +158,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
-  const handleAction = async (action: 'approve' | 'merge' | 'close') => {
+  const handleAction = async (action: 'approve' | 'merge' | 'close' | 'cancel-pipeline') => {
     setProcessingAction(true)
     try {
       if (action === 'approve') {
@@ -170,6 +170,11 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       } else if (action === 'close') {
         await window.electronAPI.closeMR(projectId, mrIid)
         onToast('MR Closed')
+      } else if (action === 'cancel-pipeline') {
+        if (mr.pipelineId) {
+          await window.electronAPI.cancelPipeline(projectId, mr.pipelineId)
+          onToast('Pipeline Canceled')
+        }
       }
       onRefresh()
       // Note: we don't close the window on approve, just refresh so user can see it approved.
@@ -226,20 +231,35 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   {mr.state.toUpperCase()}
                 </span>
                 {mr.pipelineStatus && (
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
-                    mr.pipelineStatus === 'success' ? 'text-green-400 bg-green-500/10' :
-                    mr.pipelineStatus === 'failed' ? 'text-red-400 bg-red-500/10' :
-                    mr.pipelineStatus === 'running' ? 'text-blue-400 bg-blue-500/10' :
-                    'text-gray-400 bg-gray-500/10'
+                  <div className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 border ${
+                    mr.pipelineStatus === 'success' ? 'text-green-400 bg-green-500/10 border-green-500/20' :
+                    mr.pipelineStatus === 'failed' ? 'text-red-400 bg-red-500/10 border-red-500/20' :
+                    mr.pipelineStatus === 'running' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                    'text-gray-400 bg-gray-500/10 border-gray-500/20'
                   }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      mr.pipelineStatus === 'success' ? 'bg-green-400' :
-                      mr.pipelineStatus === 'failed' ? 'bg-red-400' :
-                      mr.pipelineStatus === 'running' ? 'bg-blue-400 animate-pulse' :
-                      'bg-gray-400'
-                    }`} />
-                    Pipeline {mr.pipelineStatus}
-                  </span>
+                    <span 
+                      className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => mr.pipelineWebUrl && window.electronAPI.openUrl(mr.pipelineWebUrl)}
+                      title={mr.pipelineWebUrl ? 'View pipeline in browser' : ''}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        mr.pipelineStatus === 'success' ? 'bg-green-400' :
+                        mr.pipelineStatus === 'failed' ? 'bg-red-400' :
+                        mr.pipelineStatus === 'running' ? 'bg-blue-400 animate-pulse' :
+                        'bg-gray-400'
+                      }`} />
+                      Pipeline {mr.pipelineStatus}
+                    </span>
+                    {mr.pipelineStatus === 'running' && (
+                      <button 
+                        onClick={() => handleAction('cancel-pipeline')}
+                        className="ml-1 text-blue-400/60 hover:text-red-400 hover:bg-red-400/20 rounded p-0.5 transition-colors"
+                        title="Cancel Pipeline"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               <h1 className="text-xl font-bold text-gray-100 leading-tight mb-3">
