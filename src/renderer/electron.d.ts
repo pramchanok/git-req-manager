@@ -32,7 +32,7 @@ declare global {
       addMRNote: (projectId: number, mrIid: number, body: string) => Promise<void>
       approveMR: (projectId: number, mrIid: number) => Promise<void>
       unapproveMR: (projectId: number, mrIid: number) => Promise<void>
-      mergeMR: (projectId: number, mrIid: number) => Promise<void>
+      mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }) => Promise<void>
       closeMR: (projectId: number, mrIid: number) => Promise<void>
       cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void

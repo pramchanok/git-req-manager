@@ -470,10 +470,10 @@ export class GitLabClient {
     await this.http.post(`/projects/${projectId}/merge_requests/${mrIid}/unapprove`)
   }
 
-  async mergeMR(projectId: number, mrIid: number): Promise<void> {
+  async mergeMR(projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }): Promise<void> {
     await this.http.put(`/projects/${projectId}/merge_requests/${mrIid}/merge`, {
       should_remove_source_branch: true,
-      merge_when_pipeline_succeeds: true,
+      ...(options?.mergeWhenPipelineSucceeds ? { merge_when_pipeline_succeeds: true } : {}),
     })
   }
 

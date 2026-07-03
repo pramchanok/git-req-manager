@@ -591,11 +591,11 @@ function setupIPC(): void {
     await client.unapproveMR(projectId, mrIid)
   })
 
-  ipcMain.handle('merge-mr', async (_event, projectId: number, mrIid: number) => {
+  ipcMain.handle('merge-mr', async (_event, projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }) => {
     if (!isConfigured()) return
     const settings = getSettings()
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.mergeMR(projectId, mrIid)
+    await client.mergeMR(projectId, mrIid, options)
   })
 
   ipcMain.handle('close-mr', async (_event, projectId: number, mrIid: number) => {

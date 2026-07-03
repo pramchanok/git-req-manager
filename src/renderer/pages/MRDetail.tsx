@@ -165,8 +165,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
         await window.electronAPI.approveMR(projectId, mrIid)
         onToast('MR Approved')
       } else if (action === 'merge') {
-        await window.electronAPI.mergeMR(projectId, mrIid)
-        onToast('MR Merged')
+        await window.electronAPI.mergeMR(projectId, mrIid, {
+          mergeWhenPipelineSucceeds: mr.pipelineStatus === 'running'
+        })
+        onToast(mr.pipelineStatus === 'running' ? 'Auto-Merge Set' : 'MR Merged')
       } else if (action === 'close') {
         await window.electronAPI.closeMR(projectId, mrIid)
         onToast('MR Closed')
