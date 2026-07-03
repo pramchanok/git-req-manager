@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.3] - 2026-07-03
+
+### ฟีเจอร์ใหม่ & การปรับปรุง (New Features & Improvements)
+
+- **Auto-Merge (Merge When Pipeline Succeeds)** — รองรับระบบ Auto-Merge ของ GitLab อย่างสมบูรณ์ หากคุณกดปุ่ม Merge ขณะที่ Pipeline ยังวิ่งอยู่ (ขึ้นสถานะ Running) ปุ่มจะเปลี่ยนเป็นคำว่า `Auto-Merge` และเมื่อกด ตัวแอปจะสั่ง `merge_when_pipeline_succeeds: true` ไปที่ GitLab ทำให้มันจะไปตั้งสถานะรอ Merge อัตโนมัติเมื่อ Pipeline วิ่งผ่าน เหมือนกับปุ่ม "Merge when pipeline succeeds" บนเว็บของ GitLab เด๊ะๆ ครับ!
+
+---
+
 ## [1.7.2] - 2026-07-02
 
 ### การแก้ไขข้อผิดพลาด (Bug Fixes)
