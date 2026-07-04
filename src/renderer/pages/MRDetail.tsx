@@ -7,6 +7,8 @@ import { CustomDiffViewer } from '../components/CustomDiffViewer'
 import { buildFileTree, FileTreeNode } from '../utils/pathTree'
 import { MessageSquare, User, GitCommit, Settings, Check, X, FileText, Folder, Eye } from 'lucide-react'
 
+import { marked } from 'marked'
+
 const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) => {
   const [expanded, setExpanded] = useState(true)
   
@@ -467,7 +469,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                     <span className="font-medium text-gray-300">{note.author.name}</span>
                                     <div 
                                       className="prose prose-invert prose-sm prose-p:my-0 prose-a:text-orange-400 prose-ul:my-0 prose-li:my-0"
-                                      dangerouslySetInnerHTML={{ __html: note.body }}
+                                      dangerouslySetInnerHTML={{ __html: marked(note.body) }}
                                     />
                                     <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
                                   </div>
