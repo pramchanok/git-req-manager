@@ -134,12 +134,16 @@ export function CommitDiffModal({ projectId, fromSha, toSha, onClose }: CommitDi
               <div className="p-4 space-y-6">
                 {diffs.map((d, i) => (
                   <div key={i} id={`commit-diff-${d.newPath}`}>
-                    <CustomDiffViewer 
-                      diff={d} 
-                      viewMode={diffViewMode} 
-                      isViewed={false}
-                      onToggleViewed={() => {}}
-                    />
+                    {/* File Header */}
+                    <div className="bg-gray-800/50 px-4 py-2 text-sm font-mono text-gray-300 border border-gray-800 border-b-0 rounded-t-lg flex justify-between items-center">
+                      <span>{d.newPath}</span>
+                    </div>
+                    <div className="border border-gray-800 rounded-b-lg overflow-hidden">
+                      <CustomDiffViewer 
+                        diffString={d.diff} 
+                        viewMode={diffViewMode} 
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
