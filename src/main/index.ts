@@ -467,8 +467,8 @@ function setupIPC(): void {
 
   ipcMain.handle('open-mr-window', (_event, projectId: number, mrIid: number) => {
     const mrWin = new BrowserWindow({
-      width: 900,
-      height: 700,
+      width: 1200,
+      height: 800,
       resizable: true,
       frame: true,
       title: `MR !${mrIid}`,
