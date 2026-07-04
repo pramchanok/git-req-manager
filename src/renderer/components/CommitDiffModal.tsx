@@ -69,7 +69,7 @@ export function CommitDiffModal({ projectId, fromSha, toSha, onClose }: CommitDi
     loadDiffs()
   }, [projectId, fromSha, toSha])
 
-  const fileTree = useMemo(() => buildFileTree(diffs.map(d => d.newPath)), [diffs])
+  const fileTree = useMemo(() => buildFileTree(diffs.map(d => d.newPath).filter(Boolean), new Set(), new Map()), [diffs])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8">
