@@ -482,13 +482,16 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                           const href = target.getAttribute('href');
                                           if (href) {
                                             if (href.includes('/diffs?')) {
-                                              const rangeMatch = note.body.match(/([a-f0-9]{8,40})\.\.\.([a-f0-9]{8,40})/);
-                                              const singleMatch = note.body.match(/([a-f0-9]{8,40})\s+-/);
-                                              if (rangeMatch) {
-                                                setActiveCommitDiff({ fromSha: rangeMatch[1], toSha: rangeMatch[2] });
+                                              const hashes = Array.from(note.body.matchAll(/[a-f0-9]{8,40}/gi)).map(m => m[0]);
+                                              const urlStartShaMatch = href.match(/start_sha=([a-f0-9]+)/i);
+                                              const startSha = urlStartShaMatch ? urlStartShaMatch[1] : undefined;
+                                              const commitHashes = hashes.filter(h => h.length >= 8 && h !== startSha && !/^\d+$/.test(h));
+
+                                              if (commitHashes.length >= 2) {
+                                                setActiveCommitDiff({ fromSha: commitHashes[0], toSha: commitHashes[commitHashes.length - 1] });
                                                 return;
-                                              } else if (singleMatch) {
-                                                setActiveCommitDiff({ toSha: singleMatch[1] });
+                                              } else if (commitHashes.length === 1) {
+                                                setActiveCommitDiff({ toSha: commitHashes[0] });
                                                 return;
                                               }
                                             }
