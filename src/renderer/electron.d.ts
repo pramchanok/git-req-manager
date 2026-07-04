@@ -35,6 +35,8 @@ declare global {
       mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }) => Promise<void>
       closeMR: (projectId: number, mrIid: number) => Promise<void>
       cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
+      getCompareDiffs: (projectId: number, fromSha: string, toSha: string) => Promise<import('../../shared/types').MRDiff[]>
+      getCommitDiffs: (projectId: number, sha: string) => Promise<import('../../shared/types').MRDiff[]>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void

@@ -77,4 +77,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('close-mr', projectId, mrIid),
   cancelPipeline: (projectId: number, pipelineId: number): Promise<void> =>
     ipcRenderer.invoke('cancel-pipeline', projectId, pipelineId),
+  getCompareDiffs: (projectId: number, fromSha: string, toSha: string): Promise<import('./shared/types').MRDiff[]> =>
+    ipcRenderer.invoke('get-compare-diffs', projectId, fromSha, toSha),
+  getCommitDiffs: (projectId: number, sha: string): Promise<import('./shared/types').MRDiff[]> =>
+    ipcRenderer.invoke('get-commit-diffs', projectId, sha),
 })

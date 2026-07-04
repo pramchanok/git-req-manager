@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import parseDiff from 'parse-diff'
 import { CustomDiffViewer } from '../components/CustomDiffViewer'
+import { CommitDiffModal } from '../components/CommitDiffModal'
 import { buildFileTree, FileTreeNode } from '../utils/pathTree'
 import { MessageSquare, User, GitCommit, Settings, Check, X, FileText, Folder, Eye } from 'lucide-react'
 
@@ -76,6 +77,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [diffViewMode, setDiffViewMode] = useState<'inline' | 'split'>('inline')
+  const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
   
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
@@ -471,7 +473,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                       <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
                                     </div>
                                     <div 
-                                      className="prose prose-invert prose-sm max-w-none prose-p:my-0 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-a:no-underline prose-ul:my-2 prose-ul:list-none prose-ul:pl-0 prose-li:my-1 prose-li:bg-[#161b22] prose-li:border prose-li:border-gray-800 prose-li:rounded-lg prose-li:px-3 prose-li:py-2 prose-li:text-gray-300 prose-li:font-mono prose-li:text-[13px] prose-li:shadow-sm"
+                                      className="prose prose-invert prose-sm max-w-none prose-p:my-0 prose-a:inline-flex prose-a:items-center prose-a:gap-1 prose-a:bg-[#21262d] prose-a:border prose-a:border-gray-700 hover:prose-a:border-gray-600 prose-a:text-gray-300 prose-a:px-2.5 prose-a:py-1 prose-a:rounded-md prose-a:text-[11px] prose-a:font-medium hover:prose-a:bg-[#30363d] prose-a:no-underline prose-a:transition-colors prose-ul:my-2 prose-ul:list-none prose-ul:pl-0 prose-li:my-1 prose-li:bg-[#161b22] prose-li:border prose-li:border-gray-800 prose-li:rounded-lg prose-li:px-3 prose-li:py-2 prose-li:text-gray-300 prose-li:font-mono prose-li:text-[13px] prose-li:shadow-sm"
                                       dangerouslySetInnerHTML={{ __html: marked(note.body) }}
                                       onClick={(e) => {
                                         const target = e.target as HTMLElement;
@@ -479,6 +481,17 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                           e.preventDefault();
                                           const href = target.getAttribute('href');
                                           if (href) {
+                                            if (href.includes('/diffs?')) {
+                                              const rangeMatch = note.body.match(/([a-f0-9]{8,40})\.\.\.([a-f0-9]{8,40})/);
+                                              const singleMatch = note.body.match(/([a-f0-9]{8,40})\s+-/);
+                                              if (rangeMatch) {
+                                                setActiveCommitDiff({ fromSha: rangeMatch[1], toSha: rangeMatch[2] });
+                                                return;
+                                              } else if (singleMatch) {
+                                                setActiveCommitDiff({ toSha: singleMatch[1] });
+                                                return;
+                                              }
+                                            }
                                             let fullUrl = href;
                                             if (href.startsWith('/')) {
                                               try {
@@ -650,6 +663,14 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
           </div>
         </div>
       </div>
+      {activeCommitDiff && (
+        <CommitDiffModal
+          projectId={projectId}
+          fromSha={activeCommitDiff.fromSha}
+          toSha={activeCommitDiff.toSha}
+          onClose={() => setActiveCommitDiff(null)}
+        />
+      )}
     </div>
   )
 }

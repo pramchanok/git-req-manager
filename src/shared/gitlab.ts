@@ -437,6 +437,36 @@ export class GitLabClient {
     }))
   }
 
+  async getCompareDiffs(projectId: number, fromSha: string, toSha: string): Promise<MRDiff[]> {
+    const { data } = await this.http.get(`/projects/${projectId}/repository/compare`, {
+      params: { from: fromSha, to: toSha }
+    })
+    return (data.diffs ?? []).map((change: Record<string, unknown>) => ({
+      diff: change.diff as string,
+      newPath: change.new_path as string,
+      oldPath: change.old_path as string,
+      aMode: change.a_mode as string,
+      bMode: change.b_mode as string,
+      newFile: change.new_file as boolean,
+      renamedFile: change.renamed_file as boolean,
+      deletedFile: change.deleted_file as boolean,
+    }))
+  }
+
+  async getCommitDiffs(projectId: number, sha: string): Promise<MRDiff[]> {
+    const { data } = await this.http.get(`/projects/${projectId}/repository/commits/${sha}/diff`)
+    return (data ?? []).map((change: Record<string, unknown>) => ({
+      diff: change.diff as string,
+      newPath: change.new_path as string,
+      oldPath: change.old_path as string,
+      aMode: change.a_mode as string,
+      bMode: change.b_mode as string,
+      newFile: change.new_file as boolean,
+      renamedFile: change.renamed_file as boolean,
+      deletedFile: change.deleted_file as boolean,
+    }))
+  }
+
   async getMRDiscussions(projectId: number, mrIid: number): Promise<MRDiscussion[]> {
     const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/discussions`, {
       params: { per_page: 100 }
