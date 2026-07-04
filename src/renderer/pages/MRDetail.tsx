@@ -465,9 +465,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                   </div>
                                   <div className="flex-1 flex items-center gap-2 text-sm text-gray-400">
                                     <span className="font-medium text-gray-300">{note.author.name}</span>
-                                    <div className="prose prose-invert prose-sm prose-p:my-0 prose-a:text-orange-400">
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.body}</ReactMarkdown>
-                                    </div>
+                                    <div 
+                                      className="prose prose-invert prose-sm prose-p:my-0 prose-a:text-orange-400 prose-ul:my-0 prose-li:my-0"
+                                      dangerouslySetInnerHTML={{ __html: note.body }}
+                                    />
                                     <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
                                   </div>
                                 </div>
