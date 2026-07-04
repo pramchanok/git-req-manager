@@ -469,7 +469,9 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                     <span className="font-medium text-gray-300">{note.author.name}</span>
                                     <div 
                                       className="prose prose-invert prose-sm prose-p:my-0 prose-a:text-orange-400 prose-ul:my-0 prose-li:my-0"
-                                      dangerouslySetInnerHTML={{ __html: marked(note.body) }}
+                                      dangerouslySetInnerHTML={{ 
+                                        __html: marked(note.body.replace(/\[Compare with previous version\]\(.*?\)/g, '')) 
+                                      }}
                                     />
                                     <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
                                   </div>
