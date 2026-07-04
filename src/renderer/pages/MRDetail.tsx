@@ -465,15 +465,32 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                   <div className="w-6 h-6 rounded-full bg-gray-800/50 flex items-center justify-center border border-gray-700/50 shrink-0">
                                     <GitCommit className="w-3 h-3 text-gray-500" />
                                   </div>
-                                  <div className="flex-1 flex items-center gap-2 text-sm text-gray-400">
-                                    <span className="font-medium text-gray-300">{note.author.name}</span>
+                                  <div className="flex-1 flex flex-col gap-1 text-sm text-gray-400">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-gray-300">{note.author.name}</span>
+                                      <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
+                                    </div>
                                     <div 
-                                      className="prose prose-invert prose-sm prose-p:my-0 prose-a:text-orange-400 prose-ul:my-0 prose-li:my-0"
-                                      dangerouslySetInnerHTML={{ 
-                                        __html: marked(note.body.replace(/\[Compare with previous version\]\(.*?\)/g, '')) 
+                                      className="prose prose-invert prose-sm max-w-none prose-p:my-0 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-a:no-underline prose-ul:my-2 prose-ul:list-none prose-ul:pl-0 prose-li:my-1 prose-li:bg-[#161b22] prose-li:border prose-li:border-gray-800 prose-li:rounded-lg prose-li:px-3 prose-li:py-2 prose-li:text-gray-300 prose-li:font-mono prose-li:text-[13px] prose-li:shadow-sm"
+                                      dangerouslySetInnerHTML={{ __html: marked(note.body) }}
+                                      onClick={(e) => {
+                                        const target = e.target as HTMLElement;
+                                        if (target.tagName === 'A') {
+                                          e.preventDefault();
+                                          const href = target.getAttribute('href');
+                                          if (href) {
+                                            let fullUrl = href;
+                                            if (href.startsWith('/')) {
+                                              try {
+                                                const origin = new URL(mr.webUrl).origin;
+                                                fullUrl = origin + href;
+                                              } catch {}
+                                            }
+                                            window.electronAPI.openUrl(fullUrl);
+                                          }
+                                        }
                                       }}
                                     />
-                                    <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
                                   </div>
                                 </div>
                               )
