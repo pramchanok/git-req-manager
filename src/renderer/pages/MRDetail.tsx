@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import type { MergeRequest, MRDiff, MRDiscussion, MRNote } from '../../shared/types'
-import { marked } from 'marked'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import parseDiff from 'parse-diff'
 import { CustomDiffViewer } from '../components/CustomDiffViewer'
 import { buildFileTree, FileTreeNode } from '../utils/pathTree'
+import { MessageSquare, User, GitCommit, Settings, Check, X, FileText, Folder, Eye } from 'lucide-react'
 
 const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) => {
   const [expanded, setExpanded] = useState(true)
@@ -68,6 +70,11 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
   const [processingAction, setProcessingAction] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(288) // 72 * 4 = 288px default
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+  const [diffViewMode, setDiffViewMode] = useState<'inline' | 'split'>('inline')
+  
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
     try {
@@ -81,6 +88,30 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(Array.from(viewedFiles)))
   }, [viewedFiles, storageKey])
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return
+      const newWidth = Math.max(200, Math.min(e.clientX, 600))
+      setSidebarWidth(newWidth)
+      if (newWidth < 220 && !sidebarCollapsed) {
+        setSidebarCollapsed(true)
+      } else if (newWidth >= 220 && sidebarCollapsed) {
+        setSidebarCollapsed(false)
+      }
+    }
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing, sidebarCollapsed])
 
   const diffStats = useMemo(() => {
     const stats = new Map<string, { additions: number; deletions: number }>()
@@ -325,21 +356,64 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative flex">
         {activeTab === 'changes' && (
-          <div className="w-72 shrink-0 border-r border-gray-800 bg-[#0d1117] flex flex-col">
+          <div 
+            className={`shrink-0 border-r border-gray-800 bg-[#0d1117] flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-12' : ''}`}
+            style={{ width: sidebarCollapsed ? undefined : sidebarWidth }}
+          >
             <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-400">Files</span>
-              <span className="text-xs text-gray-500">{diffs.length}</span>
+              {!sidebarCollapsed && <span className="text-xs font-semibold text-gray-400">Files</span>}
+              <div className="flex items-center gap-2">
+                {!sidebarCollapsed && <span className="text-xs text-gray-500">{diffs.length}</span>}
+                <button 
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded hover:bg-gray-800"
+                  title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={sidebarCollapsed ? "M13 5l7 7-7 7M5 5l7 7-7 7" : "M11 19l-7-7 7-7m8 14l-7-7 7-7"} />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-              {fileTree.map((node, i) => (
-                <FileTreeNodeView key={i} node={node} />
-              ))}
-            </div>
+            {!sidebarCollapsed && (
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                {fileTree.map((node, i) => (
+                  <FileTreeNodeView key={i} node={node} />
+                ))}
+              </div>
+            )}
+            
+            {/* Resizer Handle */}
+            {!sidebarCollapsed && (
+              <div 
+                className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-orange-500/50 active:bg-orange-500 z-10 transition-colors"
+                style={{ left: sidebarWidth - 2 }}
+                onMouseDown={() => setIsResizing(true)}
+              />
+            )}
           </div>
         )}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
           <div className={`${activeTab === 'changes' ? 'w-full' : 'max-w-5xl mx-auto'} p-6 pb-32`}>
+            {activeTab === 'changes' && (
+              <div className="mb-4 flex justify-end">
+                <div className="flex items-center bg-[#161b22] border border-gray-800 rounded-lg p-1">
+                  <button
+                    onClick={() => setDiffViewMode('inline')}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${diffViewMode === 'inline' ? 'bg-gray-800 text-gray-200' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    Inline
+                  </button>
+                  <button
+                    onClick={() => setDiffViewMode('split')}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${diffViewMode === 'split' ? 'bg-gray-800 text-gray-200' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    Split
+                  </button>
+                </div>
+              </div>
+            )}
             {activeTab === 'overview' ? (
             <div className="space-y-8 animate-fade-in">
               {/* Description Box */}
@@ -349,10 +423,11 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   Description
                 </h3>
                 {mr.description ? (
-                  <div 
-                    className="prose prose-invert prose-orange max-w-none text-sm text-gray-300 leading-relaxed marker:text-orange-500 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800"
-                    dangerouslySetInnerHTML={{ __html: marked(mr.description) }}
-                  />
+                  <div className="prose prose-invert prose-orange max-w-none text-sm text-gray-300 leading-relaxed marker:text-orange-500 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {mr.description}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   <p className="text-gray-500 italic text-sm">No description provided.</p>
                 )}
@@ -381,27 +456,42 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                           <div className="absolute top-10 bottom-4 left-5 w-[2px] bg-gray-800 rounded-full" />
                         )}
                         <div className="space-y-4">
-                          {d.notes.map((note: MRNote, index: number) => (
-                            <div key={note.id} className={`flex gap-4 relative z-10 ${index > 0 ? 'ml-12' : ''}`}>
-                              <img 
-                                src={note.author.avatarUrl} 
-                                alt={note.author.name} 
-                                className={`rounded-full bg-gray-800 border border-gray-700 object-cover ${index === 0 ? 'w-10 h-10' : 'w-8 h-8 mt-1'}`}
-                              />
-                              <div className={`flex-1 bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden transition-colors hover:border-gray-700 shadow-sm ${note.system ? 'bg-transparent border-none' : ''}`}>
-                                {!note.system && (
+                          {d.notes.map((note: MRNote, index: number) => {
+                            if (note.system) {
+                              return (
+                                <div key={note.id} className={`flex items-center gap-3 relative z-10 py-1 ${index > 0 ? 'ml-12' : 'ml-2'}`}>
+                                  <div className="w-6 h-6 rounded-full bg-gray-800/50 flex items-center justify-center border border-gray-700/50 shrink-0">
+                                    <GitCommit className="w-3 h-3 text-gray-500" />
+                                  </div>
+                                  <div className="flex-1 flex items-center gap-2 text-sm text-gray-400">
+                                    <span className="font-medium text-gray-300">{note.author.name}</span>
+                                    <div className="prose prose-invert prose-sm prose-p:my-0 prose-a:text-orange-400">
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.body}</ReactMarkdown>
+                                    </div>
+                                    <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            return (
+                              <div key={note.id} className={`flex gap-4 relative z-10 ${index > 0 ? 'ml-12' : ''}`}>
+                                <img 
+                                  src={note.author.avatarUrl} 
+                                  alt={note.author.name} 
+                                  className={`rounded-full bg-gray-800 border border-gray-700 object-cover ${index === 0 ? 'w-10 h-10' : 'w-8 h-8 mt-1'}`}
+                                />
+                                <div className="flex-1 bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden transition-colors hover:border-gray-700 shadow-sm">
                                   <div className="bg-gray-800/30 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
                                     <span className="font-semibold text-gray-200 text-sm">{note.author.name}</span>
                                     <span className="text-gray-500 text-xs">{new Date(note.createdAt).toLocaleString()}</span>
                                   </div>
-                                )}
-                                <div className={`px-4 py-3 text-sm text-gray-300 prose prose-invert prose-sm max-w-none prose-a:text-orange-400 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded ${note.system ? 'px-0 py-1 text-gray-400 italic flex items-center gap-2' : ''}`}>
-                                  {note.system && <span className="text-xs">{new Date(note.createdAt).toLocaleString()}</span>}
-                                  <div dangerouslySetInnerHTML={{ __html: marked(note.body) }} />
+                                  <div className="px-4 py-3 text-sm text-gray-300 prose prose-invert prose-orange max-w-none prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.body}</ReactMarkdown>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     ))}
@@ -477,7 +567,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                       </div>
                       {/* Diff Viewer Wrapper */}
                       {!isViewed && (
-                        <CustomDiffViewer diffString={diff.diff} />
+                        <CustomDiffViewer diffString={diff.diff} viewMode={diffViewMode} />
                       )}
                     </div>
                   )
