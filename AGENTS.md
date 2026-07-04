@@ -92,3 +92,8 @@ Provide a 44×44px image for the 22×22 logical size.
 3. `src/renderer/electron.d.ts` — add TypeScript type
 
 **electron-builder config** — packaging config lives in `package.json` `"build"` field. `electron-builder.config.ts` is not used by any npm script.
+
+## Versioning Rules
+
+**Always ask for permission before bumping the version**: Before running \
+pm version\ or modifying the version in \package.json\, you MUST ask the user if they have already released the current version. Do not bump versions automatically without user confirmation.
