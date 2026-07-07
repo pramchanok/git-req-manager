@@ -22,6 +22,7 @@ import {
   handleWebhookMerge,
 } from './scheduler'
 import { startWebhookServer, stopWebhookServer, getWebhookAddress } from './webhook'
+import { setMRClickHandler } from './notifier'
 import {
   startTunnel,
   stopTunnel,
@@ -465,7 +466,7 @@ function setupIPC(): void {
     }
   })
 
-  ipcMain.handle('open-mr-window', (_event, projectId: number, mrIid: number) => {
+  function openMRWindow(projectId: number, mrIid: number) {
     const mrWin = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -493,6 +494,12 @@ function setupIPC(): void {
         }
       })
     }
+  }
+
+  setMRClickHandler(openMRWindow)
+
+  ipcMain.handle('open-mr-window', (_event, projectId: number, mrIid: number) => {
+    openMRWindow(projectId, mrIid)
   })
 
   ipcMain.handle('get-mr-by-iid', async (_event, projectId: number, mrIid: number) => {

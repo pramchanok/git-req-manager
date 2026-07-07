@@ -1,9 +1,19 @@
-import { Notification, shell } from 'electron'
+import { Notification, shell, app } from 'electron'
+import path from 'path'
 import type { GitLabGroup, MergeRequest } from '../shared/types'
 import { addNotifiedMRId, clearNotifiedMRIds, getNotifiedMRIds, removeNotifiedMRId } from './store'
 
 // Lazy-initialized from persisted store so we don't re-notify after restart
 let _notifiedMRIds: Set<number> | null = null
+let _mrClickHandler: ((projectId: number, mrIid: number) => void) | null = null
+
+export function setMRClickHandler(handler: (projectId: number, mrIid: number) => void) {
+  _mrClickHandler = handler
+}
+
+function getIconPath() {
+  return path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+}
 
 function getTracked(): Set<number> {
   if (!_notifiedMRIds) _notifiedMRIds = getNotifiedMRIds()
@@ -19,13 +29,18 @@ export function notifyNewMRs(newMRs: MergeRequest[]): void {
     if (!Notification.isSupported()) continue
 
     const notification = new Notification({
-      title: '🔔 GitLab MR Manager',
+      title: 'GitLab MR Manager',
       body: `${mr.author.name} requested your review: ${mr.title}`,
+      icon: getIconPath(),
       silent: false,
     })
 
     notification.on('click', () => {
-      shell.openExternal(mr.webUrl)
+      if (_mrClickHandler) {
+        _mrClickHandler(mr.projectId, mr.iid)
+      } else {
+        shell.openExternal(mr.webUrl)
+      }
     })
 
     notification.show()
@@ -36,13 +51,18 @@ export function notifyMRMerged(mr: MergeRequest): void {
   if (!Notification.isSupported()) return
 
   const notification = new Notification({
-    title: '✅ MR Merged!',
+    title: 'GitLab MR Manager - Merged',
     body: `"${mr.title}" ถูก merge เข้า ${mr.targetBranch} แล้ว`,
+    icon: getIconPath(),
     silent: false,
   })
 
   notification.on('click', () => {
-    shell.openExternal(mr.webUrl)
+    if (_mrClickHandler) {
+      _mrClickHandler(mr.projectId, mr.iid)
+    } else {
+      shell.openExternal(mr.webUrl)
+    }
   })
 
   notification.show()
@@ -54,13 +74,18 @@ export function notifyCIPipelineFailed(mrs: MergeRequest[]): void {
     if (!Notification.isSupported()) continue
 
     const notification = new Notification({
-      title: '🔴 GitLab CI Failed',
+      title: 'GitLab MR Manager - CI Failed',
       body: `Pipeline failed: ${mr.title}`,
+      icon: getIconPath(),
       silent: false,
     })
 
     notification.on('click', () => {
-      shell.openExternal(mr.webUrl)
+      if (_mrClickHandler) {
+        _mrClickHandler(mr.projectId, mr.iid)
+      } else {
+        shell.openExternal(mr.webUrl)
+      }
     })
 
     notification.show()
@@ -75,13 +100,18 @@ export function notifyLabelsChanged(mr: MergeRequest, added: string[], removed: 
   if (removed.length > 0) parts.push(`- ${removed.join(', ')}`)
 
   const notification = new Notification({
-    title: '🏷️ Label Changed',
+    title: 'GitLab MR Manager - Label Changed',
     body: `${mr.title}\n${parts.join(' · ')}`,
+    icon: getIconPath(),
     silent: false,
   })
 
   notification.on('click', () => {
-    shell.openExternal(mr.webUrl)
+    if (_mrClickHandler) {
+      _mrClickHandler(mr.projectId, mr.iid)
+    } else {
+      shell.openExternal(mr.webUrl)
+    }
   })
 
   notification.show()
@@ -101,8 +131,9 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
   if (toNotify.length > 5) {
     // Bulk summary to avoid notification spam
     const notification = new Notification({
-      title: `🔔 ${group.name}`,
-      body: `${toNotify.length} new merge requests`,
+      title: 'GitLab MR Manager',
+      body: `${toNotify.length} new merge requests in ${group.name}`,
+      icon: getIconPath(),
       silent: false,
     })
     notification.on('click', () => {
@@ -112,12 +143,17 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
   } else {
     for (const mr of toNotify) {
       const notification = new Notification({
-        title: `🔔 ${group.name}`,
+        title: `GitLab MR Manager - ${group.name}`,
         body: `${mr.author.name}: ${mr.title}`,
+        icon: getIconPath(),
         silent: false,
       })
       notification.on('click', () => {
-        shell.openExternal(mr.webUrl)
+        if (_mrClickHandler) {
+          _mrClickHandler(mr.projectId, mr.iid)
+        } else {
+          shell.openExternal(mr.webUrl)
+        }
       })
       notification.show()
     }
