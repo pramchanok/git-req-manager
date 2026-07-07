@@ -554,7 +554,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 })}
                 
                 <button
-                  onClick={() => setShowReactionPicker(!showReactionPicker)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowReactionPicker(prev => !prev)
+                  }}
                   className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#21262d] border border-transparent text-gray-400 hover:bg-[#30363d] transition-colors"
                   title="Add reaction"
                 >
