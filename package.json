@@ -25,7 +25,7 @@
     "start": "electron ."
   },
   "build": {
-    "appId": "com.gitlab-req-manager.app",
+    "appId": "com.gitlab-req-manager.desktop",
     "productName": "GitLab MR Manager",
     "copyright": "Copyright © 2025",
     "directories": {

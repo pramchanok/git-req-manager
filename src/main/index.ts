@@ -52,7 +52,7 @@ let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 let revealWindowOnReady = false
 let isInitialLaunch = true
-const windowsAppUserModelId = 'com.gitlab-req-manager.app'
+const windowsAppUserModelId = 'com.gitlab-req-manager.desktop'
 
 app.setName('GitLab MR Manager')
 
