@@ -40,7 +40,7 @@ jobs:
           project-slug: "gitlab-mr-manager-h-d-tb"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Extract release notes from CHANGELOG.md
         run: |
