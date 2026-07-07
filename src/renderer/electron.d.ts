@@ -1,4 +1,4 @@
-import type { AppState, GitLabGroup, GitLabUser, MergeRequest, Settings, UpdateState } from '../../shared/types'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest, Settings, UpdateState, MRAwardEmoji } from '../../shared/types'
 
 declare global {
   interface Window {
@@ -37,6 +37,9 @@ declare global {
       cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
       getCompareDiffs: (projectId: number, fromSha: string, toSha: string) => Promise<import('../../shared/types').MRDiff[]>
       getCommitDiffs: (projectId: number, sha: string) => Promise<import('../../shared/types').MRDiff[]>
+      getMRAwardEmojis: (projectId: number, mrIid: number) => Promise<MRAwardEmoji[]>
+      addMRAwardEmoji: (projectId: number, mrIid: number, name: string) => Promise<void>
+      removeMRAwardEmoji: (projectId: number, mrIid: number, awardId: number) => Promise<void>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void

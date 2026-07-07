@@ -79,6 +79,14 @@ export interface MRDiscussion {
   notes: MRNote[]
 }
 
+export interface MRAwardEmoji {
+  id: number
+  name: string
+  user: GitLabUser
+  createdAt: string
+  updatedAt: string
+}
+
 export interface GitLabUser {
   id: number
   name: string
@@ -166,3 +174,6 @@ export type IpcChannel =
   | 'unapprove-mr'
   | 'merge-mr'
   | 'close-mr'
+  | 'get-mr-award-emojis'
+  | 'add-mr-award-emoji'
+  | 'remove-mr-award-emoji'

@@ -84,6 +84,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [diffViewMode, setDiffViewMode] = useState<'inline' | 'split'>('inline')
   const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
   
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
@@ -138,6 +139,9 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     return stats
   }, [diffs])
 
+  const [awardEmojis, setAwardEmojis] = useState<import('../../shared/types').MRAwardEmoji[]>([])
+  const [currentUser, setCurrentUser] = useState<import('../../shared/types').GitLabUser | null>(null)
+
   const fileTree = useMemo(() => {
     return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
   }, [diffs, viewedFiles, diffStats])
@@ -168,11 +172,24 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
+  const fetchAwardEmojis = async () => {
+    try {
+      const data = await window.electronAPI.getMRAwardEmojis(projectId, mrIid)
+      setAwardEmojis(data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const mrData = await window.electronAPI.getMRByIid(projectId, mrIid)
+        const [mrData, appState] = await Promise.all([
+          window.electronAPI.getMRByIid(projectId, mrIid),
+          window.electronAPI.getAppState()
+        ])
         setMR(mrData)
+        setCurrentUser(appState.currentUser)
       } catch (err) {
         console.error(err)
         onToast('Failed to load MR', 'error')
@@ -181,6 +198,13 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     loadData()
     fetchDiscussions()
     fetchDiffs()
+    fetchAwardEmojis()
+    
+    const interval = setInterval(() => {
+      fetchDiscussions()
+      fetchAwardEmojis()
+    }, 60000)
+    return () => clearInterval(interval)
   }, [projectId, mrIid])
 
   const handleAddComment = async () => {
@@ -198,6 +222,34 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       setSubmittingComment(false)
     }
   }
+
+  const toggleAwardEmoji = async (emojiName: string) => {
+    if (!currentUser) return
+    const existing = awardEmojis.find(a => a.name === emojiName && a.user.id === currentUser.id)
+    try {
+      if (existing) {
+        await window.electronAPI.removeMRAwardEmoji(projectId, mrIid, existing.id)
+      } else {
+        await window.electronAPI.addMRAwardEmoji(projectId, mrIid, emojiName)
+      }
+      fetchAwardEmojis()
+    } catch (err) {
+      console.error(err)
+      onToast('Failed to update reaction', 'error')
+    }
+  }
+
+  const emojiGroups = useMemo(() => {
+    const groups: Record<string, { count: number, hasVoted: boolean }> = {}
+    for (const a of awardEmojis) {
+      if (!groups[a.name]) groups[a.name] = { count: 0, hasVoted: false }
+      groups[a.name].count++
+      if (currentUser && a.user.id === currentUser.id) {
+        groups[a.name].hasVoted = true
+      }
+    }
+    return groups
+  }, [awardEmojis, currentUser])
 
   const handleAction = async (action: 'approve' | 'merge' | 'close' | 'cancel-pipeline') => {
     setProcessingAction(true)
@@ -440,6 +492,55 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   </div>
                 ) : (
                   <p className="text-gray-500 italic text-sm">No description provided.</p>
+                )}
+              </div>
+
+              {/* Award Emojis */}
+              <div className="flex flex-wrap items-center gap-2 mt-4 relative">
+                {['thumbsup', 'thumbsdown', ...Object.keys(emojiGroups).filter(name => name !== 'thumbsup' && name !== 'thumbsdown')].map(name => {
+                  const group = emojiGroups[name]
+                  if (!group && (name !== 'thumbsup' && name !== 'thumbsdown')) return null
+                  const count = group?.count || 0
+                  const hasVoted = group?.hasVoted || false
+                  if (count === 0 && name !== 'thumbsup' && name !== 'thumbsdown') return null
+
+                  const emojiData = (data as any).emojis[name]
+                  const nativeChar = emojiData ? emojiData.skins[0].native : `:${name}:`
+
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => toggleAwardEmoji(name)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors border ${hasVoted ? 'bg-[#1d4ed8]/20 border-[#1d4ed8] text-blue-400' : 'bg-[#21262d] border-transparent text-gray-400 hover:bg-[#30363d]'}`}
+                    >
+                      <span className="text-base leading-none">{nativeChar}</span>
+                      <span>{count}</span>
+                    </button>
+                  )
+                })}
+                
+                <button
+                  onClick={() => setShowReactionPicker(!showReactionPicker)}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#21262d] border border-transparent text-gray-400 hover:bg-[#30363d] transition-colors"
+                  title="Add reaction"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+
+                {showReactionPicker && (
+                  <div className="absolute top-10 left-0 z-50 shadow-2xl border border-gray-700 rounded-lg overflow-hidden">
+                    <Picker 
+                      data={data} 
+                      theme="dark"
+                      onEmojiSelect={(emoji: any) => {
+                        toggleAwardEmoji(emoji.id)
+                        setShowReactionPicker(false)
+                      }}
+                      onClickOutside={() => setShowReactionPicker(false)}
+                    />
+                  </div>
                 )}
               </div>
 

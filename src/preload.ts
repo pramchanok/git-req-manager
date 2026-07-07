@@ -81,4 +81,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-compare-diffs', projectId, fromSha, toSha),
   getCommitDiffs: (projectId: number, sha: string): Promise<import('./shared/types').MRDiff[]> =>
     ipcRenderer.invoke('get-commit-diffs', projectId, sha),
+  getMRAwardEmojis: (projectId: number, mrIid: number): Promise<import('./shared/types').MRAwardEmoji[]> =>
+    ipcRenderer.invoke('get-mr-award-emojis', projectId, mrIid),
+  addMRAwardEmoji: (projectId: number, mrIid: number, name: string): Promise<void> =>
+    ipcRenderer.invoke('add-mr-award-emoji', projectId, mrIid, name),
+  removeMRAwardEmoji: (projectId: number, mrIid: number, awardId: number): Promise<void> =>
+    ipcRenderer.invoke('remove-mr-award-emoji', projectId, mrIid, awardId),
 })

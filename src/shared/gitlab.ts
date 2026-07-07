@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion } from './types'
+import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion, MRAwardEmoji } from './types'
 
 export class GitLabClient {
   private http: AxiosInstance
@@ -490,6 +490,25 @@ export class GitLabClient {
 
   async addMRNote(projectId: number, mrIid: number, body: string): Promise<void> {
     await this.http.post(`/projects/${projectId}/merge_requests/${mrIid}/notes`, { body })
+  }
+
+  async getMRAwardEmojis(projectId: number, mrIid: number): Promise<MRAwardEmoji[]> {
+    const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/award_emoji`)
+    return data.map((d: Record<string, unknown>) => ({
+      id: d.id as number,
+      name: d.name as string,
+      user: this.mapUser(d.user as Record<string, unknown>),
+      createdAt: d.created_at as string,
+      updatedAt: d.updated_at as string,
+    }))
+  }
+
+  async addMRAwardEmoji(projectId: number, mrIid: number, name: string): Promise<void> {
+    await this.http.post(`/projects/${projectId}/merge_requests/${mrIid}/award_emoji`, { name })
+  }
+
+  async removeMRAwardEmoji(projectId: number, mrIid: number, awardId: number): Promise<void> {
+    await this.http.delete(`/projects/${projectId}/merge_requests/${mrIid}/award_emoji/${awardId}`)
   }
 
   async approveMR(projectId: number, mrIid: number): Promise<void> {

@@ -625,4 +625,25 @@ function setupIPC(): void {
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
     return await client.getCommitDiffs(projectId, sha)
   })
+
+  ipcMain.handle('get-mr-award-emojis', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return await client.getMRAwardEmojis(projectId, mrIid)
+  })
+
+  ipcMain.handle('add-mr-award-emoji', async (_event, projectId: number, mrIid: number, name: string) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.addMRAwardEmoji(projectId, mrIid, name)
+  })
+
+  ipcMain.handle('remove-mr-award-emoji', async (_event, projectId: number, mrIid: number, awardId: number) => {
+    if (!isConfigured()) return
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    await client.removeMRAwardEmoji(projectId, mrIid, awardId)
+  })
 }
