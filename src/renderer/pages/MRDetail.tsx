@@ -9,6 +9,11 @@ import { buildFileTree, FileTreeNode } from '../utils/pathTree'
 import { MessageSquare, User, GitCommit, Settings, Check, X, FileText, Folder, Eye } from 'lucide-react'
 
 import { marked } from 'marked'
+import MDEditor, { commands } from '@uiw/react-md-editor'
+import '@uiw/react-md-editor/markdown-editor.css'
+import '@uiw/react-markdown-preview/markdown.css'
+import data from '@emoji-mart/data'
+import Picker from '@emoji-mart/react'
 
 const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) => {
   const [expanded, setExpanded] = useState(true)
@@ -78,6 +83,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [isResizing, setIsResizing] = useState(false)
   const [diffViewMode, setDiffViewMode] = useState<'inline' | 'split'>('inline')
   const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
@@ -539,17 +545,52 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
 
               {/* Comment Input */}
               <div className="mt-8 flex gap-4">
-                <div className="flex-1 bg-[#161b22] border border-gray-700 focus-within:border-orange-500 rounded-xl overflow-hidden transition-colors shadow-sm">
-                  <div className="bg-gray-800/30 px-4 py-2 border-b border-gray-800">
-                    <span className="text-xs font-semibold text-gray-400">Leave a comment</span>
+                <div className="flex-1 rounded-xl overflow-visible transition-colors relative">
+                  <div data-color-mode="dark" className="border border-gray-700 rounded-t-xl overflow-hidden">
+                    <MDEditor
+                      value={commentText}
+                      onChange={val => setCommentText(val || '')}
+                      preview="edit"
+                      height={200}
+                      className="!bg-[#161b22] !border-0"
+                      textareaProps={{
+                        placeholder: "Write your thoughts...",
+                      }}
+                      commands={[
+                        ...commands.getCommands(),
+                        commands.divider,
+                        {
+                          name: 'emoji',
+                          keyCommand: 'emoji',
+                          buttonProps: { 'aria-label': 'Insert emoji', title: 'Insert emoji' },
+                          icon: (
+                            <svg width="14" height="14" viewBox="0 0 20 20">
+                              <path d="M10 20a10 10 0 1 1 0-20 10 10 0 0 1 0 20zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm-3 6a4 4 0 0 1-3.46-2h6.92A4 4 0 0 1 10 15z" fill="currentColor"/>
+                            </svg>
+                          ),
+                          execute: () => {
+                            setShowEmojiPicker(prev => !prev)
+                          }
+                        }
+                      ]}
+                    />
                   </div>
-                  <textarea
-                    value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
-                    placeholder="Write your thoughts..."
-                    className="w-full bg-transparent p-4 text-sm text-white focus:outline-none min-h-[120px] resize-y"
-                  />
-                  <div className="bg-gray-800/30 px-4 py-3 border-t border-gray-800 flex justify-between items-center">
+                  
+                  {showEmojiPicker && (
+                    <div className="absolute top-10 right-0 z-50 shadow-2xl border border-gray-700 rounded-lg overflow-hidden">
+                      <Picker 
+                        data={data} 
+                        theme="dark"
+                        onEmojiSelect={(emoji: any) => {
+                          setCommentText(prev => prev + emoji.native)
+                          setShowEmojiPicker(false)
+                        }}
+                        onClickOutside={() => setShowEmojiPicker(false)}
+                      />
+                    </div>
+                  )}
+
+                  <div className="bg-[#161b22] px-4 py-3 border border-t-0 border-gray-700 rounded-b-xl flex justify-between items-center">
                     <span className="text-xs text-gray-500">Supports Markdown</span>
                     <button
                       onClick={handleAddComment}
