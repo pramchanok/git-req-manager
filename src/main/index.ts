@@ -54,6 +54,8 @@ let revealWindowOnReady = false
 let isInitialLaunch = true
 const windowsAppUserModelId = 'com.gitlab-req-manager.app'
 
+app.setName('GitLab MR Manager')
+
 if (process.platform === 'win32') {
   app.setAppUserModelId(windowsAppUserModelId)
 }
