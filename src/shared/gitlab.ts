@@ -1,19 +1,47 @@
-import axios, { AxiosInstance } from 'axios'
 import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion, MRAwardEmoji } from './types'
 
+class FetchWrapper {
+  constructor(private baseUrl: string, private token: string) {}
+
+  private async request(method: string, path: string, options: any = {}) {
+    const url = new URL(`${this.baseUrl}${path}`)
+    if (options.params) {
+      for (const [k, v] of Object.entries(options.params)) {
+        if (v !== undefined && v !== null) {
+          url.searchParams.append(k, String(v))
+        }
+      }
+    }
+    const res = await fetch(url.toString(), {
+      method,
+      headers: {
+        'PRIVATE-TOKEN': this.token,
+        'Content-Type': 'application/json',
+      },
+      body: options.data ? JSON.stringify(options.data) : undefined,
+    })
+    
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      throw new Error(`GitLab API Error: ${res.status} ${res.statusText} ${errText}`)
+    }
+    
+    const data: any = res.status !== 204 ? await res.json().catch(() => ({})) : {}
+    return { data }
+  }
+
+  get(path: string, options?: any) { return this.request('GET', path, options) }
+  post(path: string, data?: any) { return this.request('POST', path, { data }) }
+  put(path: string, data?: any) { return this.request('PUT', path, { data }) }
+  delete(path: string) { return this.request('DELETE', path) }
+}
+
 export class GitLabClient {
-  private http: AxiosInstance
+  private http: FetchWrapper
 
   constructor(baseUrl: string, accessToken: string) {
     const normalizedUrl = baseUrl.replace(/\/$/, '')
-    this.http = axios.create({
-      baseURL: `${normalizedUrl}/api/v4`,
-      headers: {
-        'PRIVATE-TOKEN': accessToken,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    })
+    this.http = new FetchWrapper(`${normalizedUrl}/api/v4`, accessToken)
   }
 
   async getCurrentUser(): Promise<GitLabUser> {
