@@ -223,16 +223,51 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
-  const toggleAwardEmoji = async (emojiName: string) => {
-    if (!currentUser) return
-    const existing = awardEmojis.find(a => a.name === emojiName && a.user.id === currentUser.id)
+  const getEmojiChar = (name: string) => {
+    if (name === 'thumbsup' || name === '+1') return '👍'
+    if (name === 'thumbsdown' || name === '-1') return '👎'
     try {
+      const emojiData = (data as any).emojis[name]
+      if (emojiData && emojiData.skins && emojiData.skins[0]) {
+        return emojiData.skins[0].native
+      }
+      for (const key of Object.keys((data as any).emojis || {})) {
+        const e = (data as any).emojis[key]
+        if (e.id === name || (e.shortcodes && e.shortcodes.includes(`:${name}:`))) {
+          return e.skins[0].native
+        }
+      }
+    } catch (e) {}
+    return `:${name}:`
+  }
+
+  const toggleAwardEmoji = async (emojiName: string) => {
+    if (!currentUser) {
+      onToast('User not loaded yet. Try again later.', 'error')
+      return
+    }
+    
+    // Normalize names from emoji picker
+    if (emojiName === '+1') emojiName = 'thumbsup'
+    if (emojiName === '-1') emojiName = 'thumbsdown'
+
+    try {
+      const existing = awardEmojis.find(a => a.name === emojiName && a.user.id === currentUser.id)
+      
+      if (!existing && (emojiName === 'thumbsup' || emojiName === 'thumbsdown')) {
+        const oppositeName = emojiName === 'thumbsup' ? 'thumbsdown' : 'thumbsup'
+        const oppositeExisting = awardEmojis.find(a => a.name === oppositeName && a.user.id === currentUser.id)
+        if (oppositeExisting) {
+          await window.electronAPI.removeMRAwardEmoji(projectId, mrIid, oppositeExisting.id)
+        }
+      }
+
       if (existing) {
         await window.electronAPI.removeMRAwardEmoji(projectId, mrIid, existing.id)
       } else {
         await window.electronAPI.addMRAwardEmoji(projectId, mrIid, emojiName)
       }
-      fetchAwardEmojis()
+      await fetchAwardEmojis()
     } catch (err) {
       console.error(err)
       onToast('Failed to update reaction', 'error')
@@ -504,8 +539,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   const hasVoted = group?.hasVoted || false
                   if (count === 0 && name !== 'thumbsup' && name !== 'thumbsdown') return null
 
-                  const emojiData = (data as any).emojis[name]
-                  const nativeChar = emojiData ? emojiData.skins[0].native : `:${name}:`
+                  const nativeChar = getEmojiChar(name)
 
                   return (
                     <button
