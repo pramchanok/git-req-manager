@@ -406,6 +406,7 @@ export class GitLabClient {
       approvalsLeft: (mr.approvals_left as number) ?? 0,
       draft: (mr.draft as boolean) ?? false,
       hasConflicts: (mr.has_conflicts as boolean) ?? false,
+      mergeWhenPipelineSucceeds: (mr.merge_when_pipeline_succeeds as boolean) ?? false,
       upvotes: (mr.upvotes as number) ?? 0,
       downvotes: (mr.downvotes as number) ?? 0,
       userNotesCount: (mr.user_notes_count as number) ?? 0,

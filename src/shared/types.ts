@@ -41,6 +41,7 @@ export interface MergeRequest {
   approvalsLeft: number
   draft: boolean
   hasConflicts: boolean
+  mergeWhenPipelineSucceeds: boolean
   upvotes: number
   downvotes: number
   userNotesCount: number
