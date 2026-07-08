@@ -452,13 +452,19 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => {
+    let windowIcon: Electron.NativeImage | undefined
+    try {
+      const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+      windowIcon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
+    } catch (e) {}
+
     const reportWin = new BrowserWindow({
       width: 1000,
       height: 700,
       resizable: true,
       frame: true,
       title: `Developer Report: ${name}`,
-      icon: path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+      icon: windowIcon,
       webPreferences: {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
@@ -485,13 +491,19 @@ function setupIPC(): void {
   })
 
   function openMRWindow(projectId: number, mrIid: number) {
+    let windowIcon: Electron.NativeImage | undefined
+    try {
+      const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+      windowIcon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
+    } catch (e) {}
+
     const mrWin = new BrowserWindow({
       width: 1200,
       height: 800,
       resizable: true,
       frame: true,
       title: `MR !${mrIid}`,
-      icon: path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+      icon: windowIcon,
       webPreferences: {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
