@@ -76,13 +76,21 @@ body {
   animation: page-fade 0.15s ease-out;
 }
 
-/* Fix MDEditor misalignment between textarea and pre due to Tailwind CSS reset */
-.w-md-editor-text-input,
+/* Fix MDEditor Thai/CJK cursor alignment by disabling in-editor syntax highlighting */
+.w-md-editor-text-input {
+  -webkit-text-fill-color: #e5e7eb !important; /* visible text */
+  color: #e5e7eb !important;
+}
 .w-md-editor-text-pre > code,
 .w-md-editor-text-pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
-  font-size: 14px !important;
-  line-height: 1.5 !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Slim down MDEditor toolbar */
+.w-md-editor-toolbar {
+  padding: 4px 8px !important;
+}
+.w-md-editor-toolbar li > button {
+  padding: 2px 4px !important;
 }
