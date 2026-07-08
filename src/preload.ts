@@ -43,6 +43,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
     return () => ipcRenderer.removeAllListeners('app-state-updated')
   },
+  onSyncStatusUpdated: (callback: (isSyncing: boolean) => void) => {
+    ipcRenderer.on('sync-status-updated', (_event, isSyncing: boolean) => callback(isSyncing))
+    return () => ipcRenderer.removeAllListeners('sync-status-updated')
+  },
   onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => {
     ipcRenderer.on('tunnel-status', (_event, data) => callback(data))
     return () => ipcRenderer.removeAllListeners('tunnel-status')

@@ -39,9 +39,14 @@ const currentState: AppState = {
 }
 
 let onStateChange: StateChangeCallback = () => {}
+let onSyncStatusChange: (isSyncing: boolean) => void = () => {}
 
 export function setStateChangeCallback(cb: StateChangeCallback): void {
   onStateChange = cb
+}
+
+export function setSyncStatusChangeCallback(cb: (isSyncing: boolean) => void): void {
+  onSyncStatusChange = cb
 }
 
 export function getAppState(): AppState {
@@ -61,7 +66,7 @@ export async function syncNow(): Promise<void> {
   currentState.isSyncing = true
   currentState.isConfigured = true
   currentState.error = null
-  onStateChange({ ...currentState })
+  onSyncStatusChange(true)
 
   try {
     const settings = getSettings()
@@ -162,9 +167,9 @@ export async function syncNow(): Promise<void> {
     currentState.ownerGroups = ownerGroups
 
     const notifyGroupIds = settings.notifyOwnerGroupIds ?? []
-    for (const groupId of notifyGroupIds) {
+    await Promise.all(notifyGroupIds.map(async (groupId) => {
       const group = ownerGroups.find((g) => g.id === groupId)
-      if (!group) continue
+      if (!group) return
 
       const groupMRs = await client.getGroupOpenMRs(groupId).catch((err): MergeRequest[] => {
         console.error(`[scheduler] Failed to fetch open MRs for group ${groupId}:`, err instanceof Error ? err.message : String(err))
@@ -176,7 +181,7 @@ export async function syncNow(): Promise<void> {
         notifyNewGroupMRs(group, newGroupMRs)
       }
       previousGroupMRIds.set(groupId, new Set(groupMRs.map((mr) => mr.id)))
-    }
+    }))
 
     // Prune notifiedMRIds to only active open MRs (cap 500) to prevent unbounded growth
     const activeMRIds = new Set([...reviewMRs, ...allOpenMRs].map((mr) => mr.id))
@@ -186,6 +191,7 @@ export async function syncNow(): Promise<void> {
     currentState.error = `Sync failed: ${message}`
   } finally {
     currentState.isSyncing = false
+    onSyncStatusChange(false)
     onStateChange({ ...currentState })
   }
 }

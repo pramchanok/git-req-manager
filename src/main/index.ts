@@ -19,6 +19,7 @@ import {
   syncNow,
   getAppState,
   setStateChangeCallback,
+  setSyncStatusChangeCallback,
   handleWebhookMerge,
 } from './scheduler'
 import { startWebhookServer, stopWebhookServer, getWebhookAddress } from './webhook'
@@ -123,6 +124,12 @@ async function startApp(): Promise<void> {
       // Push state to renderer
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('app-state-updated', state)
+      }
+    })
+
+    setSyncStatusChangeCallback((isSyncing: boolean) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('sync-status-updated', isSyncing)
       }
     })
 

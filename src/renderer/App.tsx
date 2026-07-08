@@ -110,6 +110,10 @@ export default function App() {
       setUpdateState(state)
     })
 
+    const unsubscribeSyncStatus = window.electronAPI.onSyncStatusUpdated((isSyncing) => {
+      setAppState((prev) => ({ ...prev, isSyncing }))
+    })
+
     const unsubscribeShowSettings = window.electronAPI.onShowSettings(() => {
       setPage('settings')
     })
@@ -121,6 +125,7 @@ export default function App() {
     return () => {
       unsubscribe()
       unsubscribeUpdates()
+      unsubscribeSyncStatus()
       unsubscribeShowSettings()
       unsubscribeShowChangelog()
     }

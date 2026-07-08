@@ -163,3 +163,30 @@ const sorted = useMemo(
 
 **แนะนำทำ #3 + #4 + #5 ก่อน** — effort ต่ำมาก ทำได้เร็ว
 แล้วค่อยทำ #2 + #1 ต่อ
+
+---
+
+## ปัญหาที่พบเพิ่มเติม (อัปเดต 2026-07) - สาเหตุอาการแอป "หน่วง"
+
+จากการตรวจสอบระบบล่าสุด พบสาเหตุที่อาจทำให้ UI เกิดอาการหน่วง (Sluggish/Stuttering) ดังนี้:
+
+### 🔴 P1 — IPC Payload มีขนาดใหญ่และส่งบ่อยเกินไป
+**ไฟล์:** `src/main/scheduler.ts` และ `src/main/index.ts`
+- **ปัญหา:** ทุกครั้งที่จบการทำงาน `syncNow()` (หรือแค่เปลี่ยนสถานะ `isSyncing` เป็น true/false) ระบบจะส่ง `currentState` ทั้งก้อนข้าม IPC Bridge ไปยัง Renderer Process
+- `currentState` ประกอบด้วย array ของ `myReviewMRs` และ `allOpenMRs` ซึ่งแต่ละ MR มีข้อมูลเยอะมาก (author, assignees, reviewers, labels) หากทีมมี MR เปิดค้างอยู่หลัก 100-200 รายการ การ Serialize JSON ก้อนใหญ่ๆ ข้าม IPC บ่อยๆ จะทำให้ Main/Renderer thread สะดุดชั่วขณะ (อาการหน่วง)
+- **วิธีแก้:** 
+  - ตรวจสอบว่า State เปลี่ยนแปลงจริงหรือไม่ก่อนส่ง (Deep compare หรือ Hash check)
+  - ลดขนาด Payload: ตัด field ที่ Renderer ไม่ได้ใช้ออก หรือส่งไปเฉพาะ MR ID แล้วให้ Renderer ทยอยดึงรายละเอียด
+
+### 🔴 P1 — React Re-render ทั้งแอป (Unnecessary Renders)
+**ไฟล์:** `src/renderer/App.tsx`
+- **ปัญหา:** เมื่อ Renderer ได้รับ `app-state-updated` จะเรียก `setAppState(state)` ทันที ทำให้ React บังคับ Re-render Component ทั้งหมดตั้งแต่ราก (Root) ไปจนถึงการ์ดแสดงผลแต่ละใบ
+- หากมี MR การ์ดจำนวนมาก จะทำให้ CPU ทำงานหนักตอนวาด UI ใหม่ (กระตุก)
+- **วิธีแก้:** 
+  - ใช้ `React.memo` คลุม UI Component ย่อยๆ (เช่น `MRCard`) ให้ Render ใหม่เฉพาะเมื่อ Props ของตัวเองเปลี่ยน
+  - แยก State `isSyncing` ออกมาจาก `AppState` ก้อนใหญ่ เพื่อไม่ให้เวลาที่ Loader หมุนไปกระทบการ Re-render ของข้อมูลลิสต์ MR
+
+### 🟡 P2 — Fetch Group MRs ทำงานแบบ Sequential (คอขวด)
+**ไฟล์:** `src/main/scheduler.ts` (บรรทัด ~164)
+- **ปัญหา:** ในลูป `for (const groupId of notifyGroupIds)` ระบบใช้ `await client.getGroupOpenMRs(groupId)` ทีละกลุ่ม หากผู้ใช้ตั้งให้แจ้งเตือน Group ไว้หลายกลุ่ม จะเสียเวลารอ API ตอบกลับทีละตัว ทำให้รอบการ Sync นานเกินความจำเป็น
+- **วิธีแก้:** เปลี่ยนลูปเป็น `await Promise.all(...)` เพื่อรันการดึงข้อมูล Group MRs หลายกลุ่มพร้อมกัน (Concurrent fetch)

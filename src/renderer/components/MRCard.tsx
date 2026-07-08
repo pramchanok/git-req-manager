@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { GitLabUser, MergeRequest, MRLabel } from '../../shared/types'
 
 interface MRCardProps {
@@ -63,7 +64,7 @@ function LabelChip({ label }: { label: MRLabel }) {
   )
 }
 
-export default function MRCard({ mr }: MRCardProps) {
+function MRCard({ mr }: MRCardProps) {
   const handleOpenApp = () => {
     window.electronAPI.openMRWindow(mr.projectId, mr.iid)
   }
@@ -219,3 +220,7 @@ export default function MRCard({ mr }: MRCardProps) {
     </div>
   )
 }
+
+export default memo(MRCard, (prevProps, nextProps) => {
+  return JSON.stringify(prevProps.mr) === JSON.stringify(nextProps.mr)
+})

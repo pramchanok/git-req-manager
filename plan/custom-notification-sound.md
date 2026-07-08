@@ -8,7 +8,10 @@
 
 ปัจจุบันเสียงแจ้งเตือนทุกอันใช้เสียง OS default (`silent: false` ในทุก Notification) ซึ่งไม่สามารถปรับแต่งได้จากในแอป Feature นี้จะ:
 1. ปิดเสียง OS notification แล้วเล่นเสียงเองจาก main process
-2. ให้ผู้ใช้เลือกจากเสียงที่ built-in มาให้ หรือ custom file `.wav` ของตัวเอง
+2. ให้ผู้ใช้ตั้งค่าเสียง Default สำหรับเหตุการณ์ "สร้าง MR ใหม่" และ "MR ถูก Merge"
+3. ให้ผู้ใช้ตั้งค่าเสียงแยกรายบุคคล (Member Specific) โดยกำหนดจาก Username ได้
+4. ผู้ใช้สามารถเลือกจากเสียงที่ built-in มาให้ หรือ custom file `.wav` ของตัวเอง
+5. เปิดหน้าต่างใหม่ (New Window) สำหรับการตั้งค่าเสียงโดยเฉพาะ เพื่อให้มีพื้นที่แสดงตารางรายชื่อ Member ได้อย่างชัดเจน
 
 ---
 
@@ -29,15 +32,31 @@
 
 ## Proposed Changes (การเปลี่ยนแปลงที่เสนอ)
 
-### 1. ⚙️ Store (`src/main/store.ts`)
-เพิ่ม fields ใน `StoreSchema`:
+### 1. ⚙️ Types (`src/shared/types.ts`)
 ```ts
-notificationSound: 'default' | 'none' | 'chime' | 'success' | 'alert' | 'custom'
-customSoundPath: string  // path ไฟล์ .wav ที่ผู้ใช้เลือก
-```
-- Default: `'default'` (ใช้เสียง OS เดิม)
+export type NotificationEvent = 'new_mr' | 'mr_merged'
+export type NotificationSound = 'default' | 'none' | 'chime' | 'success' | 'alert' | 'custom'
 
-### 2. 🔊 Audio Player (`src/main/audio.ts`) [NEW]
+export interface MemberSoundConfig {
+  onNewMR: NotificationSound;
+  onNewMRCustomPath?: string;
+  onMerged: NotificationSound;
+  onMergedCustomPath?: string;
+}
+
+export interface Settings {
+  // ... existing fields ...
+  defaultSoundConfig: MemberSoundConfig;
+  memberSoundConfigs: Record<string, MemberSoundConfig>; // Key คือ username
+}
+```
+
+### 2. ⚙️ Store (`src/main/store.ts`)
+ปรับ `StoreSchema` ให้เก็บข้อมูลในรูปแบบใหม่:
+- `defaultSoundConfig`: เก็บ Object ของ `MemberSoundConfig`
+- `memberSoundConfigs`: เก็บ Object / Record ที่มี Key เป็น username
+
+### 3. 🔊 Audio Player (`src/main/audio.ts`) [NEW]
 ```ts
 export async function playNotificationSound(
   soundType: string,
@@ -61,18 +80,21 @@ function getSoundPath(filename: string): string {
 }
 ```
 
-### 3. 🔔 Notifier (`src/main/notifier.ts`)
+### 4. 🔔 Notifier (`src/main/notifier.ts`)
 ปรับทุกฟังก์ชัน notify:
-- ถ้า `notificationSound !== 'default'` → เพิ่ม `silent: true` ใน Notification options
-- เรียก `playNotificationSound()` จาก `audio.ts` ต่อจากนั้น
+- ดึง `username` ของผู้สร้าง MR (author) และพิจารณาว่าเป็น Event อะไร (`new_mr` หรือ `mr_merged`)
+- ค้นหาเสียงจาก `memberSoundConfigs[username]` ก่อน หากไม่ได้ตั้งค่าไว้ ให้ดึงจาก `defaultSoundConfig`
+- ถ้าชนิดของเสียง `!== 'default'` → เพิ่ม `silent: true` ใน Notification options
+- เรียก `playNotificationSound()` จาก `audio.ts` ตามชนิดและ custom path ที่ดึงมาได้
 
-### 4. 🎛️ IPC Bridge (3 files ต้องแก้)
+### 5. 🎛️ IPC Bridge (ไฟล์ที่ต้องแก้)
 
 #### `src/preload.ts`
 ```ts
 selectCustomSoundFile: () => ipcRenderer.invoke('select-custom-sound-file'),
 testNotificationSound: (soundType: string, customPath?: string) =>
   ipcRenderer.invoke('test-notification-sound', soundType, customPath),
+openSoundSettingsWindow: () => ipcRenderer.invoke('open-sound-settings-window'),
 ```
 
 #### `src/main/index.ts` (setupIPC)
@@ -87,15 +109,19 @@ ipcMain.handle('select-custom-sound-file', async () => {
 ipcMain.handle('test-notification-sound', async (_, soundType, customPath) => {
   await playNotificationSound(soundType, customPath)
 })
+ipcMain.handle('open-sound-settings-window', () => {
+  // สร้างและเปิด Browser window ใหม่ โหลด path หน้า Sound Settings
+})
 ```
 
 #### `src/renderer/electron.d.ts`
 ```ts
 selectCustomSoundFile: () => Promise<string | null>
 testNotificationSound: (soundType: string, customPath?: string) => Promise<void>
+openSoundSettingsWindow: () => Promise<void>
 ```
 
-### 5. 📦 Assets & Packaging
+### 6. 📦 Assets & Packaging
 
 #### ไฟล์เสียงที่ต้องเตรียม (`assets/sounds/`)
 | ชื่อไฟล์ | คำอธิบาย |
@@ -116,26 +142,26 @@ testNotificationSound: (soundType: string, customPath?: string) => Promise<void>
 ]
 ```
 
-### 6. 🎨 Settings UI (`src/renderer/pages/Settings.tsx`)
-เพิ่ม Section "🔊 Notification Sound" ใต้ Launch at Startup:
-```
-Notification Sound: [Dropdown: System Default / Silent / Chime / Success / Alert / Custom File]
-                    [🔊 Test]  ← ปุ่มทดสอบเสียงทันที
+### 7. 🎨 Settings UI & New Window
 
-(ถ้าเลือก Custom File)
-Custom Sound File: [path...] [Browse]
-```
+เนื่องจากหน้าจอการตั้งค่าแบบแยก Member ค่อนข้างซับซ้อน (มีตารางรายชื่อ) จึงจะทำเป็นหน้าต่างย่อย (Sub-window) แยกต่างหาก เพื่อไม่ให้หน้าหลักเล็กเกินไป
 
-### 7. ⚙️ Types (`src/shared/types.ts`)
-```ts
-export type NotificationSound = 'default' | 'none' | 'chime' | 'success' | 'alert' | 'custom'
+#### `src/renderer/pages/Settings.tsx` (หน้าเก่า)
+- เพิ่มแค่ปุ่ม: `[ 🎛️ Configure Notification Sounds... ]`
+- พอกดปุ่มจะไปเรียก `window.electronAPI.openSoundSettingsWindow()`
 
-export interface Settings {
-  // ... existing fields ...
-  notificationSound: NotificationSound   // NEW — default 'default'
-  customSoundPath: string                // NEW — default ''
-}
-```
+#### `src/main/windows/soundSettings.ts` [NEW]
+- ฟังก์ชันสำหรับสร้าง `BrowserWindow` ใหม่ (กำหนดขนาดให้เหมาะสม เช่น 600x500)
+- ชี้ไปที่ router URL (เช่น `/#/sound-settings`)
+
+#### `src/renderer/pages/SoundSettings.tsx` [NEW]
+หน้าต่างสำหรับจัดการเสียง:
+- **Default Sounds Section:**
+  - Dropdown: New MR Sound + Test Button
+  - Dropdown: MR Merged Sound + Test Button
+- **Member Specific Sounds Section:**
+  - Input เพิ่ม Username ใหม่
+  - ตารางแสดง Username ที่ตั้งค่าไว้ พร้อม Dropdown 2 ตัว (New MR / Merged) และปุ่มลบ (Remove)
 
 ---
 
@@ -145,8 +171,9 @@ export interface Settings {
 |---------|-----------|----------|---------------|
 | `select-custom-sound-file` | ✅ expose | ✅ handle | ✅ type |
 | `test-notification-sound` | ✅ expose | ✅ handle | ✅ type |
+| `open-sound-settings-window` | ✅ expose | ✅ handle | ✅ type |
 
-> `notificationSound` และ `customSoundPath` ผ่าน `save-settings` / `get-settings` เดิม ไม่ต้องเพิ่ม IPC
+> การจัดการ State (Save/Load settings) ใช้ผ่าน `app-state-updated` และ `save-settings` ปกติที่วางระบบไว้แล้ว
 
 ---
 
