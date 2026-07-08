@@ -63,6 +63,7 @@
       ]
     },
     "mac": {
+      "appId": "com.gitlab-req-manager.app",
       "target": [
         {
           "target": "dmg",
