@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import {
@@ -212,6 +212,14 @@ void startApp().catch((error) => {
 })
 
 function createWindow(): BrowserWindow {
+  let icon: Electron.NativeImage | undefined
+  try {
+    const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+    icon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
+  } catch (err) {
+    console.warn('[app] failed to load window icon:', err)
+  }
+
   const win = new BrowserWindow({
     width: 380,
     height: 560,
@@ -219,6 +227,7 @@ function createWindow(): BrowserWindow {
     frame: false,
     show: false,
     skipTaskbar: process.platform !== 'darwin',
+    icon: icon,
     webPreferences: {
       preload: path.join(__dirname, '../preload.js'),
       contextIsolation: true,
