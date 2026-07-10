@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: Settings): Promise<void> => ipcRenderer.invoke('save-settings', settings),
   getAppState: (): Promise<AppState> => ipcRenderer.invoke('get-app-state'),
+  testNotification: (): Promise<void> => ipcRenderer.invoke('test-notification'),
   triggerSync: (): Promise<void> => ipcRenderer.invoke('trigger-sync'),
   openUrl: (url: string): Promise<void> => ipcRenderer.invoke('open-url', url),
   getUpdateState: (): Promise<UpdateState> => ipcRenderer.invoke('get-update-state'),

@@ -23,7 +23,7 @@ import {
   handleWebhookMerge,
 } from './scheduler'
 import { startWebhookServer, stopWebhookServer, getWebhookAddress } from './webhook'
-import { setMRClickHandler } from './notifier'
+import { setMRClickHandler, testNotification } from './notifier'
 import {
   startTunnel,
   stopTunnel,
@@ -330,6 +330,7 @@ async function autoSyncWebhooks(webhookUrl: string): Promise<void> {
 
 function setupIPC(): void {
   ipcMain.handle('get-settings', () => getSettings())
+  ipcMain.handle('test-notification', () => testNotification())
 
   ipcMain.handle('save-settings', (_event, settings: Settings) => {
     saveSettings(settings)

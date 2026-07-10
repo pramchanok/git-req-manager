@@ -159,3 +159,19 @@ export function removeTrackedMR(id: number): void {
   getTracked().delete(id)
   removeNotifiedMRId(id)
 }
+
+export function testNotification(): void {
+  if (!Notification.isSupported()) return
+
+  const notification = new Notification({
+    title: 'GitLab MR Manager',
+    body: '🎉 นี่คือการแจ้งเตือนทดสอบระบบ!\nหากคุณเห็นข้อความนี้ แปลว่าระบบแจ้งเตือนทำงานได้ปกติ',
+    silent: false,
+  })
+
+  notification.on('click', () => {
+    app.focus()
+  })
+
+  notification.show()
+}

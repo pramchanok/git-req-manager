@@ -6,6 +6,7 @@ declare global {
       getSettings: () => Promise<Settings>
       saveSettings: (settings: Settings) => Promise<void>
       getAppState: () => Promise<AppState>
+      testNotification: () => Promise<void>
       triggerSync: () => Promise<void>
       openUrl: (url: string) => Promise<void>
       getUpdateState: () => Promise<UpdateState>
