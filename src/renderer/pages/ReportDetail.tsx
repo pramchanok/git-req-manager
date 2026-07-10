@@ -701,7 +701,25 @@ ${formatMRList(developerData.reviewed)}
               {activeViewTab === 'markdown' ? (
                 <div className="flex-1 overflow-y-auto p-8 print:bg-white print:text-black">
                   <div className="prose-content text-gray-200 print:text-black text-xs leading-relaxed max-w-2xl mx-auto">
-                    <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        const anchor = target.closest('a');
+                        if (anchor) {
+                          e.preventDefault();
+                          const href = anchor.getAttribute('href');
+                          if (href) {
+                            const mr = groupMRs.find(m => m.webUrl === href);
+                            if (mr) {
+                              window.electronAPI.openMRWindow(mr.projectId, mr.iid);
+                            } else {
+                              window.electronAPI.openUrl(href);
+                            }
+                          }
+                        }
+                      }}
+                    />
                   </div>
                 </div>
               ) : (
@@ -761,7 +779,7 @@ ${formatMRList(developerData.reviewed)}
                       filteredMRs.map((mr) => (
                         <div
                           key={mr.id}
-                          onClick={() => window.electronAPI.openUrl(mr.webUrl)}
+                          onClick={() => window.electronAPI.openMRWindow(mr.projectId, mr.iid)}
                           className={`bg-gray-800/30 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700/80 rounded-xl p-4 transition-all duration-350 cursor-pointer flex flex-col gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group ${tabColorClass}`}
                         >
                           <div className="flex items-start justify-between gap-3">

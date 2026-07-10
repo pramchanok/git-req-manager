@@ -819,8 +819,13 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
               <>
                 <button
                   onClick={() => setShowCloseConfirm(true)}
-                  disabled={processingAction}
-                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/20 hover:border-red-500/50 transition-colors flex items-center gap-1.5 mr-3"
+                  disabled={processingAction || (currentUser?.id !== mr.author.id && !mr.userCanMerge)}
+                  title={currentUser?.id !== mr.author.id && !mr.userCanMerge ? "You don't have permission to close this MR" : "Close MR"}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 mr-3 ${
+                    currentUser?.id !== mr.author.id && !mr.userCanMerge
+                      ? 'text-gray-500 border-gray-700 bg-gray-800/50 cursor-not-allowed'
+                      : 'text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/50'
+                  }`}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   Close MR
@@ -829,8 +834,13 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 
                 <button
                   onClick={() => handleAction('approve')}
-                  disabled={processingAction}
-                  className="bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30 text-xs font-semibold py-1.5 px-4 rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  disabled={processingAction || currentUser?.id === mr.author.id}
+                  title={currentUser?.id === mr.author.id ? "You cannot approve your own MR" : "Approve"}
+                  className={`text-xs font-semibold py-1.5 px-4 rounded-lg transition-all flex items-center gap-2 ${
+                    currentUser?.id === mr.author.id
+                      ? 'bg-gray-800/50 text-gray-500 border border-gray-700 cursor-not-allowed'
+                      : 'bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30 disabled:opacity-50'
+                  }`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   Approve
@@ -838,15 +848,17 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 
                 <button
                   onClick={() => handleAction('merge')}
-                  disabled={processingAction || mr.hasConflicts || mr.pipelineStatus === 'failed' || mr.mergeWhenPipelineSucceeds}
+                  disabled={processingAction || mr.hasConflicts || mr.pipelineStatus === 'failed' || mr.mergeWhenPipelineSucceeds || !mr.userCanMerge}
                   className={`text-white text-xs font-semibold py-1.5 px-4 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] disabled:opacity-50 disabled:shadow-none flex items-center gap-2 border border-transparent ${
-                    mr.mergeWhenPipelineSucceeds
+                    !mr.userCanMerge
+                      ? 'bg-gray-800 text-gray-500 border-gray-700 shadow-none cursor-not-allowed'
+                      : mr.mergeWhenPipelineSucceeds
                       ? 'bg-indigo-900/50 text-indigo-300 border-indigo-500/30 shadow-none'
                       : mr.pipelineStatus === 'running'
                       ? 'bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 disabled:border-gray-600'
                       : 'bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-400 disabled:border-gray-600'
                   }`}
-                  title={mr.hasConflicts ? 'Has conflicts' : mr.pipelineStatus === 'failed' ? 'Pipeline failed' : mr.mergeWhenPipelineSucceeds ? 'Auto-merge already enabled' : mr.pipelineStatus === 'running' ? 'Merge when pipeline succeeds' : 'Merge'}
+                  title={!mr.userCanMerge ? "You don't have permission to merge" : mr.hasConflicts ? 'Has conflicts' : mr.pipelineStatus === 'failed' ? 'Pipeline failed' : mr.mergeWhenPipelineSucceeds ? 'Auto-merge already enabled' : mr.pipelineStatus === 'running' ? 'Merge when pipeline succeeds' : 'Merge'}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
                   {mr.mergeWhenPipelineSucceeds ? 'Auto-Merge Enabled' : mr.pipelineStatus === 'running' ? 'Auto-Merge' : 'Merge'}

@@ -49,6 +49,7 @@ export interface MergeRequest {
   pipelineId: number | null
   pipelineWebUrl: string | null
   labels: MRLabel[]
+  userCanMerge: boolean
 }
 
 export interface MRDiff {

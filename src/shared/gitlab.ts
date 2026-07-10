@@ -448,6 +448,7 @@ export class GitLabClient {
               : this.mapLabel(l as Record<string, unknown>)
           )
         : [],
+      userCanMerge: ((mr.user as Record<string, unknown> | undefined)?.can_merge as boolean) ?? false,
     }
   }
   // ────── In-App Review & MR Actions ──────
