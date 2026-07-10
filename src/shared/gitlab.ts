@@ -449,6 +449,7 @@ export class GitLabClient {
           )
         : [],
       userCanMerge: ((mr.user as Record<string, unknown> | undefined)?.can_merge as boolean) ?? false,
+      hasApproved: (mr.has_approved as boolean) ?? false,
     }
   }
   // ────── In-App Review & MR Actions ──────
@@ -539,6 +540,15 @@ export class GitLabClient {
 
   async removeMRAwardEmoji(projectId: number, mrIid: number, awardId: number): Promise<void> {
     await this.http.delete(`/projects/${projectId}/merge_requests/${mrIid}/award_emoji/${awardId}`)
+  }
+
+  async getMRApprovals(projectId: number, mrIid: number): Promise<{ approved_by: { user: GitLabUser }[] }> {
+    const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/approvals`)
+    return {
+      approved_by: (data.approved_by || []).map((ab: Record<string, unknown>) => ({
+        user: this.mapUser(ab.user as Record<string, unknown>)
+      }))
+    }
   }
 
   async approveMR(projectId: number, mrIid: number): Promise<void> {

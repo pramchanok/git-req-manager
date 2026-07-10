@@ -601,6 +601,13 @@ function setupIPC(): void {
     return client.getMRDiffs(projectId, mrIid)
   })
 
+  ipcMain.handle('get-mr-approvals', async (_event, projectId: number, mrIid: number) => {
+    if (!isConfigured()) throw new Error('Not configured')
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getMRApprovals(projectId, mrIid)
+  })
+
   ipcMain.handle('get-mr-discussions', async (_event, projectId: number, mrIid: number) => {
     if (!isConfigured()) return []
     const settings = getSettings()

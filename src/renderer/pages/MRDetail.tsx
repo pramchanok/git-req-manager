@@ -185,10 +185,16 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [mrData, appState] = await Promise.all([
+        const [mrData, appState, approvals] = await Promise.all([
           window.electronAPI.getMRByIid(projectId, mrIid),
-          window.electronAPI.getAppState()
+          window.electronAPI.getAppState(),
+          window.electronAPI.getMRApprovals(projectId, mrIid)
         ])
+        
+        if (mrData && appState.currentUser) {
+          mrData.hasApproved = approvals.approved_by.some(a => a.user.id === appState.currentUser?.id)
+        }
+        
         setMR(mrData)
         setCurrentUser(appState.currentUser)
       } catch (err) {
@@ -287,12 +293,15 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     return groups
   }, [awardEmojis, currentUser])
 
-  const handleAction = async (action: 'approve' | 'merge' | 'close' | 'cancel-pipeline') => {
+  const handleAction = async (action: 'approve' | 'unapprove' | 'merge' | 'close' | 'cancel-pipeline') => {
     setProcessingAction(true)
     try {
       if (action === 'approve') {
         await window.electronAPI.approveMR(projectId, mrIid)
         onToast('MR Approved')
+      } else if (action === 'unapprove') {
+        await window.electronAPI.unapproveMR(projectId, mrIid)
+        onToast('MR Approval Revoked')
       } else if (action === 'merge') {
         await window.electronAPI.mergeMR(projectId, mrIid, {
           mergeWhenPipelineSucceeds: mr.pipelineStatus === 'running'
@@ -311,6 +320,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       // Note: we don't close the window on approve, just refresh so user can see it approved.
       // If merged or closed, it might make sense to close the window, but we leave it to the user.
       const updatedMR = await window.electronAPI.getMRByIid(projectId, mrIid)
+      if (updatedMR && currentUser) {
+        const approvals = await window.electronAPI.getMRApprovals(projectId, mrIid)
+        updatedMR.hasApproved = approvals.approved_by.some(a => a.user.id === currentUser.id)
+      }
       setMR(updatedMR)
     } catch (err) {
       console.error(err)
@@ -832,19 +845,31 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 </button>
                 <div className="h-4 w-px bg-gray-700 mr-3" />
                 
-                <button
-                  onClick={() => handleAction('approve')}
-                  disabled={processingAction || currentUser?.id === mr.author.id}
-                  title={currentUser?.id === mr.author.id ? "You cannot approve your own MR" : "Approve"}
-                  className={`text-xs font-semibold py-1.5 px-4 rounded-lg transition-all flex items-center gap-2 ${
-                    currentUser?.id === mr.author.id
-                      ? 'bg-gray-800/50 text-gray-500 border border-gray-700 cursor-not-allowed'
-                      : 'bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30 disabled:opacity-50'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  Approve
-                </button>
+                {mr.hasApproved ? (
+                  <button
+                    onClick={() => handleAction('unapprove')}
+                    disabled={processingAction}
+                    title="Revoke approval"
+                    className="text-xs font-semibold py-1.5 px-4 rounded-lg transition-all flex items-center gap-2 bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    Revoke approval
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleAction('approve')}
+                    disabled={processingAction || currentUser?.id === mr.author.id}
+                    title={currentUser?.id === mr.author.id ? "You cannot approve your own MR" : "Approve"}
+                    className={`text-xs font-semibold py-1.5 px-4 rounded-lg transition-all flex items-center gap-2 ${
+                      currentUser?.id === mr.author.id
+                        ? 'bg-gray-800/50 text-gray-500 border border-gray-700 cursor-not-allowed'
+                        : 'bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30 disabled:opacity-50'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    Approve
+                  </button>
+                )}
                 
                 <button
                   onClick={() => handleAction('merge')}

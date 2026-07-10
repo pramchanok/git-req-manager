@@ -50,6 +50,7 @@ export interface MergeRequest {
   pipelineWebUrl: string | null
   labels: MRLabel[]
   userCanMerge: boolean
+  hasApproved: boolean
 }
 
 export interface MRDiff {
@@ -179,3 +180,4 @@ export type IpcChannel =
   | 'get-mr-award-emojis'
   | 'add-mr-award-emoji'
   | 'remove-mr-award-emoji'
+  | 'get-mr-approvals'

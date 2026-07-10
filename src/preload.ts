@@ -92,4 +92,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('add-mr-award-emoji', projectId, mrIid, name),
   removeMRAwardEmoji: (projectId: number, mrIid: number, awardId: number): Promise<void> =>
     ipcRenderer.invoke('remove-mr-award-emoji', projectId, mrIid, awardId),
+  getMRApprovals: (projectId: number, mrIid: number): Promise<{ approved_by: { user: import('./shared/types').GitLabUser }[] }> =>
+    ipcRenderer.invoke('get-mr-approvals', projectId, mrIid),
 })

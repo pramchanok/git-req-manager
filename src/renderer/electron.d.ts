@@ -41,6 +41,7 @@ declare global {
       getMRAwardEmojis: (projectId: number, mrIid: number) => Promise<MRAwardEmoji[]>
       addMRAwardEmoji: (projectId: number, mrIid: number, name: string) => Promise<void>
       removeMRAwardEmoji: (projectId: number, mrIid: number, awardId: number) => Promise<void>
+      getMRApprovals: (projectId: number, mrIid: number) => Promise<{ approved_by: { user: GitLabUser }[] }>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onSyncStatusUpdated: (callback: (isSyncing: boolean) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
