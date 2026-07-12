@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-merged-mrs-by-author', username),
   getGitLabGroups: (): Promise<GitLabGroup[]> =>
     ipcRenderer.invoke('get-gitlab-groups'),
+  searchProjects: (query: string): Promise<import('./shared/types').GitLabProject[]> =>
+    ipcRenderer.invoke('search-projects', query),
   getGroupMembers: (groupId: number): Promise<import('./shared/types').GitLabUser[]> =>
     ipcRenderer.invoke('get-group-members', groupId),
   getTeamReportGroup: (): Promise<number | null> =>

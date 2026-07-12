@@ -16,6 +16,7 @@ declare global {
       checkCloudflared: () => Promise<{ available: boolean; path: string | null }>
       getMergedMRsByAuthor: (username: string) => Promise<MergeRequest[]>
       getGitLabGroups: () => Promise<GitLabGroup[]>
+      searchProjects: (query: string) => Promise<import('../../shared/types').GitLabProject[]>
       getGroupMembers: (groupId: number) => Promise<GitLabUser[]>
       getTeamReportGroup: () => Promise<number | null>
       setTeamReportGroup: (id: number | null) => Promise<void>

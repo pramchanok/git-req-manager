@@ -2,6 +2,9 @@ import { useState } from 'react'
 import type { AppState, MRTab, MergeRequest } from '../../shared/types'
 import MRCard from '../components/MRCard'
 import SkeletonCard from '../components/SkeletonCard'
+import { Search, ArrowUpDown, Activity, Wifi, Shield, ArrowUpRight } from 'lucide-react'
+
+type SortOption = 'updated_desc' | 'updated_asc' | 'approvals_asc'
 
 interface DashboardProps {
   appState: AppState
@@ -9,10 +12,42 @@ interface DashboardProps {
 
 export default function Dashboard({ appState }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<MRTab>('myReviews')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortOption, setSortOption] = useState<SortOption>('updated_desc')
+  const [showStatus, setShowStatus] = useState(false)
 
-  const mrs = activeTab === 'myReviews' ? appState.myReviewMRs : appState.allOpenMRs
+  const baseMrs = activeTab === 'myReviews' ? appState.myReviewMRs : appState.allOpenMRs
   const reviewCount = appState.myReviewMRs.length
   const allCount = appState.allOpenMRs.length
+
+  // Filter
+  let mrs = baseMrs
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase()
+    mrs = mrs.filter((mr) => 
+      (mr.title || '').toLowerCase().includes(q) || 
+      (mr.author?.name || '').toLowerCase().includes(q) ||
+      (mr.projectName || '').toLowerCase().includes(q)
+    )
+  }
+
+  // Sort
+  mrs = [...mrs].sort((a, b) => {
+    if (sortOption === 'updated_desc') {
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    }
+    if (sortOption === 'updated_asc') {
+      return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+    }
+    if (sortOption === 'approvals_asc') {
+      const aLeft = a.approvalsLeft
+      const bLeft = b.approvalsLeft
+      if (aLeft !== bLeft) return aLeft - bLeft
+      // Tie breaker: updated
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    }
+    return 0
+  })
 
   if (!appState.isConfigured && !appState.isSyncing) {
     return (
@@ -43,8 +78,10 @@ export default function Dashboard({ appState }: DashboardProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tabs */}
-      <div className="flex bg-gray-900 px-3 py-2 border-b border-gray-800/80 justify-center flex-shrink-0 select-none">
+      {/* Tabs & Status */}
+      <div className="flex bg-gray-900 px-3 py-2 border-b border-gray-800/80 items-center justify-between flex-shrink-0 select-none relative">
+        <div className="w-8" /> {/* Spacer for centering */}
+
         <div className="bg-gray-950 p-0.5 rounded-lg flex w-full max-w-[250px] border border-gray-800/60">
           <TabButton
             label="My Reviews"
@@ -60,11 +97,82 @@ export default function Dashboard({ appState }: DashboardProps) {
             onClick={() => setActiveTab('allOpen')}
           />
         </div>
+
+        <button
+          onClick={() => setShowStatus(!showStatus)}
+          className={`w-8 h-8 flex items-center justify-center rounded transition-colors relative ${showStatus ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+          title="System Status"
+        >
+          <Activity className="w-4 h-4" />
+          {appState.error && <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-gray-900" />}
+        </button>
+
+        {showStatus && (
+          <div className="absolute top-full right-3 mt-1 w-64 bg-gray-800 border border-gray-700 shadow-xl rounded-lg z-50 overflow-hidden flex flex-col text-xs">
+            <div className="bg-gray-900 px-3 py-2 font-semibold text-gray-300 border-b border-gray-700">System Status</div>
+            <div className="p-3 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Wifi className={`w-4 h-4 ${appState.error ? 'text-red-400' : 'text-green-400'}`} />
+                <div className="flex flex-col">
+                  <span className="text-gray-200">GitLab API Sync</span>
+                  <span className="text-gray-500 text-[10px]">
+                    {appState.lastSyncedAt ? new Date(appState.lastSyncedAt).toLocaleTimeString() : 'Never'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-green-400" />
+                <div className="flex flex-col">
+                  <span className="text-gray-200">App State</span>
+                  <span className="text-gray-500 text-[10px]">{appState.isConfigured ? 'Configured' : 'Missing Config'}</span>
+                </div>
+              </div>
+              {appState.error && (
+                <div className="mt-1 p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px]">
+                  {appState.error}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex bg-gray-900/50 px-3 py-2 border-b border-gray-800/50 gap-2 flex-shrink-0">
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+            <Search className="w-3.5 h-3.5 text-gray-500" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search MRs..."
+            className="bg-gray-800 border border-gray-700 rounded pl-7 pr-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-orange-400 w-full transition-colors"
+          />
+        </div>
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+            <ArrowUpDown className="w-3.5 h-3.5 text-gray-500" />
+          </div>
+          <select
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value as SortOption)}
+            className="appearance-none bg-gray-800 border border-gray-700 rounded pl-7 pr-6 py-1 text-xs text-white focus:outline-none focus:border-orange-400 transition-colors"
+          >
+            <option value="updated_desc">Recently Updated</option>
+            <option value="updated_asc">Oldest Waiting</option>
+            <option value="approvals_asc">Approvals Pending</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-gray-500">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </div>
+        </div>
       </div>
 
       {/* MR List */}
       <div className="flex-1 overflow-y-auto scroll-hide">
-        {appState.isSyncing && mrs.length === 0 ? (
+        {appState.isSyncing && baseMrs.length === 0 ? (
           <div className="flex flex-col">
             {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
           </div>

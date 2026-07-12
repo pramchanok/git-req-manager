@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { GitLabGroup, Settings, UpdateState } from '../../shared/types'
 import type { ToastType } from '../components/Toast'
+import ProjectSelector from '../components/ProjectSelector'
 
 interface SettingsPageProps {
   onSaved: () => void
@@ -53,7 +54,6 @@ export default function SettingsPage({
   onInstallUpdate,
 }: SettingsPageProps) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
-  const [projectIdsText, setProjectIdsText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
@@ -72,7 +72,6 @@ export default function SettingsPage({
         webhookPublicUrl: s.webhookPublicUrl || DEFAULT_SETTINGS.webhookPublicUrl,
         notifyOwnerGroupIds: s.notifyOwnerGroupIds ?? [],
       })
-      setProjectIdsText(s.projectIds.join(', '))
     })
     window.electronAPI.getWebhookUrl().then(setWebhookUrl)
     window.electronAPI.checkCloudflared().then(({ available }) => {
@@ -125,14 +124,9 @@ export default function SettingsPage({
       setError('Webhook port must be between 1024 and 65535.'); return
     }
 
-    const ids = projectIdsText
-      .split(/[\s,]+/)
-      .map((s) => parseInt(s.trim()))
-      .filter((n) => !isNaN(n) && n > 0)
-
     setSaving(true)
     try {
-      await window.electronAPI.saveSettings({ ...settings, projectIds: ids })
+      await window.electronAPI.saveSettings(settings)
       if (settings.webhookEnabled && settings.webhookUseTunnel) {
         setTunnelStatus('starting')
         setTunnelUrl(null)
@@ -212,13 +206,10 @@ export default function SettingsPage({
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-400">Project IDs (optional)</label>
-        <input
-          type="text"
-          value={projectIdsText}
-          onChange={(e) => setProjectIdsText(e.target.value)}
-          placeholder="123, 456  (ว่าง = ทุก project)"
-          className="bg-gray-800 border border-gray-600 rounded px-2.5 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-400"
+        <label className="text-xs text-gray-400">Tracked Projects</label>
+        <ProjectSelector 
+          selectedIds={settings.projectIds} 
+          onChange={(ids) => setSettings({ ...settings, projectIds: ids })} 
         />
       </div>
 

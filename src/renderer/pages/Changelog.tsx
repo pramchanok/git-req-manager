@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 interface Props {
   onBack: () => void
@@ -14,7 +15,9 @@ export default function Changelog({ onBack, currentVersion }: Props) {
   useEffect(() => {
     window.electronAPI.getChangelog().then((md) => {
       if (md) {
-        setHtml(marked.parse(md) as string)
+        const rawHtml = marked.parse(md) as string
+        const cleanHtml = DOMPurify.sanitize(rawHtml)
+        setHtml(cleanHtml)
       }
       setLoading(false)
     })

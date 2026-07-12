@@ -414,6 +414,13 @@ function setupIPC(): void {
     return client.getGroups()
   })
 
+  ipcMain.handle('search-projects', async (_event, query: string) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.searchProjects(query)
+  })
+
   ipcMain.handle('get-group-members', async (_event, groupId: number) => {
     if (!isConfigured()) return []
     const settings = getSettings()

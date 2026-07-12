@@ -72,6 +72,19 @@ export class GitLabClient {
     return projects
   }
 
+  async searchProjects(query: string): Promise<GitLabProject[]> {
+    const { data } = await this.http.get('/projects', {
+      params: {
+        search: query,
+        membership: true,
+        per_page: 50,
+        order_by: 'last_activity_at',
+        sort: 'desc',
+      },
+    })
+    return data.map((p: Record<string, unknown>) => this.mapProject(p))
+  }
+
   async getGroups(): Promise<GitLabGroup[]> {
     const groups: GitLabGroup[] = []
     let page = 1
