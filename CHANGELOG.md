@@ -1,6 +1,10 @@
 # Changelog
 
-## [1.10.1] - 2026-07-14
+## [1.10.2] - 2026-07-15
+
+### การแก้ไขข้อผิดพลาด (Bug Fixes)
+
+- **Markdown Rendering Fix**: แก้ไขบั๊กที่ข้อความยาวๆ ในช่อง Comment (เช่น จาก AI Code Review) แสดงผลเป็นข้อความธรรมดา (Plain Text) ไม่มีสไตล์หรือการขึ้นบรรทัดใหม่ โดยทำการติดตั้งปลั๊กอิน `@tailwindcss/typography` กลับเข้าไปใน Tailwind v4 และเปิดใช้งาน `remark-breaks` เพื่อให้แสดงผลหัวข้อ, ตัวหนา, และ Bullet Points ได้ถูกต้องเหมือนในหน้าเว็บ GitLab
 
 ### ปรับปรุง UI/UX (UX/UI Improvements)
 

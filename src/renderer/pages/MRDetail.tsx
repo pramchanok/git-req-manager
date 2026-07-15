@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import type { MergeRequest, MRDiff, MRDiscussion, MRNote } from '../../shared/types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import parseDiff from 'parse-diff'
 import { CustomDiffViewer } from '../components/CustomDiffViewer'
 import { CommitDiffModal } from '../components/CommitDiffModal'
@@ -563,7 +564,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 </h3>
                 {mr.description ? (
                   <div className="prose prose-invert prose-orange max-w-none text-sm text-gray-300 leading-relaxed marker:text-orange-500 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                       {mr.description}
                     </ReactMarkdown>
                   </div>
@@ -710,7 +711,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                                     <span className="text-gray-500 text-xs">{new Date(note.createdAt).toLocaleString()}</span>
                                   </div>
                                   <div className="px-4 py-3 text-sm text-gray-300 prose prose-invert prose-orange max-w-none prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.body}</ReactMarkdown>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>
                                   </div>
                                 </div>
                               </div>
