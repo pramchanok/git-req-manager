@@ -195,3 +195,7 @@ pm version\ or modifying the version in \package.json\, you MUST ask the user if
 - **Premium Aesthetics**: Always prioritize a premium, modern design aesthetic (e.g., similar to VS Code, GitHub, or Vercel). Use rich colors, dark modes, glassmorphism, and dynamic animations where appropriate.
 - **Metadata Placement**: Do not place long text or badges inline with main titles if it can cause awkward wrapping. Move metadata (Project names, Branches, Labels, Status Badges) into dedicated "Meta Rows" above or below the title.
 - **Badges**: Use `rounded-md` for badges, add subtle shadows, and group related metadata together using icons (e.g., Lucide-react) for better scannability.
+
+## Changelog Rules
+
+- **Prepend New Versions**: When updating `CHANGELOG.md` with a new version, always use the `multi_replace_file_content` tool to insert the new version header and content directly ABOVE the previous version header. Do NOT replace or overwrite the previous version headers.
