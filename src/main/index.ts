@@ -50,6 +50,7 @@ import {
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, Settings } from '../shared/types'
 let mainWindow: BrowserWindow | null = null
+let splashWindow: BrowserWindow | null = null
 let isQuitting = false
 let revealWindowOnReady = false
 let isInitialLaunch = true
@@ -140,9 +141,63 @@ async function startApp(): Promise<void> {
       return getOrCreateMainWindow()
     })
 
+    // Create Splash Screen
+    splashWindow = createSplashWindow()
+
     setupIPC()
     setUpdateStateCallback((state) => {
       updateTrayUpdate(state.status, state.availableVersion ?? state.downloadedVersion)
+
+      // Send to splash window
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        if (state.status === 'checking' || state.status === 'available') {
+          splashWindow.webContents.send('update-status', state.message || 'Checking for updates...')
+        } else if (state.status === 'downloading') {
+          splashWindow.webContents.send('update-progress', state.progressPercent || 0)
+        } else if (state.status === 'downloaded') {
+          splashWindow.webContents.send('update-status', 'Extracting updates...')
+          setTimeout(() => {
+            isQuitting = true
+            installDownloadedUpdate()
+          }, 1000)
+        } else if (state.status === 'not-available' || state.status === 'error' || state.status === 'disabled') {
+          const delay = process.env.NODE_ENV === 'development' ? 2500 : 0
+          
+          if (process.env.NODE_ENV === 'development' && splashWindow && !splashWindow.isDestroyed()) {
+            splashWindow.webContents.send('update-status', 'Simulating update (Dev Mode)...')
+            let p = 0
+            const i = setInterval(() => { 
+              p += 4
+              if (splashWindow && !splashWindow.isDestroyed()) {
+                splashWindow.webContents.send('update-progress', p) 
+              }
+            }, 100)
+            setTimeout(() => clearInterval(i), delay)
+          }
+
+          setTimeout(() => {
+            // Finish splash screen
+            if (splashWindow && !splashWindow.isDestroyed()) {
+              splashWindow.close()
+              splashWindow = null
+            }
+            // Show main window
+            if (isInitialLaunch) {
+               const { wasOpenedAsHidden } = app.getLoginItemSettings()
+               const startHidden = wasOpenedAsHidden || (process.platform === 'win32' && process.argv.includes('--openedAtLogin'))
+               
+               if (startHidden) {
+                 if (process.platform === 'darwin') app.dock?.hide()
+               } else {
+                 if (mainWindow && !mainWindow.isDestroyed()) {
+                   showTrayWindow(mainWindow)
+                 }
+               }
+               isInitialLaunch = false
+            }
+          }, delay)
+        }
+      }
     })
     initializeUpdater()
 
@@ -253,6 +308,38 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+function createSplashWindow(): BrowserWindow {
+  let icon: Electron.NativeImage | undefined
+  try {
+    const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
+    icon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
+  } catch (err) {}
+
+  const win = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    show: false,
+    center: true,
+    icon: icon,
+    webPreferences: {
+      preload: path.join(__dirname, '../splash-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  win.loadFile(path.join(app.getAppPath(), 'assets', 'splash.html'))
+
+  win.once('ready-to-show', () => {
+    win.show()
+  })
+
+  return win
+}
+
 function registerMainWindow(win: BrowserWindow): BrowserWindow {
   mainWindow = win
   setTrayWindow(win)
@@ -266,20 +353,9 @@ function registerMainWindow(win: BrowserWindow): BrowserWindow {
       showTrayWindow(win)
       return
     }
-    isInitialLaunch = false
-
-    const { wasOpenedAsHidden } = app.getLoginItemSettings()
-    // On macOS: wasOpenedAsHidden = launched from login item with openAsHidden:true
-    // On Windows: check --openedAtLogin arg (more reliable than wasOpenedAtLogin)
-    const startHidden =
-      wasOpenedAsHidden || (process.platform === 'win32' && process.argv.includes('--openedAtLogin'))
-
-    if (startHidden) {
-      // Stay in tray only — do not show window or Dock icon
-      if (process.platform === 'darwin') app.dock?.hide()
-    } else {
-      showTrayWindow(win)
-    }
+    
+    // NOTE: isInitialLaunch logic is now handled in setUpdateStateCallback
+    // after the splash screen finishes checking for updates.
   })
 
   win.on('closed', () => {
