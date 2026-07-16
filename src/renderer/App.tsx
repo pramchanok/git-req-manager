@@ -25,9 +25,8 @@ function BottomTab({ label, active, onClick, icon, badge }: BottomTabProps) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 transition-all duration-200 relative ${
-        active ? 'text-orange-400' : 'text-gray-500 hover:text-gray-300'
-      }`}
+      className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 transition-all duration-200 relative ${active ? 'text-orange-400' : 'text-gray-500 hover:text-gray-300'
+        }`}
     >
       <div className="relative flex items-center justify-center">
         {icon}
@@ -111,7 +110,7 @@ export default function App() {
     })
     const unsubscribeUpdates = window.electronAPI.onUpdateStateChanged((state) => {
       setUpdateState(state)
-      
+
       if (manualUpdateCheckRef.current) {
         if (state.status === 'not-available') {
           showToast('แอปของคุณเป็นเวอร์ชันล่าสุดแล้ว 🎉', 'success')
@@ -169,13 +168,13 @@ export default function App() {
 
   if (page === 'mr-detail') {
     return (
-      <MRDetail 
+      <MRDetail
         projectId={Number(new URLSearchParams(window.location.search).get('projectId'))}
         mrIid={Number(new URLSearchParams(window.location.search).get('mrIid'))}
-        onBack={() => window.close()} 
+        onBack={() => window.close()}
         onRefresh={() => {
-           // For a separate window, we might not trigger a global sync, but we can call it.
-           window.electronAPI.triggerSync()
+          // For a separate window, we might not trigger a global sync, but we can call it.
+          window.electronAPI.triggerSync()
         }}
         onToast={showToast}
       />
@@ -195,13 +194,12 @@ export default function App() {
             <div className="relative flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
               <button
                 onClick={() => setVersionMenuOpen(!versionMenuOpen)}
-                className={`flex items-center gap-0.5 text-[10px] font-medium transition-colors select-none px-1.5 py-0.5 rounded-sm hover:bg-gray-800 border border-transparent hover:border-gray-700 ${
-                  updateState.status === 'downloaded'
-                    ? 'text-green-400 hover:text-green-300'
-                    : updateState.status === 'available' || updateState.status === 'downloading'
+                className={`flex items-center gap-0.5 text-[10px] font-medium transition-colors select-none px-1.5 py-0.5 rounded-sm hover:bg-gray-800 border border-transparent hover:border-gray-700 ${updateState.status === 'downloaded'
+                  ? 'text-green-400 hover:text-green-300'
+                  : updateState.status === 'available' || updateState.status === 'downloading'
                     ? 'text-orange-400 hover:text-orange-300'
                     : 'text-gray-400 hover:text-gray-300'
-                } ${versionMenuOpen ? 'bg-gray-800 border-gray-700' : ''}`}
+                  } ${versionMenuOpen ? 'bg-gray-800 border-gray-700' : ''}`}
                 title="Version Options"
               >
                 v{updateState.currentVersion}
@@ -230,21 +228,21 @@ export default function App() {
                     >
                       <div className="flex items-center gap-2 w-full">
                         {updateState.status === 'downloaded' ? <CheckCircle2 size={12} className="text-green-400" /> :
-                         updateState.status === 'downloading' ? <Download size={12} className="text-orange-400 animate-pulse" /> :
-                         <RefreshCw size={12} className={`text-gray-400 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />}
-                        
+                          updateState.status === 'downloading' ? <Download size={12} className="text-orange-400 animate-pulse" /> :
+                            <RefreshCw size={12} className={`text-gray-400 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />}
+
                         <span className={updateState.status === 'downloaded' ? 'text-green-400' : updateState.status === 'downloading' ? 'text-orange-400' : 'text-gray-300'}>
                           {updateState.status === 'downloaded' ? 'Restart to Install Update' :
-                           updateState.status === 'checking' ? 'Checking for updates...' :
-                           updateState.status === 'downloading' ? `Downloading update... ${updateState.progressPercent ?? ''}%` :
-                           'Check for Updates'}
+                            updateState.status === 'checking' ? 'Checking for updates...' :
+                              updateState.status === 'downloading' ? `Downloading update... ${updateState.progressPercent ?? ''}%` :
+                                'Check for Updates'}
                         </span>
                       </div>
 
                       {updateState.status === 'downloading' && (
                         <div className="w-full h-1 bg-gray-950 rounded-full overflow-hidden mt-0.5">
-                          <div 
-                            className="h-full bg-orange-400 transition-all duration-300 ease-out" 
+                          <div
+                            className="h-full bg-orange-400 transition-all duration-300 ease-out"
                             style={{ width: `${updateState.progressPercent ?? 0}%` }}
                           />
                         </div>
@@ -345,8 +343,8 @@ export default function App() {
             updateState.status === 'downloaded'
               ? 'green'
               : updateState.status === 'available' || updateState.status === 'downloading'
-              ? 'amber'
-              : null
+                ? 'amber'
+                : null
           }
         />
       </div>
