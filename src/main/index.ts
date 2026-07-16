@@ -161,9 +161,11 @@ async function startApp(): Promise<void> {
             installDownloadedUpdate()
           }, 1000)
         } else if (state.status === 'not-available' || state.status === 'error' || state.status === 'disabled') {
-          const delay = process.env.NODE_ENV === 'development' ? 2500 : 0
+          // If in dev mode, keep the 2.5s delay to simulate checking
+          const isDev = process.env.NODE_ENV === 'development'
+          let delay = isDev ? 2500 : 0
           
-          if (process.env.NODE_ENV === 'development' && splashWindow && !splashWindow.isDestroyed()) {
+          if (isDev && splashWindow && !splashWindow.isDestroyed()) {
             splashWindow.webContents.send('update-status', 'Simulating update (Dev Mode)...')
             let p = 0
             const i = setInterval(() => { 
@@ -173,6 +175,18 @@ async function startApp(): Promise<void> {
               }
             }, 100)
             setTimeout(() => clearInterval(i), delay)
+          }
+
+          // Show the result for 1 second before closing if it was checking
+          if (!isDev) {
+            delay = 1000
+            if (splashWindow && !splashWindow.isDestroyed()) {
+              if (state.status === 'not-available') {
+                splashWindow.webContents.send('update-status', 'You are up to date! 🎉')
+              } else if (state.status === 'error') {
+                splashWindow.webContents.send('update-status', 'Update check failed.')
+              }
+            }
           }
 
           setTimeout(() => {
