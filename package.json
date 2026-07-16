@@ -105,7 +105,7 @@
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "uninstallDisplayName": "GitLab MR Manager",
-      "runAfterFinish": true,
+      "runAfterFinish": false,
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
