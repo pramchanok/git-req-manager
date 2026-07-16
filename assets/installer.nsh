@@ -1,5 +1,6 @@
 SilentInstall silent
 !macro customInit
+  nsExec::ExecToStack 'taskkill /F /IM "GitLab MR Manager.exe"'
   StrCpy $INSTDIR "$LOCALAPPDATA\Programs\GitLab MR Manager"
 !macroend
 
