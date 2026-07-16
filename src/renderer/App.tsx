@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { FileText, ChevronDown, RefreshCw, Download, CheckCircle2 } from 'lucide-react'
 import type { AppState, UpdateState } from '../shared/types'
 import Dashboard from './pages/Dashboard'
@@ -99,6 +99,7 @@ export default function App() {
     releaseNotes: null,
   })
   const [hideUpdateBanner, setHideUpdateBanner] = useState(false)
+  const manualUpdateCheckRef = useRef(false)
 
   useEffect(() => {
     // Load initial state
@@ -111,6 +112,20 @@ export default function App() {
     })
     const unsubscribeUpdates = window.electronAPI.onUpdateStateChanged((state) => {
       setUpdateState(state)
+      
+      if (manualUpdateCheckRef.current) {
+        if (state.status === 'not-available') {
+          showToast('แอปของคุณเป็นเวอร์ชันล่าสุดแล้ว 🎉', 'success')
+          manualUpdateCheckRef.current = false
+        } else if (state.status === 'available') {
+          showToast('พบเวอร์ชันใหม่! กำลังเตรียมดาวน์โหลด...', 'info')
+          setPage('settings') // Redirect to settings to see the progress bar card
+          manualUpdateCheckRef.current = false
+        } else if (state.status === 'error') {
+          showToast('เกิดข้อผิดพลาดในการตรวจสอบอัปเดต', 'error')
+          manualUpdateCheckRef.current = false
+        }
+      }
     })
 
     const unsubscribeSyncStatus = window.electronAPI.onSyncStatusUpdated((isSyncing) => {
@@ -209,6 +224,7 @@ export default function App() {
                         if (updateState.status === 'downloaded') {
                           window.electronAPI.installUpdate()
                         } else {
+                          manualUpdateCheckRef.current = true
                           showToast('กำลังตรวจสอบการอัปเดต...', 'info')
                           window.electronAPI.checkForUpdates()
                         }
@@ -287,7 +303,11 @@ export default function App() {
             onToast={showToast}
             onShowChangelog={() => setPage('changelog')}
             updateState={updateState}
-            onCheckForUpdates={() => window.electronAPI.checkForUpdates()}
+            onCheckForUpdates={() => {
+              manualUpdateCheckRef.current = true
+              showToast('กำลังตรวจสอบการอัปเดต...', 'info')
+              window.electronAPI.checkForUpdates()
+            }}
             onInstallUpdate={() => window.electronAPI.installUpdate()}
           />
         )}
