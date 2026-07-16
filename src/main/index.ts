@@ -142,7 +142,7 @@ async function startApp(): Promise<void> {
     })
 
     // Create Splash Screen
-    const firstRun = isFirstRun()
+    const firstRun = isFirstRun() || process.argv.some(a => a.includes('--first-run'))
     splashWindow = createSplashWindow(firstRun)
 
     setupIPC()
@@ -214,7 +214,15 @@ async function startApp(): Promise<void> {
         }
       }
     })
-    initializeUpdater()
+    
+    // Delay initializeUpdater until splash is ready to prevent dropped messages
+    if (splashWindow) {
+      splashWindow.webContents.once('did-finish-load', () => {
+        initializeUpdater()
+      })
+    } else {
+      initializeUpdater()
+    }
 
     // Show changelog automatically on first launch after an update
     const currentVersion = app.getVersion()
@@ -350,6 +358,9 @@ function createSplashWindow(firstRun: boolean): BrowserWindow {
 
   win.once('ready-to-show', () => {
     win.show()
+  })
+
+  win.webContents.once('did-finish-load', () => {
     if (firstRun) {
       win.webContents.send('installation-mode')
     }
