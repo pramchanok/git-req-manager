@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { FileText, ChevronDown, RefreshCw, Download, CheckCircle2 } from 'lucide-react'
+import { FileText, ChevronDown, RefreshCw, Download, CheckCircle2, Pin } from 'lucide-react'
 import type { AppState, UpdateState } from '../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
@@ -73,6 +73,7 @@ export default function App() {
     return (params.get('page') as Page) || 'dashboard'
   })
   const [versionMenuOpen, setVersionMenuOpen] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
   const [toast, setToast] = useState<ToastData | null>(null)
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     setToast({ message, type })
@@ -285,6 +286,19 @@ export default function App() {
             title="Refresh now"
           >
             ↻
+          </button>
+          <button
+            onClick={() => {
+              const newPinned = !isPinned
+              setIsPinned(newPinned)
+              window.electronAPI.setPinned(newPinned)
+            }}
+            className={`w-5 h-5 flex items-center justify-center rounded-full transition-colors text-[10px] ${
+              isPinned ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : 'hover:bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+            title={isPinned ? 'Unpin window (Auto-hide on blur)' : 'Pin window (Keep on top)'}
+          >
+            <Pin size={10} className={isPinned ? 'fill-current transform rotate-45' : ''} />
           </button>
           <button
             onClick={() => window.close()}

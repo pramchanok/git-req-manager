@@ -28,6 +28,7 @@ declare global {
       getChangelog: () => Promise<string | null>
       setLastSeenVersion: () => Promise<void>
       getOwnerGroups: () => Promise<GitLabGroup[]>
+      setPinned: (pinned: boolean) => Promise<void>
       getMRByIid: (projectId: number, mrIid: number) => Promise<import('../../shared/types').MergeRequest | null>
       getMRDiffs: (projectId: number, mrIid: number) => Promise<import('../../shared/types').MRDiff[]>
       getMRDiscussions: (projectId: number, mrIid: number) => Promise<import('../../shared/types').MRDiscussion[]>

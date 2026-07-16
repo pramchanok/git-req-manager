@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('set-last-seen-version'),
   getOwnerGroups: (): Promise<import('./shared/types').GitLabGroup[]> =>
     ipcRenderer.invoke('get-owner-groups'),
+  setPinned: (pinned: boolean): Promise<void> =>
+    ipcRenderer.invoke('set-pinned', pinned),
   onAppStateUpdated: (callback: (state: AppState) => void) => {
     ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
     return () => ipcRenderer.removeAllListeners('app-state-updated')

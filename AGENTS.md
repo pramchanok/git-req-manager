@@ -199,3 +199,41 @@ pm version\ or modifying the version in \package.json\, you MUST ask the user if
 ## Changelog Rules
 
 - **Prepend New Versions**: When updating `CHANGELOG.md` with a new version, always use the `multi_replace_file_content` tool to insert the new version header and content directly ABOVE the previous version header. Do NOT replace or overwrite the previous version headers.
+
+## NSIS Custom Installer UI — Lessons Learned
+
+This project uses a custom NSIS installer UI (`assets/installer.nsh`) with a frameless, dark-mode splash screen. Here are critical lessons learned:
+
+### Architecture
+- **`oneClick: false`** is required in `package.json` `nsis` config to use custom page hooks (`customPageAfterChangeDir`, `customInstallMode`).
+- **`customInstallMode` macro** with `$isForceCurrentInstall = "1"` skips the "Choose Installation Options" page so the installer goes straight to file extraction.
+- **`customPageAfterChangeDir` macro** is the hook point for customizing the InstFiles page via `MUI_PAGE_CUSTOMFUNCTION_SHOW` and `MUI_PAGE_CUSTOMFUNCTION_LEAVE`.
+- **`!ifndef BUILD_UNINSTALLER`** wrapper is required around install-only functions to prevent NSIS warning 6010 ("install function not referenced") during uninstaller generation.
+
+### InstFiles Page Controls
+The NSIS InstFiles page inner dialog (`#32770`) has **only these controls**:
+- `1004` — Progress bar (`msctls_progress32`)
+- `1006` — A static text label (header/detail text)
+- `1016` — Details list (file extraction log)
+
+**Controls 1027, 1028, etc. do NOT exist on this page.** Attempting `GetDlgItem` for non-existent IDs returns 0 (null handle).
+
+### Text Rendering — Critical Gotcha
+- **`CreateWindowEx` text controls get destroyed by dialog repaints.** When NSIS updates the progress bar, the inner dialog repaints its background, covering any dynamically created controls. This is because `CreateWindowEx` controls are not registered in the dialog's control list.
+- **Solution: Bake text into the BMP image** using PowerShell + .NET `System.Drawing` (`scripts/generate-splash.ps1`). This renders Segoe UI font with ClearType antialiasing directly into the bitmap. Text becomes part of the image and cannot be overwritten by repaints.
+
+### Progress Bar — Critical Gotcha
+- **Do NOT reparent the progress bar** (via `SetParent`) to a different window. NSIS sends progress update messages to the original parent dialog. If the progress bar is reparented, it stops receiving updates and appears frozen/invisible.
+- **Do NOT hide the inner dialog** (`ShowWindow $0 0`). The progress bar lives inside it and will also be hidden.
+- **Keep the inner dialog visible** but set its background to match the splash color (`SetCtlColors $0 "" 0x111827`). Stretch it to cover the full window area.
+- **`SetWindowTheme` with spaces** (`t " ", t " "`) removes the Windows visual theme from the progress bar for a flat look.
+- **Progress bar color messages**: `PBM_SETBKCOLOR = 0x2001` (track bg), `PBM_SETBARCOLOR = 0x0409` (fill). Colors must be in **BGR format**, not RGB.
+
+### BMP Image Generation
+- Use `scripts/generate-splash.ps1` (PowerShell + .NET System.Drawing) for BMP generation with proper font rendering.
+- NSIS bitmap controls only support `.bmp` format (no PNG transparency).
+- Use `${BUILD_RESOURCES_DIR}` to reference files from the `assets/` folder during NSIS compilation.
+
+### App Launch After Install
+- **Do NOT pass `--first-run`** to the app executable in `onInstFilesLeave`. This flag causes `isFirstRun()` to return true, which makes the splash screen show for 2.5s and prevents the app from hiding to tray.
+- Just use `Exec '"$INSTDIR\GitLab MR Manager.exe"'` without any flags.

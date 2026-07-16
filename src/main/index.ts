@@ -199,7 +199,7 @@ async function startApp(): Promise<void> {
             // Show main window
             if (isInitialLaunch) {
                const { wasOpenedAsHidden } = app.getLoginItemSettings()
-               const startHidden = wasOpenedAsHidden || (process.platform === 'win32' && process.argv.includes('--openedAtLogin'))
+               const startHidden = wasOpenedAsHidden || (process.platform === 'win32' && (process.argv.includes('--openedAtLogin') || process.argv.includes('--hidden')))
                
                if (startHidden) {
                  if (process.platform === 'darwin') app.dock?.hide()
@@ -328,6 +328,12 @@ function createWindow(): BrowserWindow {
     hideWindow(win)
   })
 
+  win.on('blur', () => {
+    if (process.env.NODE_ENV !== 'development' && !win.isAlwaysOnTop()) {
+      hideWindow(win)
+    }
+  })
+
   return win
 }
 
@@ -436,6 +442,12 @@ async function autoSyncWebhooks(webhookUrl: string): Promise<void> {
 function setupIPC(): void {
   ipcMain.handle('get-settings', () => getSettings())
   ipcMain.handle('test-notification', () => testNotification())
+
+  ipcMain.handle('set-pinned', (_event, pinned: boolean) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(pinned)
+    }
+  })
 
   ipcMain.handle('save-settings', (_event, settings: Settings) => {
     saveSettings(settings)

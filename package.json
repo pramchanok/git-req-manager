@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.10.6",
+  "version": "1.10.7",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -99,7 +99,7 @@
       "icon": "assets/icon.png"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
       "installerIcon": "assets/icon.ico",
