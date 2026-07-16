@@ -145,7 +145,8 @@ export function installDownloadedUpdate(): void {
     throw new Error('No downloaded update is ready to install.')
   }
 
-  autoUpdater.quitAndInstall(false, true)
+  // Run the installer completely silently without showing the NSIS UI
+  autoUpdater.quitAndInstall(true, true)
 }
 
 export function initializeUpdater(): void {
