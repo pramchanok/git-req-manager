@@ -8,7 +8,6 @@ import Changelog from './pages/Changelog'
 import ReportDetail from './pages/ReportDetail'
 import MRDetail from './pages/MRDetail'
 import Toast, { type ToastData, type ToastType } from './components/Toast'
-import UpdateBanner from './components/UpdateBanner'
 
 type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report' | 'mr-detail'
 
