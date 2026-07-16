@@ -33,6 +33,7 @@
       "output": "release",
       "buildResources": "assets"
     },
+    "compression": "store",
     "files": [
       "dist/main/**/*",
       "dist/renderer/**/*",

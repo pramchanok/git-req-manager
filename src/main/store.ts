@@ -19,6 +19,7 @@ interface StoreSchema {
   teamReportGroupId: number
   lastSeenVersion: string
   notifyOnMyMRMerged: boolean
+  hasRunBefore: boolean
 }
 
 const store = new Store<StoreSchema>({
@@ -39,6 +40,7 @@ const store = new Store<StoreSchema>({
     teamReportGroupId: 0,
     lastSeenVersion: '',
     notifyOnMyMRMerged: true,
+    hasRunBefore: false,
   },
 })
 
@@ -157,4 +159,13 @@ export function addNotifiedMergedMRId(id: number): void {
     const updated = [...ids, id].slice(-500)
     store.set('notifiedMergedMRIds', updated)
   }
+}
+
+export function isFirstRun(): boolean {
+  const hasRun = store.get('hasRunBefore', false)
+  if (!hasRun) {
+    store.set('hasRunBefore', true)
+    return true
+  }
+  return false
 }

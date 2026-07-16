@@ -6,5 +6,8 @@ contextBridge.exposeInMainWorld('splashAPI', {
   },
   onUpdateProgress: (callback: (percent: number) => void) => {
     ipcRenderer.on('update-progress', (_event, percent) => callback(percent));
+  },
+  onInstallationMode: (callback: () => void) => {
+    ipcRenderer.on('installation-mode', () => callback());
   }
 });

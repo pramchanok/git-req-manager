@@ -118,6 +118,23 @@
         
         document.getElementById('status').innerText = `Downloading update... ${Math.round(percent)}%`;
       });
+
+      window.splashAPI.onInstallationMode(() => {
+        document.getElementById('status').innerText = 'Setting up application...';
+        document.getElementById('progress-indeterminate').style.display = 'none';
+        const pBar = document.getElementById('progress-bar');
+        pBar.style.display = 'block';
+        
+        let p = 0;
+        const i = setInterval(() => {
+          p += 5;
+          pBar.style.width = p + '%';
+          if (p >= 100) {
+            clearInterval(i);
+            document.getElementById('status').innerText = 'Ready!';
+          }
+        }, 100);
+      });
     }
   </script>
 </body>

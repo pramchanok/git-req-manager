@@ -12,7 +12,7 @@ import {
   showTrayWindow,
   hideWindow,
 } from './tray'
-import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId, getLastSeenVersion, setLastSeenVersion } from './store'
+import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId, getLastSeenVersion, setLastSeenVersion, isFirstRun } from './store'
 import {
   startScheduler,
   stopScheduler,
@@ -142,7 +142,8 @@ async function startApp(): Promise<void> {
     })
 
     // Create Splash Screen
-    splashWindow = createSplashWindow()
+    const firstRun = isFirstRun()
+    splashWindow = createSplashWindow(firstRun)
 
     setupIPC()
     setUpdateStateCallback((state) => {
@@ -179,9 +180,9 @@ async function startApp(): Promise<void> {
 
           // Show the result for 1 second before closing if it was checking
           if (!isDev) {
-            delay = 1000
+            delay = firstRun ? 2500 : 1000
             if (splashWindow && !splashWindow.isDestroyed()) {
-              if (state.status === 'not-available') {
+              if (state.status === 'not-available' && !firstRun) {
                 splashWindow.webContents.send('update-status', 'You are up to date! 🎉')
               } else if (state.status === 'error') {
                 splashWindow.webContents.send('update-status', 'Update check failed.')
@@ -322,7 +323,7 @@ function createWindow(): BrowserWindow {
   return win
 }
 
-function createSplashWindow(): BrowserWindow {
+function createSplashWindow(firstRun: boolean): BrowserWindow {
   let icon: Electron.NativeImage | undefined
   try {
     const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
@@ -349,6 +350,9 @@ function createSplashWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => {
     win.show()
+    if (firstRun) {
+      win.webContents.send('installation-mode')
+    }
   })
 
   return win
