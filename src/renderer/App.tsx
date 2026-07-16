@@ -199,7 +199,7 @@ export default function App() {
                   updateState.status === 'downloaded'
                     ? 'text-green-400 hover:text-green-300'
                     : updateState.status === 'available' || updateState.status === 'downloading'
-                    ? 'text-amber-400 hover:text-amber-300'
+                    ? 'text-orange-400 hover:text-orange-300'
                     : 'text-gray-400 hover:text-gray-300'
                 } ${versionMenuOpen ? 'bg-gray-800 border-gray-700' : ''}`}
                 title="Version Options"
@@ -230,10 +230,10 @@ export default function App() {
                     >
                       <div className="flex items-center gap-2 w-full">
                         {updateState.status === 'downloaded' ? <CheckCircle2 size={12} className="text-green-400" /> :
-                         updateState.status === 'downloading' ? <Download size={12} className="text-amber-400 animate-pulse" /> :
+                         updateState.status === 'downloading' ? <Download size={12} className="text-orange-400 animate-pulse" /> :
                          <RefreshCw size={12} className={`text-gray-400 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />}
                         
-                        <span className={updateState.status === 'downloaded' ? 'text-green-400' : updateState.status === 'downloading' ? 'text-amber-400' : 'text-gray-300'}>
+                        <span className={updateState.status === 'downloaded' ? 'text-green-400' : updateState.status === 'downloading' ? 'text-orange-400' : 'text-gray-300'}>
                           {updateState.status === 'downloaded' ? 'Restart to Install Update' :
                            updateState.status === 'checking' ? 'Checking for updates...' :
                            updateState.status === 'downloading' ? `Downloading update... ${updateState.progressPercent ?? ''}%` :
@@ -244,7 +244,7 @@ export default function App() {
                       {updateState.status === 'downloading' && (
                         <div className="w-full h-1 bg-gray-950 rounded-full overflow-hidden mt-0.5">
                           <div 
-                            className="h-full bg-amber-400 transition-all duration-300 ease-out" 
+                            className="h-full bg-orange-400 transition-all duration-300 ease-out" 
                             style={{ width: `${updateState.progressPercent ?? 0}%` }}
                           />
                         </div>
