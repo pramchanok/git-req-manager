@@ -98,7 +98,6 @@ export default function App() {
     releaseDate: null,
     releaseNotes: null,
   })
-  const [hideUpdateBanner, setHideUpdateBanner] = useState(false)
   const manualUpdateCheckRef = useRef(false)
 
   useEffect(() => {
@@ -316,7 +315,7 @@ export default function App() {
             onCheckForUpdates={() => {
               manualUpdateCheckRef.current = true
               showToast('กำลังตรวจสอบการอัปเดต...', 'info')
-              window.electronAPI.checkForUpdates()
+              return window.electronAPI.checkForUpdates()
             }}
             onInstallUpdate={() => window.electronAPI.installUpdate()}
           />
@@ -356,14 +355,6 @@ export default function App() {
         <Toast {...toast} onDismiss={() => setToast(null)} />
       )}
 
-      {(updateState.status === 'downloading' || updateState.status === 'downloaded') && !hideUpdateBanner && (
-        <UpdateBanner 
-          version={updateState.downloadedVersion || updateState.availableVersion || 'Unknown'}
-          progress={updateState.status === 'downloaded' ? 100 : (updateState.progressPercent ?? 0)}
-          onDismiss={() => setHideUpdateBanner(true)}
-          onRestart={() => window.electronAPI.installUpdate()}
-        />
-      )}
     </div>
   )
 }
