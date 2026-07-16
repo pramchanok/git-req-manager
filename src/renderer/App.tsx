@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { FileText, ChevronDown, RefreshCw, Download, CheckCircle2 } from 'lucide-react'
 import type { AppState, UpdateState } from '../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
@@ -7,6 +8,7 @@ import Changelog from './pages/Changelog'
 import ReportDetail from './pages/ReportDetail'
 import MRDetail from './pages/MRDetail'
 import Toast, { type ToastData, type ToastType } from './components/Toast'
+import UpdateBanner from './components/UpdateBanner'
 
 type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report' | 'mr-detail'
 
@@ -72,6 +74,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search)
     return (params.get('page') as Page) || 'dashboard'
   })
+  const [versionMenuOpen, setVersionMenuOpen] = useState(false)
   const [toast, setToast] = useState<ToastData | null>(null)
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
     setToast({ message, type })
@@ -96,6 +99,7 @@ export default function App() {
     releaseDate: null,
     releaseNotes: null,
   })
+  const [hideUpdateBanner, setHideUpdateBanner] = useState(false)
 
   useEffect(() => {
     // Load initial state
@@ -176,35 +180,82 @@ export default function App() {
         <div className="flex items-center gap-2 text-xs">
           <span className="text-orange-400 font-bold">🦊 GitLab MR Manager</span>
           {updateState.currentVersion && (
-            <button
-              onClick={() => setPage('changelog')}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              className={`text-[10px] font-medium transition-colors select-none ${
-                updateState.status === 'downloaded'
-                  ? 'text-green-400 hover:text-green-300'
-                  : updateState.status === 'available' || updateState.status === 'downloading'
-                  ? 'text-amber-400 hover:text-amber-300 animate-pulse'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-              title="ดูสิ่งที่เปลี่ยนแปลง"
-            >
-              v{updateState.currentVersion}
-              {updateState.status === 'downloaded' && ' ⬆️'}
-              {(updateState.status === 'available' || updateState.status === 'downloading') && ' ↑'}
-            </button>
-          )}
-          {appState.lastSyncedAt && !appState.isSyncing && (
-            <span className="text-[10px] text-gray-500 font-medium">
-              · {new Date(appState.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          {appState.isSyncing && (
-            <span className="text-[9px] text-orange-400 animate-pulse bg-orange-950/40 px-1.5 py-0.5 rounded-full font-semibold">syncing…</span>
+            <div className="relative flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+              <button
+                onClick={() => setVersionMenuOpen(!versionMenuOpen)}
+                className={`flex items-center gap-0.5 text-[10px] font-medium transition-colors select-none px-1.5 py-0.5 rounded-sm hover:bg-gray-800 border border-transparent hover:border-gray-700 ${
+                  updateState.status === 'downloaded'
+                    ? 'text-green-400 hover:text-green-300'
+                    : updateState.status === 'available' || updateState.status === 'downloading'
+                    ? 'text-amber-400 hover:text-amber-300'
+                    : 'text-gray-400 hover:text-gray-300'
+                } ${versionMenuOpen ? 'bg-gray-800 border-gray-700' : ''}`}
+                title="Version Options"
+              >
+                v{updateState.currentVersion}
+                {updateState.status === 'downloaded' && ' ⬆️'}
+                {updateState.status === 'checking' && ' 🔄'}
+                {(updateState.status === 'available' || updateState.status === 'downloading') && ' ↑'}
+                <ChevronDown size={10} className={`opacity-60 transition-transform ${versionMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {versionMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setVersionMenuOpen(false)} />
+                  <div className="absolute top-full left-0 mt-1 w-44 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 py-1 flex flex-col font-medium text-[11px] overflow-hidden">
+                    <button
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800 text-left transition-colors"
+                      onClick={() => {
+                        setVersionMenuOpen(false)
+                        if (updateState.status === 'downloaded') {
+                          window.electronAPI.installUpdate()
+                        } else {
+                          showToast('กำลังตรวจสอบการอัปเดต...', 'info')
+                          window.electronAPI.checkForUpdates()
+                        }
+                      }}
+                    >
+                      {updateState.status === 'downloaded' ? <CheckCircle2 size={12} className="text-green-400" /> :
+                       updateState.status === 'downloading' ? <Download size={12} className="text-amber-400 animate-pulse" /> :
+                       <RefreshCw size={12} className={`text-gray-400 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />}
+                      
+                      <span className={updateState.status === 'downloaded' ? 'text-green-400' : updateState.status === 'downloading' ? 'text-amber-400' : 'text-gray-300'}>
+                        {updateState.status === 'downloaded' ? 'Restart to Install Update' :
+                         updateState.status === 'checking' ? 'Checking for updates...' :
+                         updateState.status === 'downloading' ? `Downloading update... ${updateState.progressPercent ?? ''}%` :
+                         'Check for Updates'}
+                      </span>
+                    </button>
+                    <div className="h-px bg-gray-800 my-0.5" />
+                    <button
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800 text-gray-300 text-left transition-colors"
+                      onClick={() => {
+                        setVersionMenuOpen(false)
+                        setPage('changelog')
+                      }}
+                    >
+                      <FileText size={12} className="text-gray-400" />
+                      View Changelog
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 
         {/* Title bar controls (no-drag) */}
         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <div className="flex items-center mr-1 select-none pointer-events-none">
+            {appState.lastSyncedAt && !appState.isSyncing && (
+              <span className="text-[10px] text-gray-500 font-medium">
+                {new Date(appState.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            {appState.isSyncing && (
+              <span className="text-[9px] text-orange-400 animate-pulse bg-orange-950/40 px-1.5 py-0.5 rounded-full font-semibold">syncing…</span>
+            )}
+          </div>
           <button
             onClick={() => window.electronAPI.triggerSync()}
             disabled={appState.isSyncing}
@@ -274,6 +325,15 @@ export default function App() {
 
       {toast && (
         <Toast {...toast} onDismiss={() => setToast(null)} />
+      )}
+
+      {(updateState.status === 'downloading' || updateState.status === 'downloaded') && !hideUpdateBanner && (
+        <UpdateBanner 
+          version={updateState.downloadedVersion || updateState.availableVersion || 'Unknown'}
+          progress={updateState.status === 'downloaded' ? 100 : (updateState.progressPercent ?? 0)}
+          onDismiss={() => setHideUpdateBanner(true)}
+          onRestart={() => window.electronAPI.installUpdate()}
+        />
       )}
     </div>
   )

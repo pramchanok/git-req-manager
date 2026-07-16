@@ -2,6 +2,7 @@ import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell, nativeTheme
 import fs from 'fs'
 import path from 'path'
 import type { MergeRequest, UpdateStatus } from '../shared/types'
+import { checkForUpdates, installDownloadedUpdate } from './updater'
 
 let tray: Tray | null = null
 let pendingCount = 0
@@ -128,11 +129,7 @@ function updateTrayMenu(): void {
       {
         label: `⬆️ Update ready: v${updateVersion} — Click to install`,
         click: () => {
-          const win = getOrCreateWindow()
-          if (win) {
-            showWindow(win)
-            win.webContents.send('show-settings')
-          }
+          installDownloadedUpdate()
         },
       }
     )
@@ -144,6 +141,17 @@ function updateTrayMenu(): void {
           ? `⬇️ Downloading update v${updateVersion}…`
           : `🔔 Update available: v${updateVersion}`,
         enabled: false,
+      }
+    )
+  } else if (updateStatus !== 'disabled') {
+    updateItems.push(
+      { type: 'separator' },
+      {
+        label: updateStatus === 'checking' ? '🔄 Checking for updates…' : '🔄 Check for Updates',
+        enabled: updateStatus !== 'checking',
+        click: () => {
+          void checkForUpdates()
+        },
       }
     )
   }
