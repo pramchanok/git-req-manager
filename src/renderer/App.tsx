@@ -119,7 +119,6 @@ export default function App() {
           manualUpdateCheckRef.current = false
         } else if (state.status === 'available') {
           showToast('พบเวอร์ชันใหม่! กำลังเตรียมดาวน์โหลด...', 'info')
-          setPage('settings') // Redirect to settings to see the progress bar card
           manualUpdateCheckRef.current = false
         } else if (state.status === 'error') {
           showToast('เกิดข้อผิดพลาดในการตรวจสอบอัปเดต', 'error')
