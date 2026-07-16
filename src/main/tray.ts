@@ -1,4 +1,4 @@
-import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell, nativeTheme } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import type { MergeRequest, UpdateStatus } from '../shared/types'
@@ -23,9 +23,9 @@ function getOrCreateWindow(): BrowserWindow | null {
 
 function createIcon(state: 'default' | 'active' | 'update'): Electron.NativeImage {
   const baseName =
-    state === 'update' ? 'tray-icon-update' :
-    state === 'active' ? 'tray-icon-active' :
-    'tray-icon'
+    state === 'update' ? 'tray-icon-update-app' :
+    state === 'active' ? 'tray-icon-app' :
+    'tray-icon-grey'
   const assetsDir = path.join(app.getAppPath(), 'assets')
 
   // Use fs.readFileSync so we can read from inside an asar archive, then
@@ -56,6 +56,10 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   tray = new Tray(createIcon('default'))
   tray.setToolTip('GitLab MR Manager')
   updateTrayMenu()
+
+  nativeTheme.on('updated', () => {
+    refreshTrayIcon()
+  })
 
   tray.on('click', () => {
     const win = getOrCreateWindow()

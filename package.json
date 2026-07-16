@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.10.3",
+  "version": "1.10.4",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -123,6 +123,7 @@
     "cross-env": "^10.1.0",
     "electron": "^43.0.0",
     "electron-builder": "26.15.3",
+    "jimp": "^1.6.1",
     "postcss": "^8.5.16",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.2",
