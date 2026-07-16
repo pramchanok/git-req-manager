@@ -217,7 +217,7 @@ export default function App() {
                   <div className="fixed inset-0 z-40" onClick={() => setVersionMenuOpen(false)} />
                   <div className="absolute top-full left-0 mt-1 w-44 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 py-1 flex flex-col font-medium text-[11px] overflow-hidden">
                     <button
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-800 text-left transition-colors"
+                      className="flex flex-col gap-1.5 px-3 py-2 hover:bg-gray-800 text-left transition-colors w-full"
                       onClick={() => {
                         setVersionMenuOpen(false)
                         if (updateState.status === 'downloaded') {
@@ -229,16 +229,27 @@ export default function App() {
                         }
                       }}
                     >
-                      {updateState.status === 'downloaded' ? <CheckCircle2 size={12} className="text-green-400" /> :
-                       updateState.status === 'downloading' ? <Download size={12} className="text-amber-400 animate-pulse" /> :
-                       <RefreshCw size={12} className={`text-gray-400 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />}
-                      
-                      <span className={updateState.status === 'downloaded' ? 'text-green-400' : updateState.status === 'downloading' ? 'text-amber-400' : 'text-gray-300'}>
-                        {updateState.status === 'downloaded' ? 'Restart to Install Update' :
-                         updateState.status === 'checking' ? 'Checking for updates...' :
-                         updateState.status === 'downloading' ? `Downloading update... ${updateState.progressPercent ?? ''}%` :
-                         'Check for Updates'}
-                      </span>
+                      <div className="flex items-center gap-2 w-full">
+                        {updateState.status === 'downloaded' ? <CheckCircle2 size={12} className="text-green-400" /> :
+                         updateState.status === 'downloading' ? <Download size={12} className="text-amber-400 animate-pulse" /> :
+                         <RefreshCw size={12} className={`text-gray-400 ${updateState.status === 'checking' ? 'animate-spin' : ''}`} />}
+                        
+                        <span className={updateState.status === 'downloaded' ? 'text-green-400' : updateState.status === 'downloading' ? 'text-amber-400' : 'text-gray-300'}>
+                          {updateState.status === 'downloaded' ? 'Restart to Install Update' :
+                           updateState.status === 'checking' ? 'Checking for updates...' :
+                           updateState.status === 'downloading' ? `Downloading update... ${updateState.progressPercent ?? ''}%` :
+                           'Check for Updates'}
+                        </span>
+                      </div>
+
+                      {updateState.status === 'downloading' && (
+                        <div className="w-full h-1 bg-gray-950 rounded-full overflow-hidden mt-0.5">
+                          <div 
+                            className="h-full bg-amber-400 transition-all duration-300 ease-out" 
+                            style={{ width: `${updateState.progressPercent ?? 0}%` }}
+                          />
+                        </div>
+                      )}
                     </button>
                     <div className="h-px bg-gray-800 my-0.5" />
                     <button
