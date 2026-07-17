@@ -334,6 +334,57 @@ export default function App() {
         )}
       </div>
 
+      {/* Update Banner */}
+      {(updateState.status === 'available' || updateState.status === 'downloading' || updateState.status === 'downloaded') && (
+        <div 
+          className="border-t border-gray-800 bg-gray-900 px-3 py-2 flex items-center justify-between flex-shrink-0 cursor-pointer hover:bg-gray-800 transition-colors shadow-[0_-4px_12px_rgba(0,0,0,0.2)] z-10"
+          onClick={() => {
+            if (updateState.status === 'downloaded') {
+              window.electronAPI.installUpdate()
+            } else {
+              setPage('changelog')
+            }
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className={`p-1.5 rounded-full ${updateState.status === 'downloaded' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+              {updateState.status === 'downloaded' ? (
+                <CheckCircle2 size={12} strokeWidth={2.5} />
+              ) : (
+                <Download size={12} className={updateState.status === 'downloading' ? 'animate-pulse' : ''} strokeWidth={2.5} />
+              )}
+            </div>
+            <div className="flex flex-col justify-center">
+              <span className="text-[11px] font-medium text-gray-200">
+                {updateState.status === 'downloaded' 
+                  ? 'Update ready to install' 
+                  : `Downloading update v${updateState.availableVersion || '...'}`}
+              </span>
+              {updateState.status === 'downloading' && (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="w-24 bg-gray-950 rounded-full h-1 overflow-hidden border border-gray-800">
+                    <div className="bg-orange-400 h-full rounded-full transition-all duration-300 ease-out" style={{ width: `${updateState.progressPercent ?? 0}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          {updateState.status === 'downloaded' ? (
+            <button 
+              className="bg-green-500 hover:bg-green-600 text-white text-[10px] px-2.5 py-1 rounded shadow-sm font-semibold transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                window.electronAPI.installUpdate()
+              }}
+            >
+              Restart
+            </button>
+          ) : (
+            <span className="text-[10px] text-gray-400 font-medium px-1">View</span>
+          )}
+        </div>
+      )}
+
       {/* Bottom Navigation Bar */}
       <div className="h-12 bg-gray-950 border-t border-gray-900 flex items-stretch flex-shrink-0">
         <BottomTab

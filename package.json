@@ -1,6 +1,6 @@
 {
   "name": "gitlab-req-manager",
-  "version": "1.10.8",
+  "version": "1.10.9",
   "description": "Desktop app to track GitLab Merge Requests for review",
   "main": "dist/main/index.js",
   "repository": {
@@ -107,7 +107,7 @@
       "uninstallDisplayName": "GitLab MR Manager",
       "runAfterFinish": false,
       "deleteAppDataOnUninstall": false,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": false,
       "createStartMenuShortcut": true,
       "include": "assets/installer.nsh"
     }
