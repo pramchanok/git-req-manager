@@ -21,11 +21,14 @@ Desktop app สำหรับติดตาม GitLab Merge Requests ที่
 
 ## ✨ Features
 
-- 🔔 **Desktop Notification** — แจ้งเตือนเมื่อมี MR ใหม่ที่ assigned ให้คุณ review
+- 🔔 **Desktop Notification** — แจ้งเตือนเมื่อมี MR ใหม่ที่ assigned ให้คุณ review หรือเมื่อ MR ของคุณถูก Merge
 - 📋 **My Reviews** — ดู MR ทุกตัวที่คุณเป็น reviewer
 - 📂 **All Open MRs** — ดู MR เปิดอยู่ทั้งหมดในทุก repo ที่คุณมีสิทธิ์
-- ⏱️ **Auto Sync** — ดึงข้อมูลใหม่อัตโนมัติตาม interval ที่ตั้งไว้
-- ⬆️ **In-app Updates** — เช็กอัปเดตจาก GitHub Releases และติดตั้งเวอร์ชันใหม่ได้จากในแอป
+- 👥 **Team Report** — สรุปสถานะ MR ของคนในทีม (Team members)
+- ⚡ **Real-time Sync (Webhook)** — รับอัปเดตทันทีผ่าน Webhook พร้อมรองรับ Cloudflare Tunnel ในตัว
+- ⏱️ **Auto Sync (Polling)** — ดึงข้อมูลใหม่อัตโนมัติตาม interval ที่ตั้งไว้ (เป็นทางเลือกแทน Webhook)
+- 📌 **Pin Window** — ปักหมุดหน้าต่างให้อยู่บนสุดเสมอ (Always on Top)
+- ⬆️ **In-app Updates** — แจ้งเตือนและอัปเดตเวอร์ชันใหม่ในตัวแบบ OTA พร้อมหน้าต่างติดตั้งที่สวยงาม
 - 🔒 **Secure Token Storage** — เก็บ Personal Access Token ด้วย OS-level encryption
 - 🌐 **รองรับ GitLab ทุกแบบ** — ทั้ง `gitlab.com` และ self-hosted GitLab
 
@@ -71,12 +74,13 @@ Desktop app สำหรับติดตาม GitLab Merge Requests ที่
 |------|---------|---------|
 | **GitLab URL** | `https://gitlab.com` | URL ของ GitLab (ใส่ของ self-hosted ได้) |
 | **Personal Access Token** | `glpat-xxxx...` | Token ที่สร้างในขั้นตอนที่ 1 |
-| **Refresh Interval** | `5` | ดึงข้อมูลทุกกี่นาที (1–120) |
-| **Project IDs** | *(ว่างไว้)* | ระบุ project ID ถ้าอยากจำกัด scope |
+| **Refresh Interval** | `5` | ดึงข้อมูลทุกกี่นาที (กรณีไม่ได้ใช้ Webhook) |
+| **Project IDs** | *(ว่างไว้)* | ระบุ project ID ถ้าอยากจำกัด scope (ถ้าว่างจะดึงจากทุก repo) |
+| **Webhook Enabled** | `เปิด` | เปิดใช้งานการอัปเดตแบบ Real-time |
+| **Use Cloudflare Tunnel** | `เปิด` | สร้าง Tunnel อัตโนมัติ (เหมาะสำหรับเครื่องที่ไม่มี Public IP) |
+| **Team/Owner Groups** | `123, 456` | กรอก Group ID สำหรับดู Team Report |
 
 3. กด **Save & Connect**
-
-> **Project IDs**: ถ้าปล่อยว่างจะดึง MR จากทุก repo ที่คุณมีสิทธิ์โดยอัตโนมัติ
 
 ---
 
@@ -85,31 +89,30 @@ Desktop app สำหรับติดตาม GitLab Merge Requests ที่
 ### หน้า Dashboard
 
 ```
-┌─────────────────────────────────────┐
-│ 🦊 GitLab MR Manager    ⚙️  ✕      │  ← Title bar (ลากย้ายหน้าต่างได้)
-├──────────────┬──────────────────────┤
-│  My Reviews  │  All Open            │  ← แท็บ
-│     (3)      │    (12)              │
-├─────────────────────────────────────┤
-│ 👤 somchai                          │
-│  feat: add user login          !42  │  ← คลิกเพื่อเปิดใน browser
-│  my-project · 2h ago               │
-│  main ← feature/login              │
-├─────────────────────────────────────┤
-│ ...                                 │
-├─────────────────────────────────────┤
-│ Last sync: 21:05:00    ↻ Refresh   │  ← Footer
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│ 🦊 GitLab MR Manager      📌 ⚙️  ✕     │  ← Title bar (ลากย้ายหน้าต่างได้, ปักหมุดได้)
+├──────────────┬─────────────┬────────────┤
+│  Dashboard   │    Team     │  Settings  │  ← แท็บ (อยู่ด้านล่างสุดของแอป)
+├──────────────┴─────────────┴────────────┤
+│ 👤 somchai                              │
+│  feat: add user login              !42  │  ← คลิกเพื่อเปิดใน browser
+│  my-project · 2h ago                    │
+│  main ← feature/login                   │
+├─────────────────────────────────────────┤
+│ ...                                     │
+├─────────────────────────────────────────┤
+│ ⬇️ Downloading update v1.10.10...       │  ← Update Banner (จะแสดงเมื่อมีอัปเดต)
+└─────────────────────────────────────────┘
 ```
 
 ### การทำงานของแต่ละส่วน
 
 | ส่วน | การทำงาน |
 |------|---------|
-| **My Reviews** | MR ที่คุณถูก assign เป็น reviewer (`reviewer_id=me`) |
-| **All Open** | MR เปิดอยู่ทั้งหมดในทุก repo ที่คุณมีสิทธิ์ |
+| **Dashboard** | รวม MR ที่คุณเป็น Reviewer (My Reviews) และ MR ทั้งหมด (All Open) |
+| **Team** | หน้าจอแสดง MR ของคนในกลุ่ม (ตั้งค่า Group ID ใน Settings) |
+| **📌 Pin** | ปักหมุดหน้าต่างให้อยู่บนสุด (Always on top) ถึงแม้จะสลับไปโปรแกรมอื่นก็ไม่ซ่อนตัว |
 | **คลิก MR card** | เปิด MR นั้นใน browser |
-| **↻ Refresh** | ดึงข้อมูลใหม่ทันที |
 | **✕** | ซ่อน app ไว้ใน system tray (ไม่ได้ปิด) |
 
 ### System Tray
@@ -222,13 +225,19 @@ gitlab-req-manager/
 │   │   ├── index.ts            # App bootstrap + BrowserWindow + IPC
 │   │   ├── tray.ts             # System tray icon และ context menu
 │   │   ├── scheduler.ts        # Polling loop + state management
+│   │   ├── webhook.ts          # Local Webhook server
+│   │   ├── tunnel.ts           # Cloudflare Tunnel integration
+│   │   ├── socket-client.ts    # Socket.IO client สำหรับ Reverse Proxy
+│   │   ├── updater.ts          # Auto-update logic
 │   │   ├── notifier.ts         # Desktop notification
 │   │   └── store.ts            # บันทึก settings (token เข้ารหัส)
 │   ├── renderer/               # React UI
 │   │   ├── App.tsx             # Root component + routing
 │   │   ├── pages/
-│   │   │   ├── Dashboard.tsx   # หน้า MR list (2 tabs)
-│   │   │   └── Settings.tsx    # หน้า config
+│   │   │   ├── Dashboard.tsx   # หน้า MR list (My Reviews, All Open)
+│   │   │   ├── TeamReport.tsx  # หน้า MR ของทีม
+│   │   │   ├── Settings.tsx    # หน้า config
+│   │   │   └── Changelog.tsx   # หน้าแสดงประวัติการอัปเดต
 │   │   └── components/
 │   │       └── MRCard.tsx      # การ์ดแสดง MR แต่ละรายการ
 │   ├── shared/
