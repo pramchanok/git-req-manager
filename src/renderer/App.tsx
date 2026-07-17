@@ -301,7 +301,7 @@ export default function App() {
             <Pin size={10} className={isPinned ? 'fill-current transform rotate-45' : ''} />
           </button>
           <button
-            onClick={() => window.close()}
+            onClick={() => window.electronAPI.hideWindow()}
             className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-600 hover:text-white text-gray-400 hover:text-white transition-colors text-[10px]"
             title="Hide to tray"
           >

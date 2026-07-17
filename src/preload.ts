@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-owner-groups'),
   setPinned: (pinned: boolean): Promise<void> =>
     ipcRenderer.invoke('set-pinned', pinned),
+  hideWindow: (): Promise<void> =>
+    ipcRenderer.invoke('hide-window'),
   onAppStateUpdated: (callback: (state: AppState) => void) => {
     ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
     return () => ipcRenderer.removeAllListeners('app-state-updated')

@@ -449,6 +449,12 @@ function setupIPC(): void {
     }
   })
 
+  ipcMain.handle('hide-window', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      hideWindow(mainWindow)
+    }
+  })
+
   ipcMain.handle('save-settings', (_event, settings: Settings) => {
     saveSettings(settings)
 

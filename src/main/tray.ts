@@ -254,10 +254,13 @@ function showWindow(win: BrowserWindow): void {
     }
   } else {
     // setAlwaysOnTop is needed on Windows to bypass focus-stealing prevention
+    const wasAlwaysOnTop = win.isAlwaysOnTop()
     win.setAlwaysOnTop(true)
     win.show()
     win.focus()
-    win.setAlwaysOnTop(false)
+    if (!wasAlwaysOnTop) {
+      win.setAlwaysOnTop(false)
+    }
   }
 }
 
