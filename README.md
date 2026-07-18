@@ -61,7 +61,7 @@ Desktop app สำหรับติดตาม GitLab Merge Requests ที่
 1. เข้า GitLab → **User Settings** → **Access Tokens**
 2. กด **Add new token**
 3. ตั้งชื่อ เช่น `mr-manager`
-4. เลือก Scope: ติ๊กแค่ **`read_api`** เท่านั้น
+4. เลือก Scope: ติ๊ก **`api`** (จำเป็นสำหรับฟีเจอร์ approve / merge / comment ในแอป — ถ้าต้องการแค่ดูอย่างเดียวใช้ `read_api` ได้ แต่ฟีเจอร์ review ในแอปจะใช้ไม่ได้)
 5. กด **Create personal access token**
 6. **คัดลอก token ทันที** (จะไม่สามารถดูได้อีก)
 
@@ -74,11 +74,12 @@ Desktop app สำหรับติดตาม GitLab Merge Requests ที่
 |------|---------|---------|
 | **GitLab URL** | `https://gitlab.com` | URL ของ GitLab (ใส่ของ self-hosted ได้) |
 | **Personal Access Token** | `glpat-xxxx...` | Token ที่สร้างในขั้นตอนที่ 1 |
-| **Refresh Interval** | `5` | ดึงข้อมูลทุกกี่นาที (กรณีไม่ได้ใช้ Webhook) |
 | **Project IDs** | *(ว่างไว้)* | ระบุ project ID ถ้าอยากจำกัด scope (ถ้าว่างจะดึงจากทุก repo) |
 | **Webhook Enabled** | `เปิด` | เปิดใช้งานการอัปเดตแบบ Real-time |
-| **Use Cloudflare Tunnel** | `เปิด` | สร้าง Tunnel อัตโนมัติ (เหมาะสำหรับเครื่องที่ไม่มี Public IP) |
+| **Custom Webhook URL** | `https://.../gitlab-webhook` | URL ของ relay server ที่รับ event จาก GitLab |
 | **Team/Owner Groups** | `123, 456` | กรอก Group ID สำหรับดู Team Report |
+
+> ตัวเลือก **Refresh Interval** (polling) และ **Cloudflare Tunnel** ถูกซ่อนไว้ในเวอร์ชันปัจจุบัน (โค้ดยังอยู่ — เปิดคืนได้ผ่าน feature flags ใน `Settings.tsx`)
 
 3. กด **Save & Connect**
 
@@ -252,9 +253,10 @@ gitlab-req-manager/
 ├── package.json
 ├── tsconfig.json               # TypeScript config (renderer)
 ├── tsconfig.main.json          # TypeScript config (main process)
-├── vite.config.ts              # Vite config (renderer build)
-└── electron-builder.config.ts  # Packaging config
+└── vite.config.ts              # Vite config (renderer build)
 ```
+
+> การตั้งค่า packaging (electron-builder) อยู่ใน `package.json` ฟิลด์ `"build"`
 
 ---
 
@@ -267,10 +269,10 @@ A: รองรับ ใส่ URL ของ GitLab instance ตัวเอง
 A: Token ถูกเข้ารหัสด้วย OS-level encryption (`safeStorage` ของ Electron) ก่อนบันทึก ไม่ได้เก็บเป็น plain text
 
 **Q: ต้องการ permission อะไรใน GitLab?**  
-A: ต้องการ scope `read_api` เท่านั้น app ไม่ได้ write หรือแก้ไขข้อมูลใดๆ
+A: แนะนำ scope `api` เพราะแอปมีฟีเจอร์ approve, merge, close และ comment ใน MR ได้ (ถ้าใช้ `read_api` จะดูข้อมูลได้อย่างเดียว ฟีเจอร์ review จะใช้ไม่ได้)
 
 **Q: All Open MRs แสดงได้กี่รายการ?**  
-A: สูงสุด 100 MR ล่าสุด (เรียงตาม GitLab API default)
+A: แสดงทั้งหมด — app ดึงครบทุกหน้าจาก GitLab API (pagination หน้าละ 100 รายการ)
 
 **Q: ปิดหน้าต่างแล้ว app หายไปไหน?**  
 A: app ยังทำงานอยู่ใน system tray มองหา icon 🦊 ใน notification area แล้วคลิกเพื่อเปิดกลับมา

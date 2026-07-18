@@ -48,7 +48,11 @@ export const CustomDiffViewer: React.FC<CustomDiffViewerProps> = ({ diffString, 
     if (Prism.languages[lang]) {
       return Prism.highlight(code, Prism.languages[lang], lang)
     }
+    // Fallback: escape HTML ก่อนเสมอ เพราะผลลัพธ์ถูกใช้กับ dangerouslySetInnerHTML
     return code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
   }
 
   const renderInlineChange = (change: Change, i: number) => {

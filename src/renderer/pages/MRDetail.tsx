@@ -1,63 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
-import type { MergeRequest, MRDiff, MRDiscussion, MRNote } from '../../shared/types'
+import type { GitLabUser, MergeRequest, MRDiff, MRDiscussion, MRAwardEmoji } from '../../shared/types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import parseDiff from 'parse-diff'
-import { CustomDiffViewer } from '../components/CustomDiffViewer'
 import { CommitDiffModal } from '../components/CommitDiffModal'
-import { buildFileTree, FileTreeNode } from '../utils/pathTree'
-import { MessageSquare, User, GitCommit, Settings, Check, X, FileText, Folder, Eye } from 'lucide-react'
+import { buildFileTree } from '../utils/pathTree'
+import MRHeader, { MRDetailTab } from '../components/mr-detail/MRHeader'
+import FilesSidebar from '../components/mr-detail/FilesSidebar'
+import DiffList from '../components/mr-detail/DiffList'
+import AwardEmojiBar from '../components/mr-detail/AwardEmojiBar'
+import DiscussionThread from '../components/mr-detail/DiscussionThread'
+import CommentComposer from '../components/mr-detail/CommentComposer'
+import MRActionBar, { MRAction } from '../components/mr-detail/MRActionBar'
+import CloseConfirmModal from '../components/mr-detail/CloseConfirmModal'
 
-import { marked } from 'marked'
-import MDEditor, { commands } from '@uiw/react-md-editor'
 import '@uiw/react-md-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
-import data from '@emoji-mart/data'
-import Picker from '@emoji-mart/react'
-
-const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) => {
-  const [expanded, setExpanded] = useState(true)
-  
-  if (node.isDirectory) {
-    return (
-      <div>
-        <div 
-          className="flex items-center gap-1.5 py-1 px-2 hover:bg-white/5 cursor-pointer text-gray-300 select-none rounded"
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          onClick={() => setExpanded(!expanded)}
-        >
-          <svg className={`w-3.5 h-3.5 text-gray-500 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-          <span className="text-xs truncate">{node.name}</span>
-        </div>
-        {expanded && node.children?.map((child, i) => (
-          <FileTreeNodeView key={i} node={child} depth={depth + 1} />
-        ))}
-      </div>
-    )
-  }
-
-  return (
-    <div 
-      className={`flex items-center justify-between py-1 px-2 hover:bg-white/5 cursor-pointer select-none rounded group ${node.isViewed ? 'opacity-50' : ''}`}
-      style={{ paddingLeft: `${depth * 12 + 20}px` }}
-      onClick={() => {
-        document.getElementById(`diff-${node.path}`)?.scrollIntoView({ behavior: 'smooth' })
-      }}
-    >
-      <div className="flex items-center gap-1.5 overflow-hidden">
-        <svg className="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-        <span className={`text-xs truncate ${node.isViewed ? 'line-through text-gray-500' : 'text-gray-300'}`}>{node.name}</span>
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0 opacity-100 transition-opacity">
-        {(node.additions ?? 0) > 0 && <span className="text-[10px] text-green-400">+{node.additions}</span>}
-        {(node.deletions ?? 0) > 0 && <span className="text-[10px] text-red-400">-{node.deletions}</span>}
-        {node.isViewed && <svg className="w-3 h-3 text-orange-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-      </div>
-    </div>
-  )
-}
 
 interface MRDetailProps {
   projectId: number
@@ -67,11 +26,9 @@ interface MRDetailProps {
   onToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
-type Tab = 'overview' | 'changes'
-
 export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast }: MRDetailProps) {
   const [mr, setMR] = useState<MergeRequest | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [activeTab, setActiveTab] = useState<MRDetailTab>('overview')
   const [diffs, setDiffs] = useState<MRDiff[]>([])
   const [discussions, setDiscussions] = useState<MRDiscussion[]>([])
   const [loadingDiffs, setLoadingDiffs] = useState(false)
@@ -79,15 +36,16 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
   const [processingAction, setProcessingAction] = useState(false)
+  const [removeSourceBranch, setRemoveSourceBranch] = useState(true)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(288) // 72 * 4 = 288px default
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [diffViewMode, setDiffViewMode] = useState<'inline' | 'split'>('inline')
   const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  const [showReactionPicker, setShowReactionPicker] = useState(false)
-  
+  const [awardEmojis, setAwardEmojis] = useState<MRAwardEmoji[]>([])
+  const [currentUser, setCurrentUser] = useState<GitLabUser | null>(null)
+
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
     try {
@@ -141,9 +99,6 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     return stats
   }, [diffs])
 
-  const [awardEmojis, setAwardEmojis] = useState<import('../../shared/types').MRAwardEmoji[]>([])
-  const [currentUser, setCurrentUser] = useState<import('../../shared/types').GitLabUser | null>(null)
-
   const fileTree = useMemo(() => {
     return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
   }, [diffs, viewedFiles, diffStats])
@@ -191,11 +146,11 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
           window.electronAPI.getAppState(),
           window.electronAPI.getMRApprovals(projectId, mrIid)
         ])
-        
+
         if (mrData && appState.currentUser) {
           mrData.hasApproved = approvals.approved_by.some(a => a.user.id === appState.currentUser?.id)
         }
-        
+
         setMR(mrData)
         setCurrentUser(appState.currentUser)
       } catch (err) {
@@ -207,7 +162,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     fetchDiscussions()
     fetchDiffs()
     fetchAwardEmojis()
-    
+
     const interval = setInterval(() => {
       fetchDiscussions()
       fetchAwardEmojis()
@@ -231,37 +186,19 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
-  const getEmojiChar = (name: string) => {
-    if (name === 'thumbsup' || name === '+1') return '👍'
-    if (name === 'thumbsdown' || name === '-1') return '👎'
-    try {
-      const emojiData = (data as any).emojis[name]
-      if (emojiData && emojiData.skins && emojiData.skins[0]) {
-        return emojiData.skins[0].native
-      }
-      for (const key of Object.keys((data as any).emojis || {})) {
-        const e = (data as any).emojis[key]
-        if (e.id === name || (e.shortcodes && e.shortcodes.includes(`:${name}:`))) {
-          return e.skins[0].native
-        }
-      }
-    } catch (e) {}
-    return `:${name}:`
-  }
-
   const toggleAwardEmoji = async (emojiName: string) => {
     if (!currentUser) {
       onToast('User not loaded yet. Try again later.', 'error')
       return
     }
-    
+
     // Normalize names from emoji picker
     if (emojiName === '+1') emojiName = 'thumbsup'
     if (emojiName === '-1') emojiName = 'thumbsdown'
 
     try {
       const existing = awardEmojis.find(a => a.name === emojiName && a.user.id === currentUser.id)
-      
+
       if (!existing && (emojiName === 'thumbsup' || emojiName === 'thumbsdown')) {
         const oppositeName = emojiName === 'thumbsup' ? 'thumbsdown' : 'thumbsup'
         const oppositeExisting = awardEmojis.find(a => a.name === oppositeName && a.user.id === currentUser.id)
@@ -294,7 +231,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     return groups
   }, [awardEmojis, currentUser])
 
-  const handleAction = async (action: 'approve' | 'unapprove' | 'merge' | 'close' | 'cancel-pipeline') => {
+  const handleAction = async (action: MRAction) => {
+    if (!mr) return
     setProcessingAction(true)
     try {
       if (action === 'approve') {
@@ -305,7 +243,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
         onToast('MR Approval Revoked')
       } else if (action === 'merge') {
         await window.electronAPI.mergeMR(projectId, mrIid, {
-          mergeWhenPipelineSucceeds: mr.pipelineStatus === 'running'
+          mergeWhenPipelineSucceeds: mr.pipelineStatus === 'running',
+          removeSourceBranch,
         })
         onToast(mr.pipelineStatus === 'running' ? 'Auto-Merge Set' : 'MR Merged')
       } else if (action === 'close') {
@@ -354,184 +293,26 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
 
   return (
     <div className="flex flex-col h-screen bg-[#0d1117] text-gray-200 font-sans selection:bg-orange-500/30 selection:text-orange-200">
-      {/* Glassmorphic Header */}
-      <header className="sticky top-0 z-20 bg-[#0d1117]/80 backdrop-blur-xl border-b border-gray-800 shrink-0">
-        <div className="px-6 py-5">
-          <div className="flex flex-col gap-1">
-            
-            {/* Top Meta Row: Project & Author */}
-            <div className="flex items-center gap-3 text-xs mb-1">
-              <div className="inline-flex items-center gap-1.5 bg-[#161b22] border border-gray-700/60 px-2.5 py-1 rounded-md text-gray-300 shadow-sm">
-                <Folder className="w-3.5 h-3.5 text-orange-500/80" />
-                <span title={mr.projectNamespace} className="truncate max-w-[150px] opacity-60">{mr.projectNamespace}</span>
-                <span className="opacity-40">/</span>
-                <span className="truncate max-w-[200px] font-medium">{mr.projectName}</span>
-              </div>
-              <div className="w-1 h-1 bg-gray-700 rounded-full" />
-              <div className="flex items-center gap-1.5 text-gray-400">
-                <img src={mr.author.avatarUrl} alt={mr.author.name} className="w-4 h-4 rounded-full border border-gray-700" />
-                <span className="font-medium text-gray-300">{mr.author.name}</span>
-                <span className="opacity-70">requests to merge</span>
-              </div>
-            </div>
-
-            {/* Title Row */}
-            <div className="mb-3">
-              <h1 className="text-xl font-bold text-gray-100 leading-snug m-0">
-                {mr.title} <span className="text-gray-500 font-mono text-lg font-medium ml-1.5">!{mr.iid}</span>
-              </h1>
-            </div>
-
-            {/* Bottom Meta Row: Branches & Badges */}
-            <div className="flex items-center flex-wrap gap-3">
-              {/* Branches */}
-              <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-gray-900/60 px-2.5 py-1.5 rounded-md border border-gray-800/80 shadow-sm">
-                <GitCommit className="w-3.5 h-3.5 text-gray-500" />
-                <span className="font-mono text-orange-300/90">{mr.sourceBranch}</span>
-                <span className="text-gray-600 px-1">→</span>
-                <span className="font-mono text-orange-300/90">{mr.targetBranch}</span>
-              </div>
-
-              <div className="w-[1px] h-4 bg-gray-800" />
-
-              {/* Status Badge */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {mr.draft && (
-                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-bold px-2.5 py-1 rounded-md tracking-wide shadow-sm">
-                    DRAFT
-                  </span>
-                )}
-                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md tracking-wide shadow-sm border ${
-                  mr.state === 'opened' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                  mr.state === 'merged' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                  'bg-red-500/10 text-red-400 border-red-500/20'
-                }`}>
-                  {mr.state.toUpperCase()}
-                </span>
-
-                {/* Pipeline */}
-                {mr.pipelineStatus && (
-                  <div className="flex items-center gap-1.5">
-                    <button 
-                      onClick={() => mr.pipelineWebUrl && window.electronAPI.openUrl(mr.pipelineWebUrl)}
-                      title="View Pipeline on GitLab"
-                      className={`text-[11px] font-bold px-2.5 py-1 rounded-md flex items-center gap-1.5 border transition-all shadow-sm ${
-                        mr.pipelineStatus === 'success' ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500/20' :
-                        mr.pipelineStatus === 'failed' ? 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20' :
-                        mr.pipelineStatus === 'running' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20' :
-                        'text-gray-400 bg-gray-500/10 border-gray-500/20 hover:bg-gray-500/20'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        mr.pipelineStatus === 'success' ? 'bg-green-400' :
-                        mr.pipelineStatus === 'failed' ? 'bg-red-400' :
-                        mr.pipelineStatus === 'running' ? 'bg-blue-400 animate-pulse' :
-                        'bg-gray-400'
-                      }`} />
-                      PIPELINE {mr.pipelineStatus.toUpperCase()}
-                    </button>
-                    
-                    {mr.pipelineStatus === 'running' && (
-                      <button 
-                        onClick={() => handleAction('cancel-pipeline')}
-                        title="Cancel running pipeline"
-                        disabled={processingAction}
-                        className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-md border border-gray-700 bg-gray-800 text-gray-400 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/10 transition-colors disabled:opacity-50 shadow-sm"
-                      >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        CANCEL
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Labels */}
-                {mr.labels?.length > 0 && <div className="w-[1px] h-4 bg-gray-800 mx-1" />}
-                {mr.labels?.map((label, idx) => (
-                  <span 
-                    key={idx}
-                    className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-gray-700/50 shadow-sm transition-transform hover:scale-105 cursor-default"
-                    style={{ backgroundColor: label.color, color: label.textColor || '#fff' }}
-                    title={label.name}
-                  >
-                    {label.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex px-6 gap-6 text-sm font-medium">
-          <button
-            className={`pb-2 border-b-2 transition-colors ${
-              activeTab === 'overview' 
-                ? 'border-orange-500 text-orange-400' 
-                : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('overview')}
-          >
-            Overview
-          </button>
-          <button
-            className={`pb-2 border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'changes' 
-                ? 'border-orange-500 text-orange-400' 
-                : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('changes')}
-          >
-            Changes 
-            <span className={`text-[10px] py-0.5 px-2 rounded-full ${
-              activeTab === 'changes' ? 'bg-orange-500/20 text-orange-300' : 'bg-gray-800 text-gray-400'
-            }`}>
-              {diffs.length}
-            </span>
-          </button>
-        </div>
-      </header>
+      <MRHeader
+        mr={mr}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        diffsCount={diffs.length}
+        processingAction={processingAction}
+        onCancelPipeline={() => handleAction('cancel-pipeline')}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative flex">
         {activeTab === 'changes' && (
-          <div 
-            className={`shrink-0 border-r border-gray-800 bg-[#0d1117] flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-12' : ''}`}
-            style={{ width: sidebarCollapsed ? undefined : sidebarWidth }}
-          >
-            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-              {!sidebarCollapsed && <span className="text-xs font-semibold text-gray-400">Files</span>}
-              <div className="flex items-center gap-2">
-                {!sidebarCollapsed && <span className="text-xs text-gray-500">{diffs.length}</span>}
-                <button 
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                  className="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded hover:bg-gray-800"
-                  title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={sidebarCollapsed ? "M13 5l7 7-7 7M5 5l7 7-7 7" : "M11 19l-7-7 7-7m8 14l-7-7 7-7"} />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                {fileTree.map((node, i) => (
-                  <FileTreeNodeView key={i} node={node} />
-                ))}
-              </div>
-            )}
-            
-            {/* Resizer Handle */}
-            {!sidebarCollapsed && (
-              <div 
-                className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-orange-500/50 active:bg-orange-500 z-10 transition-colors"
-                style={{ left: sidebarWidth - 2 }}
-                onMouseDown={() => setIsResizing(true)}
-              />
-            )}
-          </div>
+          <FilesSidebar
+            fileTree={fileTree}
+            filesCount={diffs.length}
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={() => setSidebarCollapsed(!sidebarCollapsed)}
+            width={sidebarWidth}
+            onStartResize={() => setIsResizing(true)}
+          />
         )}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
@@ -555,378 +336,71 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
               </div>
             )}
             {activeTab === 'overview' ? (
-            <div className="space-y-8 animate-fade-in">
-              {/* Description Box */}
-              <div className="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm">
-                <h3 className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-                  Description
-                </h3>
-                {mr.description ? (
-                  <div className="prose prose-invert prose-orange max-w-none text-sm text-gray-300 leading-relaxed marker:text-orange-500 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                      {mr.description}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <p className="text-gray-500 italic text-sm">No description provided.</p>
-                )}
-              </div>
-
-              {/* Award Emojis */}
-              <div className="flex flex-wrap items-center gap-2 mt-4 relative">
-                {['thumbsup', 'thumbsdown', ...Object.keys(emojiGroups).filter(name => name !== 'thumbsup' && name !== 'thumbsdown')].map(name => {
-                  const group = emojiGroups[name]
-                  if (!group && (name !== 'thumbsup' && name !== 'thumbsdown')) return null
-                  const count = group?.count || 0
-                  const hasVoted = group?.hasVoted || false
-                  if (count === 0 && name !== 'thumbsup' && name !== 'thumbsdown') return null
-
-                  const nativeChar = getEmojiChar(name)
-
-                  return (
-                    <button
-                      key={name}
-                      onClick={() => toggleAwardEmoji(name)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors border ${hasVoted ? 'bg-[#1d4ed8]/20 border-[#1d4ed8] text-blue-400' : 'bg-[#21262d] border-transparent text-gray-400 hover:bg-[#30363d]'}`}
-                    >
-                      <span className="text-base leading-none">{nativeChar}</span>
-                      <span>{count}</span>
-                    </button>
-                  )
-                })}
-                
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowReactionPicker(prev => !prev)
-                  }}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#21262d] border border-transparent text-gray-400 hover:bg-[#30363d] transition-colors"
-                  title="Add reaction"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-
-                {showReactionPicker && (
-                  <div className="absolute top-10 left-0 z-50 shadow-2xl border border-gray-700 rounded-lg overflow-hidden">
-                    <Picker 
-                      data={data} 
-                      theme="dark"
-                      onEmojiSelect={(emoji: any) => {
-                        toggleAwardEmoji(emoji.id)
-                        setShowReactionPicker(false)
-                      }}
-                      onClickOutside={() => setShowReactionPicker(false)}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Discussion Thread */}
-              <div>
-                <h3 className="text-xs font-bold text-gray-500 mb-6 uppercase tracking-widest flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg>
-                  Activity & Discussions
-                </h3>
-                
-                {loadingDiscussions ? (
-                  <div className="flex justify-center py-8">
-                    <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : discussions.length === 0 ? (
-                  <div className="text-center py-12 bg-[#161b22] border border-gray-800 border-dashed rounded-xl">
-                    <p className="text-gray-500 text-sm">No discussions yet. Be the first to comment!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {discussions.map(d => (
-                      <div key={d.id} className="relative group">
-                        {d.notes.length > 1 && (
-                          <div className="absolute top-10 bottom-4 left-5 w-[2px] bg-gray-800 rounded-full" />
-                        )}
-                        <div className="space-y-4">
-                          {d.notes.map((note: MRNote, index: number) => {
-                            if (note.system) {
-                              return (
-                                <div key={note.id} className={`flex items-center gap-3 relative z-10 py-1 ${index > 0 ? 'ml-12' : 'ml-2'}`}>
-                                  <div className="w-6 h-6 rounded-full bg-gray-800/50 flex items-center justify-center border border-gray-700/50 shrink-0">
-                                    <GitCommit className="w-3 h-3 text-gray-500" />
-                                  </div>
-                                  <div className="flex-1 flex flex-col gap-1 text-sm text-gray-400">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium text-gray-300">{note.author.name}</span>
-                                      <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
-                                    </div>
-                                    <div 
-                                      className="prose prose-invert prose-sm max-w-none prose-p:my-0 [&_a]:inline-flex [&_a]:items-center [&_a]:gap-1 [&_a]:bg-[#21262d] [&_a]:border [&_a]:border-gray-700 hover:[&_a]:border-gray-500 [&_a]:text-gray-200 [&_a]:px-3 [&_a]:py-1.5 [&_a]:rounded-md [&_a]:text-[12px] [&_a]:font-semibold hover:[&_a]:bg-[#30363d] [&_a]:no-underline [&_a]:transition-colors [&_a]:shadow-sm [&_a]:cursor-pointer [&_ul]:my-2 [&_ul]:list-none [&_ul]:pl-0 [&_li]:my-1.5 [&_li]:bg-[#161b22] [&_li]:border [&_li]:border-gray-800 [&_li]:rounded-lg [&_li]:px-3 [&_li]:py-2.5 [&_li]:text-gray-300 [&_li]:font-mono [&_li]:text-[13px] [&_li]:shadow-sm"
-                                      dangerouslySetInnerHTML={{ __html: marked(note.body) }}
-                                      onClick={(e) => {
-                                        const target = e.target as HTMLElement;
-                                        if (target.tagName === 'A') {
-                                          e.preventDefault();
-                                          const href = target.getAttribute('href');
-                                          if (href) {
-                                            if (href.includes('/diffs?')) {
-                                              const hashes = Array.from(note.body.matchAll(/[a-f0-9]{8,40}/gi)).map(m => m[0]);
-                                              const urlStartShaMatch = href.match(/start_sha=([a-f0-9]+)/i);
-                                              const startSha = urlStartShaMatch ? urlStartShaMatch[1] : undefined;
-                                              const commitHashes = hashes.filter(h => h.length >= 8 && h !== startSha && !/^\d+$/.test(h));
-
-                                              if (commitHashes.length >= 2) {
-                                                setActiveCommitDiff({ fromSha: commitHashes[0], toSha: commitHashes[commitHashes.length - 1] });
-                                                return;
-                                              } else if (commitHashes.length === 1) {
-                                                setActiveCommitDiff({ toSha: commitHashes[0] });
-                                                return;
-                                              }
-                                            }
-                                            let fullUrl = href;
-                                            if (href.startsWith('/')) {
-                                              try {
-                                                const origin = new URL(mr.webUrl).origin;
-                                                fullUrl = origin + href;
-                                              } catch {}
-                                            }
-                                            window.electronAPI.openUrl(fullUrl);
-                                          }
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              )
-                            }
-                            return (
-                              <div key={note.id} className={`flex gap-4 relative z-10 ${index > 0 ? 'ml-12' : ''}`}>
-                                <img 
-                                  src={note.author.avatarUrl} 
-                                  alt={note.author.name} 
-                                  className={`rounded-full bg-gray-800 border border-gray-700 object-cover ${index === 0 ? 'w-10 h-10' : 'w-8 h-8 mt-1'}`}
-                                />
-                                <div className="flex-1 bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden transition-colors hover:border-gray-700 shadow-sm">
-                                  <div className="bg-gray-800/30 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                                    <span className="font-semibold text-gray-200 text-sm">{note.author.name}</span>
-                                    <span className="text-gray-500 text-xs">{new Date(note.createdAt).toLocaleString()}</span>
-                                  </div>
-                                  <div className="px-4 py-3 text-sm text-gray-300 prose prose-invert prose-orange max-w-none prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Comment Input */}
-              <div className="mt-8 flex gap-4">
-                <div className="flex-1 rounded-xl overflow-visible transition-colors relative">
-                  <div data-color-mode="dark" className="border border-gray-700 rounded-t-xl overflow-hidden">
-                    <MDEditor
-                      value={commentText}
-                      onChange={val => setCommentText(val || '')}
-                      preview="edit"
-                      height={200}
-                      className="!bg-[#161b22] !border-0"
-                      textareaProps={{
-                        placeholder: "Write your thoughts...",
-                      }}
-                      commands={[
-                        ...commands.getCommands(),
-                        commands.divider,
-                        {
-                          name: 'emoji',
-                          keyCommand: 'emoji',
-                          buttonProps: { 'aria-label': 'Insert emoji', title: 'Insert emoji' },
-                          icon: (
-                            <svg width="14" height="14" viewBox="0 0 20 20">
-                              <path d="M10 20a10 10 0 1 1 0-20 10 10 0 0 1 0 20zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm-3 6a4 4 0 0 1-3.46-2h6.92A4 4 0 0 1 10 15z" fill="currentColor"/>
-                            </svg>
-                          ),
-                          execute: () => {
-                            setShowEmojiPicker(prev => !prev)
-                          }
-                        }
-                      ]}
-                    />
-                  </div>
-                  
-                  {showEmojiPicker && (
-                    <div className="absolute top-12 left-[340px] z-50 shadow-[0_10px_50px_rgba(0,0,0,0.7)] border border-gray-700 rounded-lg overflow-hidden">
-                      <Picker 
-                        data={data} 
-                        theme="dark"
-                        onEmojiSelect={(emoji: any) => {
-                          setCommentText(prev => prev + emoji.native)
-                          setShowEmojiPicker(false)
-                        }}
-                        onClickOutside={() => setShowEmojiPicker(false)}
-                      />
+              <div className="space-y-8 animate-fade-in">
+                {/* Description Box */}
+                <div className="bg-[#161b22] border border-gray-800 rounded-xl p-5 shadow-sm">
+                  <h3 className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                    Description
+                  </h3>
+                  {mr.description ? (
+                    <div className="prose prose-invert prose-orange max-w-none text-sm text-gray-300 leading-relaxed marker:text-orange-500 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                        {mr.description}
+                      </ReactMarkdown>
                     </div>
+                  ) : (
+                    <p className="text-gray-500 italic text-sm">No description provided.</p>
                   )}
-
-                  <div className="bg-[#161b22] px-4 py-2 border border-t-0 border-gray-700 rounded-b-xl flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Supports Markdown</span>
-                    <button
-                      onClick={handleAddComment}
-                      disabled={!commentText.trim() || submittingComment}
-                      className="bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold py-1 px-5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(234,88,12,0.2)] hover:shadow-[0_0_20px_rgba(234,88,12,0.4)]"
-                    >
-                      {submittingComment ? 'Posting...' : 'Comment'}
-                    </button>
-                  </div>
                 </div>
+
+                {/* Award Emojis */}
+                <AwardEmojiBar emojiGroups={emojiGroups} onToggle={toggleAwardEmoji} />
+
+                {/* Discussion Thread */}
+                <DiscussionThread
+                  discussions={discussions}
+                  loading={loadingDiscussions}
+                  mrWebUrl={mr.webUrl}
+                  onOpenCommitDiff={setActiveCommitDiff}
+                />
+
+                {/* Comment Input */}
+                <CommentComposer
+                  value={commentText}
+                  onChange={setCommentText}
+                  submitting={submittingComment}
+                  onSubmit={handleAddComment}
+                />
               </div>
-            </div>
-          ) : (
-            <div className="space-y-6 animate-fade-in">
-              {loadingDiffs ? (
-                 <div className="flex justify-center py-12">
-                   <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                 </div>
-              ) : diffs.length === 0 ? (
-                <div className="text-center py-12 bg-[#161b22] border border-gray-800 border-dashed rounded-xl">
-                  <p className="text-gray-500 text-sm">No changes found in this merge request.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {diffs.map((diff, index) => {
-                    const isViewed = viewedFiles.has(diff.newPath)
-                    const stats = diffStats.get(diff.newPath)
-                    return (
-                    <div id={`diff-${diff.newPath}`} key={index} className={`bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-all`}>
-                      {/* File Header */}
-                      <div className="bg-gray-800/50 px-4 py-2 text-sm font-mono text-gray-300 border-b border-gray-800 flex justify-between items-center group">
-                        <div className="flex items-center gap-3">
-                          <svg className="w-4 h-4 text-gray-500 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          <span className={isViewed ? 'line-through text-gray-500' : ''}>{diff.newPath}</span>
-                          {stats && (
-                            <span className="flex items-center gap-1.5 ml-2">
-                              {stats.additions > 0 && <span className="text-[10px] text-green-400 font-bold">+{stats.additions}</span>}
-                              {stats.deletions > 0 && <span className="text-[10px] text-red-400 font-bold">-{stats.deletions}</span>}
-                            </span>
-                          )}
-                          {diff.newFile && <span className="bg-green-500/10 text-green-400 text-[10px] px-2 py-0.5 rounded-full uppercase font-bold border border-green-500/20">New</span>}
-                          {diff.deletedFile && <span className="bg-red-500/10 text-red-400 text-[10px] px-2 py-0.5 rounded-full uppercase font-bold border border-red-500/20">Deleted</span>}
-                        </div>
-                        <label className="flex items-center gap-2 text-xs font-sans text-gray-400 hover:text-gray-200 cursor-pointer select-none">
-                          Viewed
-                          <input 
-                            type="checkbox" 
-                            checked={isViewed}
-                            onChange={() => toggleViewedFile(diff.newPath)}
-                            className="w-4 h-4 rounded border-gray-600 bg-gray-900 text-orange-500 focus:ring-orange-500/50 cursor-pointer" 
-                          />
-                        </label>
-                      </div>
-                      {/* Diff Viewer Wrapper */}
-                      {!isViewed && (
-                        <CustomDiffViewer diffString={diff.diff} viewMode={diffViewMode} />
-                      )}
-                    </div>
-                  )
-                })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-
-      {/* Glassmorphic Sticky Action Bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-[#0d1117]/80 backdrop-blur-xl border-t border-gray-800 py-2 px-4 z-30 shadow-[0_-20px_40px_-20px_rgba(0,0,0,0.5)]">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-6">
-            <button
-              onClick={onBack}
-              className="text-gray-400 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-              Back
-            </button>
-            <div className="h-4 w-px bg-gray-700" />
-            <button
-              onClick={() => window.electronAPI.openUrl(mr.webUrl)}
-              className="text-orange-400 hover:text-orange-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-              View on GitLab
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {mr.state === 'opened' && (
-              <>
-                <button
-                  onClick={() => setShowCloseConfirm(true)}
-                  disabled={processingAction || (currentUser?.id !== mr.author.id && !mr.userCanMerge)}
-                  title={currentUser?.id !== mr.author.id && !mr.userCanMerge ? "You don't have permission to close this MR" : "Close MR"}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 mr-3 ${
-                    currentUser?.id !== mr.author.id && !mr.userCanMerge
-                      ? 'text-gray-500 border-gray-700 bg-gray-800/50 cursor-not-allowed'
-                      : 'text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20 hover:border-red-500/50'
-                  }`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Close MR
-                </button>
-                <div className="h-4 w-px bg-gray-700 mr-3" />
-                
-                {mr.hasApproved ? (
-                  <button
-                    onClick={() => handleAction('unapprove')}
-                    disabled={processingAction}
-                    title="Revoke approval"
-                    className="text-xs font-semibold py-1.5 px-4 rounded-lg transition-all flex items-center gap-2 bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 disabled:opacity-50"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    Revoke approval
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleAction('approve')}
-                    disabled={processingAction || currentUser?.id === mr.author.id}
-                    title={currentUser?.id === mr.author.id ? "You cannot approve your own MR" : "Approve"}
-                    className={`text-xs font-semibold py-1.5 px-4 rounded-lg transition-all flex items-center gap-2 ${
-                      currentUser?.id === mr.author.id
-                        ? 'bg-gray-800/50 text-gray-500 border border-gray-700 cursor-not-allowed'
-                        : 'bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-500/30 disabled:opacity-50'
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    Approve
-                  </button>
-                )}
-                
-                <button
-                  onClick={() => handleAction('merge')}
-                  disabled={processingAction || mr.hasConflicts || mr.mergeWhenPipelineSucceeds || !mr.userCanMerge}
-                  className={`text-white text-xs font-semibold py-1.5 px-4 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] disabled:opacity-50 disabled:shadow-none flex items-center gap-2 border border-transparent ${
-                    !mr.userCanMerge
-                      ? 'bg-gray-800 text-gray-500 border-gray-700 shadow-none cursor-not-allowed'
-                      : mr.mergeWhenPipelineSucceeds
-                      ? 'bg-indigo-900/50 text-indigo-300 border-indigo-500/30 shadow-none'
-                      : mr.pipelineStatus === 'running'
-                      ? 'bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-400 disabled:border-gray-600'
-                      : 'bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-400 disabled:border-gray-600'
-                  }`}
-                  title={!mr.userCanMerge ? "You don't have permission to merge" : mr.hasConflicts ? 'Has conflicts' : mr.mergeWhenPipelineSucceeds ? 'Auto-merge already enabled' : mr.pipelineStatus === 'running' ? 'Merge when pipeline succeeds' : 'Merge'}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-                  {mr.mergeWhenPipelineSucceeds ? 'Auto-Merge Enabled' : mr.pipelineStatus === 'running' ? 'Auto-Merge' : 'Merge'}
-                </button>
-              </>
+            ) : (
+              <div className="space-y-6 animate-fade-in">
+                <DiffList
+                  diffs={diffs}
+                  loading={loadingDiffs}
+                  viewedFiles={viewedFiles}
+                  onToggleViewed={toggleViewedFile}
+                  diffStats={diffStats}
+                  viewMode={diffViewMode}
+                />
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Glassmorphic Sticky Action Bar */}
+      <MRActionBar
+        mr={mr}
+        currentUser={currentUser}
+        processingAction={processingAction}
+        removeSourceBranch={removeSourceBranch}
+        onRemoveSourceBranchChange={setRemoveSourceBranch}
+        onBack={onBack}
+        onAction={handleAction}
+        onRequestClose={() => setShowCloseConfirm(true)}
+      />
+
       {activeCommitDiff && (
         <CommitDiffModal
           projectId={projectId}
@@ -938,36 +412,13 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
 
       {/* Confirmation Modal for Close MR */}
       {showCloseConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#161b22] border border-red-900/50 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-red-600" />
-            <h3 className="text-xl font-bold text-gray-100 mb-2 flex items-center gap-2">
-              <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              Close Merge Request
-            </h3>
-            <p className="text-gray-400 text-sm mb-6">
-              Are you sure you want to close this Merge Request? This action will mark it as closed on GitLab and it will not be merged.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setShowCloseConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => {
-                  setShowCloseConfirm(false);
-                  handleAction('close');
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors shadow-[0_0_15px_rgba(220,38,38,0.3)] hover:shadow-[0_0_20px_rgba(220,38,38,0.5)] flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Yes, Close MR
-              </button>
-            </div>
-          </div>
-        </div>
+        <CloseConfirmModal
+          onCancel={() => setShowCloseConfirm(false)}
+          onConfirm={() => {
+            setShowCloseConfirm(false)
+            handleAction('close')
+          }}
+        />
       )}
     </div>
   )

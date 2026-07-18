@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.11.0] - 2026-07-18
+
+### คุณสมบัติใหม่ (New Features)
+
+- **เริ่มพร้อมเปิดเครื่องเป็นค่าเริ่มต้น (Launch at Startup by Default)**: เปิดใช้งานการเริ่มแอปอัตโนมัติพร้อมเปิดเครื่องเป็นค่าเริ่มต้น (มีผลกับเครื่องที่ติดตั้งอยู่แล้วครั้งเดียวหลังอัปเดต — ยังสามารถปิดเองได้ที่หน้า Settings ตามปกติ) พร้อมรองรับการลงทะเบียน Login Item บน macOS
+- **ตัวเลือกลบ Source Branch ตอน Merge**: เพิ่ม checkbox "Delete source branch" ข้างปุ่ม Merge ในหน้า MR Detail เลือกได้ว่าจะให้ลบ source branch หลัง merge หรือไม่ (ค่าเริ่มต้น: ลบ)
+- **แจ้งเตือน MR ถูก Merge แบบเรียลไทม์ผ่าน Relay Server**: โหมด Custom Webhook URL (relay) รองรับการแจ้งเตือน "MR ของเราถูก Merge" แบบทันทีแล้ว (ต้องอัปเดต relay server เป็นเวอร์ชันที่ส่ง `mrIid`/`authorId` มาด้วย)
+
+### การปรับปรุง (Improvements)
+
+- **ปรับหน้า Settings ให้เรียบง่ายขึ้น**: ซ่อนตัวเลือก Cloudflare Tunnel และ Refresh Interval (Polling) ออกจาก UI เนื่องจากปัจจุบันใช้ Custom Webhook URL เป็นหลัก (โค้ดยังอยู่ครบ เปิดคืนได้ผ่าน feature flags)
+- **Refactor โครงสร้างโค้ด Renderer ครั้งใหญ่**: แตกหน้า MRDetail, ReportDetail และ Settings ออกเป็น component ย่อยใน `components/mr-detail/`, `components/report/`, `components/settings/` พร้อมแยก logic สร้างรายงาน (Markdown/CSV) เป็น pure function ใน `utils/reportBuilder.ts` เพื่อให้ดูแลรักษาและเขียน test ได้ง่ายขึ้น (ไม่มีการเปลี่ยนแปลงพฤติกรรมการใช้งาน)
+
+### ความปลอดภัย (Security)
+
+- **ป้องกัน XSS ในการแสดงผล Markdown**: sanitize HTML ด้วย DOMPurify ทุกจุดที่ render เนื้อหาจาก GitLab (comment ใน MR, รายงาน, release notes) และ escape HTML ใน diff viewer
+- **จำกัดการเปิดลิงก์ภายนอก**: อนุญาตเฉพาะ URL แบบ `http:`/`https:` เท่านั้น (บล็อก `file://` และ protocol อื่น)
+- **ลดพื้นที่โจมตีของ Webhook**: โหมด relay ไม่เปิด local HTTP server อีกต่อไป และโหมด tunnel จะ generate secret ให้อัตโนมัติถ้ายังไม่ได้ตั้งค่า
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- แก้ไขปัญหาเปลี่ยน token/GitLab URL แล้วแอปยังจำ user เดิมค้างไว้จนกว่าจะ restart (reset cache ทันทีเมื่อบันทึก Settings)
+- แก้ไขการบันทึก token ล้มเหลวเงียบๆ บนเครื่องที่ OS keychain ใช้งานไม่ได้ (เช่น Linux ที่ไม่มี keyring) โดย fallback เป็นการเก็บแบบเข้ารหัส base64 พร้อมคำเตือน
+- อัปเดตเอกสาร: scope ของ Personal Access Token ที่ถูกต้องคือ `api` (จำเป็นสำหรับฟีเจอร์ approve/merge/comment)
+
+---
+
 ## [1.10.10] - 2026-07-17
 
 ### การแก้ไขข้อบกพร่อง (Bug Fixes)

@@ -1,134 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import type { MergeRequest, GitLabGroup } from '../../shared/types'
-
-// ── SVG Donut Chart Component ────────────────────────────────────────────────
-function DonutChart({ created, merged, reviewed }: { created: number; merged: number; reviewed: number }) {
-  const total = created + merged + reviewed
-
-  if (total === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 bg-gray-950/20 border border-white/5 rounded-2xl p-5">
-        <svg width="80" height="80" viewBox="0 0 36 36" className="animate-pulse">
-          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#27272a" strokeWidth="3" />
-        </svg>
-        <span className="text-[10px] text-gray-500 mt-3 font-bold uppercase tracking-wider">No Activity</span>
-      </div>
-    )
-  }
-
-  const createdPct = (created / total) * 100
-  const mergedPct = (merged / total) * 100
-  const reviewedPct = (reviewed / total) * 100
-
-  const strokeCreated = `${createdPct} ${100 - createdPct}`
-  const strokeMerged = `${mergedPct} ${100 - mergedPct}`
-  const strokeReviewed = `${reviewedPct} ${100 - reviewedPct}`
-
-  const offsetCreated = 100 - 25 // start at 12 o'clock
-  const offsetMerged = offsetCreated - createdPct
-  const offsetReviewed = offsetMerged - mergedPct
-
-  return (
-    <div className="relative flex items-center justify-center flex-shrink-0">
-      <svg width="110" height="110" viewBox="0 0 36 36">
-        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#09090b" strokeWidth="3.5" />
-        
-        {/* Reviewed Segment (Blue) */}
-        {reviewed > 0 && (
-          <circle
-            cx="18"
-            cy="18"
-            r="15.915"
-            fill="none"
-            stroke="#3b82f6"
-            strokeWidth="3.5"
-            strokeDasharray={strokeReviewed}
-            strokeDashoffset={offsetReviewed}
-            strokeLinecap="round"
-            className="transition-all duration-500"
-          />
-        )}
-
-        {/* Merged Segment (Green) */}
-        {merged > 0 && (
-          <circle
-            cx="18"
-            cy="18"
-            r="15.915"
-            fill="none"
-            stroke="#10b981"
-            strokeWidth="3.5"
-            strokeDasharray={strokeMerged}
-            strokeDashoffset={offsetMerged}
-            strokeLinecap="round"
-            className="transition-all duration-500"
-          />
-        )}
-
-        {/* Created Segment (Orange) */}
-        {created > 0 && (
-          <circle
-            cx="18"
-            cy="18"
-            r="15.915"
-            fill="none"
-            stroke="#f97316"
-            strokeWidth="3.5"
-            strokeDasharray={strokeCreated}
-            strokeDashoffset={offsetCreated}
-            strokeLinecap="round"
-            className="transition-all duration-500"
-          />
-        )}
-      </svg>
-      
-      <div className="absolute flex flex-col items-center justify-center">
-        <span className="text-xl font-black text-white tracking-tight">{total}</span>
-        <span className="text-[7px] font-bold text-gray-500 uppercase tracking-widest">Total</span>
-      </div>
-    </div>
-  )
-}
-
-// ── 7-Day Activity History Bar Chart Component ───────────────────────────────
-function ActivityBarChart({ data }: { data: { timestamp: number; dayLabel: string; dateLabel?: string; count: number }[] }) {
-  const maxVal = Math.max(...data.map((d) => d.count), 1)
-
-  return (
-    <div className="bg-gray-800/20 border border-white/5 rounded-2xl p-5 flex flex-col flex-1">
-      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">7-Day Activity History</span>
-      
-      {/* Set h-full on parents and h-16 container on bars to fix percentage height rendering */}
-      <div className="flex items-end justify-between h-28 px-1 gap-2">
-        {data.map((d, idx) => {
-          const heightPct = (d.count / maxVal) * 100
-          return (
-            <div key={idx} className="flex flex-col items-center justify-end flex-1 h-full group relative">
-              <span className="absolute -top-8 scale-0 group-hover:scale-100 transition-all bg-gray-950 border border-gray-800 text-[9px] font-bold text-orange-400 px-2 py-0.5 rounded-md shadow-xl pointer-events-none z-10 whitespace-nowrap">
-                {d.count} MRs {d.dateLabel ? `(${d.dateLabel})` : ''}
-              </span>
-
-              {/* Bar container of 64px height */}
-              <div className="w-full h-16 flex items-end justify-center mb-2">
-                <div 
-                  style={{ height: `${Math.max(heightPct, 8)}%` }} // Minimum 8% height so it is always visible
-                  className={`w-5 rounded-t transition-all duration-300 cursor-pointer ${
-                    d.count > 0 
-                      ? 'bg-gradient-to-t from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 shadow-md shadow-orange-600/5' 
-                      : 'bg-gray-800 hover:bg-gray-700'
-                  }`}
-                ></div>
-              </div>
-
-              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-wide">{d.dayLabel}</span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+import DonutChart from '../components/report/DonutChart'
+import ActivityBarChart from '../components/report/ActivityBarChart'
+import ReportMRCard from '../components/report/ReportMRCard'
+import { buildReportMarkdown, buildReportCSV } from '../utils/reportBuilder'
 
 // ── Main Page Component ──────────────────────────────────────────────────────
 export default function ReportDetail() {
@@ -365,54 +242,16 @@ export default function ReportDetail() {
   }
 
   // 6. Generate Markdown Content
-  const markdownContent = useMemo(() => {
-    const formatMRList = (mrs: MergeRequest[]) => {
-      if (mrs.length === 0) return '_No Merge Requests._\n'
-      return mrs
-        .map((mr, idx) => {
-          const stateBadge = mr.state === 'merged' ? '✅ Merged' : mr.state === 'closed' ? '❌ Closed' : '🔵 Open'
-          const dateStr = new Date(mr.createdAt).toLocaleDateString()
-          return `${idx + 1}. **!${mr.iid}**: [${mr.title.replace(/[\[\]]/g, '\\$&')}](${mr.webUrl}) - [${stateBadge}] (Created: ${dateStr})`
-        })
-        .join('\n')
-    }
-
-    return `# Developer Contribution Report: ${name} (@${username})
-
-* **Group:** ${selectedGroupName}
-* **Period:** ${timeframeLabel}
-* **Generated At:** ${new Date().toLocaleString()}
-
----
-
-## 📊 Summary of Contributions
-
-| Contribution Type | Count |
-| :--- | :---: |
-| **MRs Created (สร้าง)** | **${developerData.authored.length}** |
-| **MRs Merged (สลักเสร็จสิ้น)** | **${developerData.merged.length}** |
-| **MRs Reviewed / Assigned (ตรวจทาน/รับมอบหมาย)** | **${developerData.reviewed.length}** |
-
----
-
-## ✍️ Created Merge Requests (${developerData.authored.length})
-
-${formatMRList(developerData.authored)}
-
-## 🏆 Merged Merge Requests (${developerData.merged.length})
-
-${formatMRList(developerData.merged)}
-
-## 👁️ Reviewed / Assigned Merge Requests (${developerData.reviewed.length})
-
-${formatMRList(developerData.reviewed)}
-`
-  }, [name, username, selectedGroupName, timeframeLabel, developerData])
+  const markdownContent = useMemo(
+    () => buildReportMarkdown({ name, username, groupName: selectedGroupName, timeframeLabel }, developerData),
+    [name, username, selectedGroupName, timeframeLabel, developerData]
+  )
 
   // 7. Generate HTML from Markdown
   const htmlContent = useMemo(() => {
     try {
-      return marked.parse(markdownContent)
+      // sanitize ก่อน render — MR title/description เป็น user content จาก GitLab
+      return DOMPurify.sanitize(marked.parse(markdownContent) as string)
     } catch (err) {
       console.error(err)
       return '<p className="text-red-500">Error rendering report.</p>'
@@ -431,33 +270,7 @@ ${formatMRList(developerData.reviewed)}
   const handleExportCSV = async () => {
     setIsExporting('excel')
     const filename = `${username}_report_${timeframe}.csv`
-
-    let csv = `Developer Performance Report\n`
-    csv += `Name,${name} (@${username})\n`
-    csv += `Group,${selectedGroupName}\n`
-    csv += `Timeframe,${timeframeLabel}\n`
-    csv += `Generated At,${new Date().toLocaleString()}\n\n`
-
-    csv += `Summary Metrics\n`
-    csv += `Metric,Value\n`
-    csv += `MRs Created,${developerData.authored.length}\n`
-    csv += `MRs Merged,${developerData.merged.length}\n`
-    csv += `MRs Reviewed / Assigned,${developerData.reviewed.length}\n\n`
-
-    csv += `Detailed Activity List\n`
-    csv += `Activity Type,MR IID,Title,State,Created At,URL\n`
-
-    const addRows = (list: MergeRequest[], type: string) => {
-      list.forEach((mr) => {
-        const cleanTitle = mr.title.replace(/"/g, '""')
-        csv += `"${type}",${mr.iid},"${cleanTitle}","${mr.state}","${new Date(mr.createdAt).toLocaleDateString()}","${mr.webUrl}"\n`
-      })
-    }
-
-    addRows(developerData.authored, 'Created')
-    addRows(developerData.merged, 'Merged')
-    addRows(developerData.reviewed, 'Reviewed/Assigned')
-
+    const csv = buildReportCSV({ name, username, groupName: selectedGroupName, timeframeLabel }, developerData)
     const bom = '\uFEFF'
     const success = await window.electronAPI.saveReportFile(filename, bom + csv)
     setIsExporting(null)
@@ -777,40 +590,12 @@ ${formatMRList(developerData.reviewed)}
                       </div>
                     ) : (
                       filteredMRs.map((mr) => (
-                        <div
+                        <ReportMRCard
                           key={mr.id}
-                          onClick={() => window.electronAPI.openMRWindow(mr.projectId, mr.iid)}
-                          className={`bg-gray-800/30 hover:bg-gray-800/80 border border-gray-800/60 hover:border-gray-700/80 rounded-xl p-4 transition-all duration-350 cursor-pointer flex flex-col gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group ${tabColorClass}`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="text-[10px] text-gray-400 font-bold font-mono bg-gray-955/40 px-2 py-0.5 rounded-md flex-shrink-0">
-                              !{mr.iid}
-                            </span>
-                            <h3 className="text-xs font-bold text-white group-hover:text-orange-400 transition-colors leading-relaxed flex-1 line-clamp-2">
-                              {mr.title}
-                            </h3>
-                            <span
-                              className={`text-[8px] font-extrabold uppercase px-2 py-0.5 rounded-md tracking-wider flex-shrink-0 ${
-                                mr.state === 'merged'
-                                  ? 'bg-green-950/50 text-green-400 border border-green-900/40'
-                                  : mr.state === 'closed'
-                                  ? 'bg-red-950/50 text-red-400 border border-red-900/40'
-                                  : 'bg-blue-950/50 text-blue-400 border border-blue-900/40'
-                              }`}
-                            >
-                              {mr.state}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between mt-0.5 text-[9px] text-gray-500 font-semibold">
-                            <span className="bg-gray-950/20 text-gray-400 px-2 py-0.5 rounded-md truncate max-w-[280px]">
-                              📁 {mr.projectNamespace || 'Unknown Project'}
-                            </span>
-                            <span className="text-gray-500">
-                              Created: {new Date(mr.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
+                          mr={mr}
+                          accentClass={tabColorClass}
+                          onOpen={(m) => window.electronAPI.openMRWindow(m.projectId, m.iid)}
+                        />
                       ))
                     )}
                   </div>

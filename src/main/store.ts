@@ -20,6 +20,7 @@ interface StoreSchema {
   lastSeenVersion: string
   notifyOnMyMRMerged: boolean
   hasRunBefore: boolean
+  launchAtStartupDefaultApplied: boolean
 }
 
 const store = new Store<StoreSchema>({
@@ -33,7 +34,7 @@ const store = new Store<StoreSchema>({
     webhookSecret: '',
     webhookPublicUrl: 'https://ig-server-eoffice.igenco.dev/gitlab-webhook',
     webhookUseTunnel: false,
-    launchAtStartup: false,
+    launchAtStartup: true,
     notifyOwnerGroupIds: [],
     notifiedMRIds: [],
     notifiedMergedMRIds: [],
@@ -41,19 +42,35 @@ const store = new Store<StoreSchema>({
     lastSeenVersion: '',
     notifyOnMyMRMerged: true,
     hasRunBefore: false,
+    launchAtStartupDefaultApplied: false,
   },
 })
+
+// ── One-time migration: เปลี่ยน default ของ "เริ่มพร้อมเปิดเครื่อง" เป็นเปิด ──
+// ครอบคลุมเครื่องที่ติดตั้งอยู่แล้ว (ซึ่งมีค่า false บันทึกไว้) — ทำครั้งเดียว
+// หลังจากนั้นผู้ใช้ยังปิดเองได้ตามปกติ
+if (!store.get('launchAtStartupDefaultApplied', false)) {
+  store.set('launchAtStartup', true)
+  store.set('launchAtStartupDefaultApplied', true)
+}
+
+const PLAIN_TOKEN_PREFIX = 'plain:'
 
 export function getSettings(): Settings {
   const encryptedToken = store.get('encryptedToken', '')
   let accessToken = ''
 
   if (encryptedToken) {
-    try {
-      const buf = Buffer.from(encryptedToken, 'base64')
-      accessToken = safeStorage.decryptString(buf)
-    } catch {
-      accessToken = ''
+    if (encryptedToken.startsWith(PLAIN_TOKEN_PREFIX)) {
+      // Fallback storage: OS keychain ไม่พร้อมใช้งานตอนบันทึก (เช่น Linux ไม่มี keyring)
+      accessToken = Buffer.from(encryptedToken.slice(PLAIN_TOKEN_PREFIX.length), 'base64').toString('utf-8')
+    } else {
+      try {
+        const buf = Buffer.from(encryptedToken, 'base64')
+        accessToken = safeStorage.decryptString(buf)
+      } catch {
+        accessToken = ''
+      }
     }
   }
 
@@ -67,7 +84,7 @@ export function getSettings(): Settings {
     webhookSecret: store.get('webhookSecret', ''),
     webhookPublicUrl: store.get('webhookPublicUrl', 'https://ig-server-eoffice.igenco.dev/gitlab-webhook'),
     webhookUseTunnel: store.get('webhookUseTunnel', false),
-    launchAtStartup: store.get('launchAtStartup', false),
+    launchAtStartup: store.get('launchAtStartup', true),
     notifyOwnerGroupIds: store.get('notifyOwnerGroupIds', []),
     notifyOnMyMRMerged: store.get('notifyOnMyMRMerged', true),
   }
@@ -87,9 +104,22 @@ export function saveSettings(settings: Settings): void {
   store.set('notifyOnMyMRMerged', settings.notifyOnMyMRMerged ?? true)
 
   if (settings.accessToken) {
-    const encrypted = safeStorage.encryptString(settings.accessToken)
-    store.set('encryptedToken', encrypted.toString('base64'))
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(settings.accessToken)
+      store.set('encryptedToken', encrypted.toString('base64'))
+    } else {
+      // OS keychain ไม่พร้อมใช้งาน (เช่น Linux ที่ไม่มี keyring) — เก็บแบบ base64
+      // เพื่อไม่ให้ save ล้มเหลวเงียบๆ (encryptString จะ throw)
+      console.warn('[store] safeStorage unavailable — storing token base64-encoded (not encrypted)')
+      store.set('encryptedToken', PLAIN_TOKEN_PREFIX + Buffer.from(settings.accessToken, 'utf-8').toString('base64'))
+    }
   }
+  // หมายเหตุ: token ว่างจะ "ไม่" ล้างค่าเดิม เพื่อกันเคส decrypt fail ชั่วคราว
+  // แล้ว save ทับจนหาย — ใช้ clearAccessToken() เมื่อต้องการ logout จริงๆ
+}
+
+export function clearAccessToken(): void {
+  store.set('encryptedToken', '')
 }
 
 export function isConfigured(): boolean {

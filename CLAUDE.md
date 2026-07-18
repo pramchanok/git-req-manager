@@ -80,7 +80,7 @@ icon.addRepresentation({ scaleFactor: 2, buffer: fs.readFileSync(icon2xPath) });
 ```
 Provide a 44×44px image for the 22×22 logical size.
 
-**electron-builder GitHub publish defaults to draft** — add `"releaseType": "release"` explicitly in the `build` config in `package.json`, otherwise releases are created as drafts and won't appear publicly.
+**electron-builder GitHub publish — draft is intentional here** — this repo sets `"releaseType": "draft"` in `package.json` on purpose: CI builds upload artifacts to a draft release, then the `finalize-release.yml` GitHub Action (workflow_dispatch) publishes it. Do not switch to `"release"` without removing that workflow, or releases will go public before all platform artifacts are uploaded.
 
 **Auto-update target requirements** — Windows must use `nsis` target (not `portable`/`zip`). macOS needs both `dmg` + `zip` targets AND a signed build. Unsigned macOS builds silently skip the update check.
 
@@ -91,4 +91,4 @@ Provide a 44×44px image for the 22×22 logical size.
 2. `src/main/index.ts` `setupIPC()` — register `ipcMain.handle`
 3. `src/renderer/electron.d.ts` — add TypeScript type
 
-**electron-builder config** — packaging config lives in `package.json` `"build"` field. `electron-builder.config.ts` is not used by any npm script.
+**electron-builder config** — packaging config lives in `package.json` `"build"` field (there is no separate electron-builder config file).

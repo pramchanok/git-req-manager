@@ -36,7 +36,7 @@ declare global {
       addMRNote: (projectId: number, mrIid: number, body: string) => Promise<void>
       approveMR: (projectId: number, mrIid: number) => Promise<void>
       unapproveMR: (projectId: number, mrIid: number) => Promise<void>
-      mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }) => Promise<void>
+      mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => Promise<void>
       closeMR: (projectId: number, mrIid: number) => Promise<void>
       cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
       getCompareDiffs: (projectId: number, fromSha: string, toSha: string) => Promise<import('../../shared/types').MRDiff[]>

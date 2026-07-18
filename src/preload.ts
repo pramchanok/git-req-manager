@@ -82,7 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('approve-mr', projectId, mrIid),
   unapproveMR: (projectId: number, mrIid: number): Promise<void> =>
     ipcRenderer.invoke('unapprove-mr', projectId, mrIid),
-  mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }): Promise<void> =>
+  mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }): Promise<void> =>
     ipcRenderer.invoke('merge-mr', projectId, mrIid, options),
   closeMR: (projectId: number, mrIid: number): Promise<void> =>
     ipcRenderer.invoke('close-mr', projectId, mrIid),

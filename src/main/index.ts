@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import crypto from 'crypto'
 import {
   createTray,
   updateTrayBadge,
@@ -21,6 +22,7 @@ import {
   setStateChangeCallback,
   setSyncStatusChangeCallback,
   handleWebhookMerge,
+  resetSchedulerCache,
 } from './scheduler'
 import { startWebhookServer, stopWebhookServer, getWebhookAddress } from './webhook'
 import { setMRClickHandler, testNotification } from './notifier'
@@ -102,6 +104,9 @@ async function startApp(): Promise<void> {
           args: ['--openedAtLogin'],
         })
       }
+    } else if (process.platform === 'darwin' && storedSettings.launchAtStartup) {
+      // Register login item when the setting is on (e.g. fresh install with default ON)
+      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
     }
 
     // Sync login item status from OS to store on startup.
@@ -242,18 +247,22 @@ async function startApp(): Promise<void> {
       const settings = getSettings()
       if (settings.webhookEnabled) {
         syncNow()
-        startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
-          // Real-time merge notification for the MR author
-          if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
-            void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
-          }
-          syncNow()
-        })
+        ensureTunnelWebhookSecret(settings)
+        const useRelay = !settings.webhookUseTunnel && !!settings.webhookPublicUrl.trim()
+        // Relay mode: event เข้าทาง Socket.IO — ไม่ต้องเปิด local HTTP server (ลด attack surface)
+        if (!useRelay) {
+          startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
+            // Real-time merge notification for the MR author
+            if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+              void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
+            }
+            syncNow()
+          })
+        }
         if (settings.webhookUseTunnel) {
           startTunnel(settings.webhookPort)
-        } else if (settings.webhookPublicUrl.trim()) {
-          const serverUrl = extractServerUrl(settings.webhookPublicUrl)
-          if (serverUrl) connectSocketClient(serverUrl, () => syncNow())
+        } else if (useRelay) {
+          startRelaySocket(settings.webhookPublicUrl)
         }
       } else {
         startScheduler(settings.refreshIntervalMinutes)
@@ -410,6 +419,34 @@ function getOrCreateMainWindow(): BrowserWindow {
   return registerMainWindow(createWindow())
 }
 
+/**
+ * Relay mode (Custom Webhook URL): รับ event ผ่าน Socket.IO จาก relay server
+ * relay ส่ง authorId/mrIid มาด้วย ทำให้แจ้งเตือน "MR ถูก merge" แบบ real-time ได้
+ */
+function startRelaySocket(publicUrl: string): void {
+  const serverUrl = extractServerUrl(publicUrl)
+  if (!serverUrl) return
+  connectSocketClient(serverUrl, (data) => {
+    if (data?.action === 'merge' && data.authorId && data.projectId && data.mrIid) {
+      void handleWebhookMerge(data.authorId, data.projectId, data.mrIid)
+    }
+    syncNow()
+  })
+}
+
+/**
+ * Tunnel mode: app เป็นคน register webhook ใน GitLab เองทั้งหมด — ถ้ายังไม่มี secret
+ * ให้ generate อัตโนมัติเพื่อไม่ให้ endpoint สาธารณะเปิดรับ request โดยไม่มีการยืนยัน
+ * (Relay mode "ไม่" auto-generate เพราะ secret ต้องตรงกับ GITLAB_WEBHOOK_SECRET ฝั่ง relay server)
+ */
+function ensureTunnelWebhookSecret(settings: Settings): void {
+  if (settings.webhookUseTunnel && !settings.webhookSecret) {
+    settings.webhookSecret = crypto.randomBytes(24).toString('hex')
+    saveSettings(settings)
+    console.log('[webhook] auto-generated secret for tunnel mode')
+  }
+}
+
 async function autoSyncWebhooks(webhookUrl: string): Promise<void> {
   const settings = getSettings()
   if (!settings.webhookEnabled || !settings.gitlabUrl || !settings.accessToken) return
@@ -458,6 +495,10 @@ function setupIPC(): void {
   ipcMain.handle('save-settings', (_event, settings: Settings) => {
     saveSettings(settings)
 
+    // Settings (URL/token) may have changed — drop cached user identity
+    // so the next sync re-authenticates as the correct account.
+    resetSchedulerCache()
+
     // Apply launch at startup
     app.setLoginItemSettings({
       openAtLogin: settings.launchAtStartup,
@@ -471,22 +512,28 @@ function setupIPC(): void {
       // Webhook active — ปิด polling, sync ครั้งเดียวตอนเริ่ม
       stopScheduler()
       syncNow()
-      startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
-        // Real-time merge notification for the MR author
-        if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
-          void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
-        }
-        syncNow()
-      })
+      ensureTunnelWebhookSecret(settings)
+      const useRelay = !settings.webhookUseTunnel && !!settings.webhookPublicUrl.trim()
+      if (!useRelay) {
+        startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
+          // Real-time merge notification for the MR author
+          if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+            void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
+          }
+          syncNow()
+        })
+      } else {
+        // Relay mode: event เข้าทาง Socket.IO — ปิด local HTTP server (ลด attack surface)
+        stopWebhookServer()
+      }
       if (settings.webhookUseTunnel) {
         disconnectSocketClient()
         startTunnel(settings.webhookPort)
       } else {
         stopTunnel()
-        if (settings.webhookPublicUrl.trim()) {
+        if (useRelay) {
           autoSyncWebhooks(settings.webhookPublicUrl.trim())
-          const serverUrl = extractServerUrl(settings.webhookPublicUrl)
-          if (serverUrl) connectSocketClient(serverUrl, () => syncNow())
+          startRelaySocket(settings.webhookPublicUrl)
         }
       }
     } else {
@@ -499,7 +546,20 @@ function setupIPC(): void {
 
   ipcMain.handle('get-app-state', () => getAppState())
   ipcMain.handle('trigger-sync', () => syncNow())
-  ipcMain.handle('open-url', (_event, url: string) => shell.openExternal(url))
+  ipcMain.handle('open-url', (_event, url: string) => {
+    // Security: only allow http/https — block file://, smb:// etc.
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        console.warn('[open-url] blocked non-http(s) URL:', url)
+        return
+      }
+    } catch {
+      console.warn('[open-url] blocked invalid URL:', url)
+      return
+    }
+    return shell.openExternal(url)
+  })
   ipcMain.handle('get-update-state', () => getUpdateState())
   ipcMain.handle('check-for-updates', () => checkForUpdates())
   ipcMain.handle('install-update', () => {
@@ -766,7 +826,7 @@ function setupIPC(): void {
     await client.unapproveMR(projectId, mrIid)
   })
 
-  ipcMain.handle('merge-mr', async (_event, projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean }) => {
+  ipcMain.handle('merge-mr', async (_event, projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => {
     if (!isConfigured()) return
     const settings = getSettings()
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)

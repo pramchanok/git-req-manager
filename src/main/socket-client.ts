@@ -1,6 +1,15 @@
 import { io, Socket } from 'socket.io-client'
 
-type MREventCallback = () => void
+export type MREventData = {
+  mrId?: number | null
+  mrIid?: number | null
+  authorId?: number | null
+  projectId?: number | null
+  action?: string | null
+  eventType?: string
+}
+
+type MREventCallback = (data?: MREventData) => void
 
 let socket: Socket | null = null
 
@@ -20,9 +29,9 @@ export function connectSocketClient(serverUrl: string, onMREvent: MREventCallbac
     console.log(`[socket-client] connected to ${serverUrl}`)
   })
 
-  socket.on('gitlab:mr-event', (data: unknown) => {
+  socket.on('gitlab:mr-event', (data: MREventData) => {
     console.log('[socket-client] gitlab:mr-event received:', data)
-    onMREvent()
+    onMREvent(data)
   })
 
   socket.on('disconnect', (reason) => {

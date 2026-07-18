@@ -218,6 +218,16 @@ export function restartScheduler(): void {
 }
 
 /**
+ * Reset cached identity/state. Must be called when settings change
+ * (GitLab URL or token) so the next sync re-fetches the current user
+ * instead of reusing the previous account's identity.
+ */
+export function resetSchedulerCache(): void {
+  cachedUser = null
+  previousAuthoredOpenMRIds = new Map()
+}
+
+/**
  * Called from webhook handler when action=merge is received in real-time.
  * Immediately notifies the author without waiting for next sync cycle.
  */
