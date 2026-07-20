@@ -136,6 +136,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -161,9 +163,46 @@ jobs:
             cp "$file" "release-files/$new_name"
           done
 
+      - name: Create release tag after successful builds
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "Invalid package version: ${VERSION}"
+            exit 1
+          fi
+
+          git fetch --tags origin
+
+          if git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "Tag ${TAG} already points to ${TAG_SHA}, not workflow commit ${GITHUB_SHA}."
+              echo "Refusing to move an existing release tag."
+              exit 1
+            fi
+            echo "Tag ${TAG} already exists at the correct commit."
+          else
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/${TAG}"
+            echo "Created ${TAG} at ${GITHUB_SHA}."
+          fi
+
+          echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
+
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          gh release create "v${VERSION}" release-files/* --notes-file release-notes.txt --title "${VERSION}" --repo pramchanok/git-req-manager
+          if gh release view "$RELEASE_TAG" --repo pramchanok/git-req-manager >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists. Refusing to overwrite it."
+            exit 1
+          fi
+
+          gh release create "$RELEASE_TAG" release-files/* \
+            --verify-tag \
+            --notes-file release-notes.txt \
+            --title "${VERSION}" \
+            --repo pramchanok/git-req-manager
