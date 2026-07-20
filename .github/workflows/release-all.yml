@@ -2,12 +2,84 @@ name: Release All Platforms
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (must match package.json and CHANGELOG.md)
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release request
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          LOCK_VERSION=$(node -p "require('./package-lock.json').version")
+          TAG="v${PACKAGE_VERSION}"
+
+          if ! echo "$REQUESTED_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "Invalid requested version: ${REQUESTED_VERSION}"
+            exit 1
+          fi
+
+          if [ "$REQUESTED_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Requested version ${REQUESTED_VERSION} does not match package.json ${PACKAGE_VERSION}."
+            exit 1
+          fi
+
+          if [ "$LOCK_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "package-lock.json ${LOCK_VERSION} does not match package.json ${PACKAGE_VERSION}."
+            exit 1
+          fi
+
+          if ! grep -Fq "## [${PACKAGE_VERSION}]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no section for ${PACKAGE_VERSION}."
+            exit 1
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists. Bump the version before releasing again."
+            exit 1
+          fi
+
+          git fetch --tags origin
+          if git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
+            TAG_SHA=$(git rev-list -n 1 "$TAG")
+            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "Tag ${TAG} already points to ${TAG_SHA}, not workflow commit ${GITHUB_SHA}."
+              echo "Delete the unreleased tag or bump the version before retrying."
+              exit 1
+            fi
+            echo "Tag ${TAG} already exists at this commit; treating this as a safe retry."
+          fi
+
+          echo "version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
   publish-mac:
+    needs: prepare
     runs-on: macos-14
     steps:
       - name: Checkout repository
@@ -131,7 +203,7 @@ jobs:
             release/latest-linux.yml
 
   finalize:
-    needs: [publish-mac, publish-windows, publish-linux]
+    needs: [prepare, publish-mac, publish-windows, publish-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -145,8 +217,9 @@ jobs:
           node-version: 24
 
       - name: Extract release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
           awk "/^## \[${VERSION}\]/{flag=1; next} /^---$/{if(flag) exit} flag" CHANGELOG.md > release-notes.txt
 
       - name: Download all artifacts
@@ -164,38 +237,32 @@ jobs:
           done
 
       - name: Create release tag after successful builds
+        env:
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}"
-
-          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
-            echo "Invalid package version: ${VERSION}"
-            exit 1
-          fi
-
           git fetch --tags origin
 
-          if git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
-            TAG_SHA=$(git rev-list -n 1 "$TAG")
-            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
-              echo "Tag ${TAG} already points to ${TAG_SHA}, not workflow commit ${GITHUB_SHA}."
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            TAG_SHA=$(git rev-list -n 1 "$RELEASE_TAG")
+            if [ "$TAG_SHA" != "$RELEASE_SHA" ]; then
+              echo "Tag ${RELEASE_TAG} already points to ${TAG_SHA}, not workflow commit ${RELEASE_SHA}."
               echo "Refusing to move an existing release tag."
               exit 1
             fi
-            echo "Tag ${TAG} already exists at the correct commit."
+            echo "Tag ${RELEASE_TAG} already exists at the correct commit."
           else
-            git tag "$TAG" "$GITHUB_SHA"
-            git push origin "refs/tags/${TAG}"
-            echo "Created ${TAG} at ${GITHUB_SHA}."
+            git tag "$RELEASE_TAG" "$RELEASE_SHA"
+            git push origin "refs/tags/${RELEASE_TAG}"
+            echo "Created ${RELEASE_TAG} at ${RELEASE_SHA}."
           fi
-
-          echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
           if gh release view "$RELEASE_TAG" --repo pramchanok/git-req-manager >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists. Refusing to overwrite it."
             exit 1
