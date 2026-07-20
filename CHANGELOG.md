@@ -8,6 +8,8 @@
 
 ### การปรับปรุง (Improvements)
 
+- **Modern Animated NSIS Installer**: ออกแบบหน้าติดตั้ง Windows ใหม่ให้ตรงกับธีมของแอป (`#0d1117`) พร้อม animation แบบ 12 เฟรมที่มี orange glow pulse และ orbit highlight รอบไอคอน โดยยังใช้ progress bar จริงของ NSIS, จัดการ timer/GDI bitmap handles อย่างปลอดภัย และมี static splash fallback
+- **เอกสาร Architecture และ Project Skills**: เพิ่มเอกสารภาพรวมโครงสร้าง process/data flow พร้อม Codex skills เฉพาะโครงการสำหรับ Electron features, GitLab API, release/packaging, NSIS installer, renderer UI และ sync/webhook debugging
 - **ออกแบบปุ่ม "Delete source branch" ใหม่**: เปลี่ยนจาก checkbox เป็น toggle pill ที่คลิกได้ทั้งก้อน พร้อม mini switch และสถานะเปิด/ปิดที่ชัดเจน เข้ากับโทนของแอป
 - **Loading indicator ครบทุก action**: ปุ่ม Approve / Revoke / Merge / Close MR / Cancel Pipeline แสดง spinner พร้อมข้อความสถานะ (เช่น "Merging…") เฉพาะปุ่มที่กดขณะรอ API, emoji reaction แสดงสถานะกำลังส่งและป้องกันการกดซ้ำ, ปุ่ม refresh บน title bar หมุนขณะ sync
 - **หน้า MR Detail อัปเดตแบบเรียลไทม์**: broadcast ข้อมูล sync ไปทุกหน้าต่าง (ไม่ใช่แค่หน้าต่างหลัก) ทำให้หน้าต่าง MR Detail ที่เปิดอยู่ refresh สถานะ MR, approvals, discussions และ emoji ทันทีเมื่อ webhook/polling sync เสร็จ, โหลด diffs ใหม่อัตโนมัติเมื่อมี commit ใหม่ push เข้ามา (ตรวจจาก head SHA) และเร่ง fallback poll ของ discussions จาก 60 → 20 วินาที

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Renderer UI Design"
+  short_description: "Build consistent premium React interfaces"
+  default_prompt: "Use $renderer-ui-design to implement a polished renderer UI feature."

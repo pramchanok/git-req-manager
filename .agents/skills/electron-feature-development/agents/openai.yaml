@@ -1,0 +1,4 @@
+interface:
+  display_name: "Electron Feature Development"
+  short_description: "Implement Electron features safely"
+  default_prompt: "Use $electron-feature-development to implement an Electron feature across the correct process boundaries."

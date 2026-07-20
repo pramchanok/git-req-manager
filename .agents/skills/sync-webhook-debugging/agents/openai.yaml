@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync and Webhook Debugging"
+  short_description: "Diagnose polling and webhook synchronization"
+  default_prompt: "Use $sync-webhook-debugging to diagnose a synchronization or notification issue."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release and Packaging"
+  short_description: "Build and release desktop packages safely"
+  default_prompt: "Use $release-and-packaging to prepare and verify a desktop application release."

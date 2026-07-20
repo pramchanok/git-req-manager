@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitLab API Integration"
+  short_description: "Build and test GitLab API integrations"
+  default_prompt: "Use $gitlab-api-integration to add or modify a GitLab REST API operation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "NSIS Installer Customization"
+  short_description: "Modify and verify the custom NSIS installer"
+  default_prompt: "Use $nsis-installer-customization to update the Windows NSIS installer UI safely."
