@@ -171,8 +171,17 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       fetchAwardEmojis()
     }, 20000)
 
-    // real-time: main process broadcast state ใหม่ทุกครั้งที่ sync (webhook/polling) → refresh ทันที
-    const unsubscribe = window.electronAPI.onAppStateUpdated(() => {
+    // real-time: main process broadcast state ใหม่ทุกครั้งที่ sync (webhook/polling)
+    // เช็คจาก state ที่แนบมาก่อนว่า MR นี้มีอะไรเปลี่ยนจริงไหม — ถ้าไม่เปลี่ยนก็ไม่ต้องยิง API ซ้ำ
+    const unsubscribe = window.electronAPI.onAppStateUpdated((state) => {
+      const cur = mrRef.current
+      const inReviews = state.myReviewMRs.find(m => m.projectId === projectId && m.iid === mrIid)
+      const found = inReviews ?? state.allOpenMRs.find(m => m.projectId === projectId && m.iid === mrIid)
+      if (found && cur && found.updatedAt === cur.updatedAt &&
+          // pipeline status ถูก patch เฉพาะ list ของ My Reviews — เทียบได้เมื่อเจอในนั้นเท่านั้น
+          (!inReviews || inReviews.pipelineStatus === cur.pipelineStatus)) {
+        return
+      }
       refreshMR()
       fetchDiscussions()
       fetchAwardEmojis()
@@ -199,6 +208,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
 
   // โหลด diffs ครั้งแรก และโหลดซ้ำแบบเงียบๆ เมื่อ head sha เปลี่ยน (มี commit ใหม่ push เข้ามา)
   const lastShaRef = useRef<string | null>(null)
+  const mrRef = useRef<MergeRequest | null>(null)
+  useEffect(() => { mrRef.current = mr }, [mr])
   useEffect(() => {
     if (!mr) return
     if (lastShaRef.current === null) {

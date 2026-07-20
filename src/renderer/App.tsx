@@ -1,13 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { FileText, ChevronDown, RefreshCw, Download, CheckCircle2, Pin } from 'lucide-react'
 import type { AppState, UpdateState } from '../shared/types'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import TeamReport from './pages/TeamReport'
 import Changelog from './pages/Changelog'
-import ReportDetail from './pages/ReportDetail'
-import MRDetail from './pages/MRDetail'
 import Toast, { type ToastData, type ToastType } from './components/Toast'
+
+// Code splitting: หน้าเหล่านี้ลากไลบรารีหนัก (md-editor, emoji-mart, parse-diff, chart) —
+// แยก chunk เพื่อให้หน้าต่างหลัก (Dashboard ใน tray) เปิดเร็ว
+const ReportDetail = lazy(() => import('./pages/ReportDetail'))
+const MRDetail = lazy(() => import('./pages/MRDetail'))
+
+function PageLoader() {
+  return (
+    <div className="flex flex-col h-screen bg-[#0d1117] items-center justify-center">
+      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
 
 type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report' | 'mr-detail'
 
@@ -164,21 +175,27 @@ export default function App() {
   }, [page])
 
   if (page === 'report') {
-    return <ReportDetail />
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <ReportDetail />
+      </Suspense>
+    )
   }
 
   if (page === 'mr-detail') {
     return (
-      <MRDetail
-        projectId={Number(new URLSearchParams(window.location.search).get('projectId'))}
-        mrIid={Number(new URLSearchParams(window.location.search).get('mrIid'))}
-        onBack={() => window.close()}
-        onRefresh={() => {
-          // For a separate window, we might not trigger a global sync, but we can call it.
-          window.electronAPI.triggerSync()
-        }}
-        onToast={showToast}
-      />
+      <Suspense fallback={<PageLoader />}>
+        <MRDetail
+          projectId={Number(new URLSearchParams(window.location.search).get('projectId'))}
+          mrIid={Number(new URLSearchParams(window.location.search).get('mrIid'))}
+          onBack={() => window.close()}
+          onRefresh={() => {
+            // For a separate window, we might not trigger a global sync, but we can call it.
+            window.electronAPI.triggerSync()
+          }}
+          onToast={showToast}
+        />
+      </Suspense>
     )
   }
 

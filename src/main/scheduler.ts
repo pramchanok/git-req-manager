@@ -14,16 +14,46 @@ let previousGroupMRIds = new Map<number, Set<number>>()
 let previousAuthoredOpenMRIds = new Map<number, { projectId: number; iid: number }>()
 let cachedUser: GitLabUser | null = null
 
+const OWNER_GROUPS_TTL = 10 * 60 * 1000
+let ownerGroupsCache: { groups: GitLabGroup[]; fetchedAt: number } | null = null
+
+// Cache สถานะ pipeline ราย MR — สถานะ terminal (success/failed/canceled) จะเปลี่ยนได้ก็ต่อเมื่อ
+// มี pipeline ใหม่ (commit ใหม่ → updatedAt เปลี่ยน) หรือ user กด retry ซึ่งไม่แตะ updatedAt
+// จึงใส่ TTL 5 นาทีกันค้างจากเคส retry — ส่วนสถานะ null/running fetch ใหม่เสมอ
+const PIPELINE_CACHE_TTL = 5 * 60 * 1000
+let pipelineCache = new Map<number, { updatedAt: string; status: MergeRequest['pipelineStatus']; cachedAt: number }>()
+
 async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[], chunkSize = 5): Promise<void> {
-  for (let i = 0; i < mrs.length; i += chunkSize) {
-    const chunk = mrs.slice(i, i + chunkSize)
+  const now = Date.now()
+  const toFetch: MergeRequest[] = []
+  for (const mr of mrs) {
+    const cached = pipelineCache.get(mr.id)
+    const isTerminal = cached && cached.status !== null && cached.status !== 'running'
+    if (cached && isTerminal && cached.updatedAt === mr.updatedAt && now - cached.cachedAt < PIPELINE_CACHE_TTL) {
+      mr.pipelineStatus = cached.status
+    } else {
+      toFetch.push(mr)
+    }
+  }
+
+  for (let i = 0; i < toFetch.length; i += chunkSize) {
+    const chunk = toFetch.slice(i, i + chunkSize)
     const statuses = await Promise.all(
       chunk.map((mr) => client.getMRPipelines(mr.projectId, mr.iid).catch((err) => {
         console.error(`[scheduler] Failed to fetch pipeline for MR !${mr.iid}:`, err instanceof Error ? err.message : String(err))
         return null
       }))
     )
-    chunk.forEach((mr, j) => { mr.pipelineStatus = statuses[j] })
+    chunk.forEach((mr, j) => {
+      mr.pipelineStatus = statuses[j]
+      pipelineCache.set(mr.id, { updatedAt: mr.updatedAt, status: statuses[j], cachedAt: now })
+    })
+  }
+
+  // กัน cache โตไม่จำกัด — เก็บเฉพาะ MR ที่ยังอยู่ในรอบนี้
+  const activeIds = new Set(mrs.map((mr) => mr.id))
+  for (const id of pipelineCache.keys()) {
+    if (!activeIds.has(id)) pipelineCache.delete(id)
   }
 }
 
@@ -159,11 +189,15 @@ export async function syncNow(): Promise<void> {
     currentState.allOpenMRs = allOpenMRs
     currentState.lastSyncedAt = new Date().toISOString()
 
-    // Fetch groups where user is Owner, and notify new MRs for enabled ones
-    const ownerGroups = await client.getOwnerGroups().catch((err): GitLabGroup[] => {
-      console.error('[scheduler] Failed to fetch owner groups:', err instanceof Error ? err.message : String(err))
-      return []
-    })
+    // Fetch groups where user is Owner (cache 10 นาที — รายชื่อ group แทบไม่เปลี่ยน) and notify new MRs for enabled ones
+    if (!ownerGroupsCache || Date.now() - ownerGroupsCache.fetchedAt > OWNER_GROUPS_TTL) {
+      const groups = await client.getOwnerGroups().catch((err): GitLabGroup[] | null => {
+        console.error('[scheduler] Failed to fetch owner groups:', err instanceof Error ? err.message : String(err))
+        return null
+      })
+      if (groups !== null) ownerGroupsCache = { groups, fetchedAt: Date.now() }
+    }
+    const ownerGroups = ownerGroupsCache?.groups ?? []
     currentState.ownerGroups = ownerGroups
 
     const notifyGroupIds = settings.notifyOwnerGroupIds ?? []
@@ -225,6 +259,8 @@ export function restartScheduler(): void {
 export function resetSchedulerCache(): void {
   cachedUser = null
   previousAuthoredOpenMRIds = new Map()
+  pipelineCache = new Map()
+  ownerGroupsCache = null
 }
 
 /**
