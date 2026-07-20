@@ -1,8 +1,21 @@
 Add-Type -AssemblyName System.Drawing
 
-$width = 320
-$height = 200
+$width = 400
+$height = 300
 $assetsDir = Join-Path $PSScriptRoot '..\assets'
+$iconPath = Join-Path $assetsDir 'icon.png'
+
+function New-RoundedRectanglePath {
+    param([System.Drawing.RectangleF]$Rectangle, [float]$Radius)
+    $diameter = $Radius * 2
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc($Rectangle.X, $Rectangle.Y, $diameter, $diameter, 180, 90)
+    $path.AddArc($Rectangle.Right - $diameter, $Rectangle.Y, $diameter, $diameter, 270, 90)
+    $path.AddArc($Rectangle.Right - $diameter, $Rectangle.Bottom - $diameter, $diameter, $diameter, 0, 90)
+    $path.AddArc($Rectangle.X, $Rectangle.Bottom - $diameter, $diameter, $diameter, 90, 90)
+    $path.CloseFigure()
+    return $path
+}
 
 function New-SplashImage {
     param(
@@ -26,7 +39,24 @@ function New-SplashImage {
     )
     $graphics.FillRectangle($backgroundBrush, $backgroundRect)
 
-    # The 80x80 logo area at (120, 16) is supplied by installer-logo.avi.
+    # Stable fallback logo. The native AVI control covers this region when it
+    # opens successfully, but the installer never shows an empty logo area.
+    $centerX = 200
+    $centerY = 92
+    for ($layer = 3; $layer -ge 1; $layer--) {
+        $radius = 29 + ($layer * 7)
+        $alpha = 4 + ((4 - $layer) * 2)
+        $glowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($alpha, 249, 115, 22))
+        $graphics.FillEllipse($glowBrush, $centerX - $radius, $centerY - $radius, $radius * 2, $radius * 2)
+        $glowBrush.Dispose()
+    }
+    $tilePath = New-RoundedRectanglePath ([System.Drawing.RectangleF]::new(172, 64, 56, 56)) 14
+    $tileBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(210, 30, 38, 49))
+    $tilePen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(48, 249, 115, 22), 1)
+    $graphics.FillPath($tileBrush, $tilePath)
+    $graphics.DrawPath($tilePen, $tilePath)
+    $icon = [System.Drawing.Image]::FromFile($iconPath)
+    $graphics.DrawImage($icon, 180, 72, 40, 40)
 
     $centerFormat = New-Object System.Drawing.StringFormat
     $centerFormat.Alignment = [System.Drawing.StringAlignment]::Center
@@ -35,25 +65,29 @@ function New-SplashImage {
     $rightFormat = New-Object System.Drawing.StringFormat
     $rightFormat.Alignment = [System.Drawing.StringAlignment]::Far
 
-    $titleFont = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawing.FontStyle]::Bold)
-    $statusFont = New-Object System.Drawing.Font('Segoe UI', 9)
+    $titleFont = New-Object System.Drawing.Font('Segoe UI Semibold', 14, [System.Drawing.FontStyle]::Bold)
+    $statusFont = New-Object System.Drawing.Font('Segoe UI', 10)
     $microFont = New-Object System.Drawing.Font('Segoe UI Semibold', 7)
     $titleBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(230, 237, 243))
     $statusBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(139, 148, 158))
     $accentBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(251, 146, 60))
 
-    $graphics.DrawString('GitLab MR Manager', $titleFont, $titleBrush, [System.Drawing.RectangleF]::new(0, 96, 320, 24), $centerFormat)
-    $graphics.DrawString('Preparing your review workspace', $statusFont, $statusBrush, [System.Drawing.RectangleF]::new(0, 121, 320, 20), $centerFormat)
-    $graphics.DrawString('INSTALLING', $microFont, $accentBrush, [System.Drawing.RectangleF]::new(32, 147, 100, 12), $leftFormat)
-    $graphics.DrawString('SECURE DESKTOP APP', $microFont, $statusBrush, [System.Drawing.RectangleF]::new(158, 147, 130, 12), $rightFormat)
+    $graphics.DrawString('GitLab MR Manager', $titleFont, $titleBrush, [System.Drawing.RectangleF]::new(0, 154, 400, 28), $centerFormat)
+    $graphics.DrawString('Preparing your review workspace', $statusFont, $statusBrush, [System.Drawing.RectangleF]::new(0, 184, 400, 22), $centerFormat)
+    $graphics.DrawString('INSTALLING', $microFont, $accentBrush, [System.Drawing.RectangleF]::new(40, 222, 120, 12), $leftFormat)
+    $graphics.DrawString('SECURE DESKTOP APP', $microFont, $statusBrush, [System.Drawing.RectangleF]::new(240, 222, 120, 12), $rightFormat)
 
-    # The native NSIS progress bar is placed at y=163 over this bitmap.
+    # The native NSIS progress bar is placed at y=240 over this bitmap.
     $borderPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(48, 54, 61), 1)
-    $graphics.DrawRectangle($borderPen, 0, 0, 319, 199)
+    $graphics.DrawRectangle($borderPen, 0, 0, 399, 299)
 
     $bitmap.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Bmp)
 
     $backgroundBrush.Dispose()
+    $icon.Dispose()
+    $tilePath.Dispose()
+    $tileBrush.Dispose()
+    $tilePen.Dispose()
     $borderPen.Dispose()
     $titleFont.Dispose()
     $statusFont.Dispose()
@@ -71,4 +105,4 @@ function New-SplashImage {
 $outputPath = Join-Path $assetsDir 'splash.bmp'
 New-SplashImage -OutputPath $outputPath
 
-Write-Host "Created $outputPath (320x200)"
+Write-Host "Created $outputPath (400x300)"

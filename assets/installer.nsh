@@ -22,14 +22,14 @@ Function onInstFilesShow
   IntOp $0 $0 & 0xFF3BFFFF ; Remove WS_CAPTION and WS_THICKFRAME
   System::Call 'user32::SetWindowLong(i $HWNDPARENT, i -16, i $0)'
 
-  ; 3. Center and resize main window to 320x200
+  ; 3. Match the Electron splash window at 400x300
   System::Call 'user32::GetSystemMetrics(i 0) i .r1'
   System::Call 'user32::GetSystemMetrics(i 1) i .r2'
-  IntOp $3 $1 - 320
+  IntOp $3 $1 - 400
   IntOp $3 $3 / 2
-  IntOp $4 $2 - 200
+  IntOp $4 $2 - 300
   IntOp $4 $4 / 2
-  System::Call 'user32::SetWindowPos(i $HWNDPARENT, i 0, i $3, i $4, i 320, i 200, i 0x0040)'
+  System::Call 'user32::SetWindowPos(i $HWNDPARENT, i 0, i $3, i $4, i 400, i 300, i 0x0040)'
   SetCtlColors $HWNDPARENT "" 0x111827
 
   ; 4. Hide ALL buttons and controls on parent window
@@ -58,7 +58,7 @@ Function onInstFilesShow
 
   ; 5. Setup Inner Dialog
   FindWindow $0 "#32770" "" $HWNDPARENT
-  System::Call 'user32::SetWindowPos(i $0, i 0, i 0, i 0, i 320, i 200, i 0x0040)'
+  System::Call 'user32::SetWindowPos(i $0, i 0, i 0, i 0, i 400, i 300, i 0x0040)'
   SetCtlColors $0 "" 0x111827
 
   ; Hide file list and text controls
@@ -74,28 +74,29 @@ Function onInstFilesShow
   IntOp $2 $2 | 0x0E ; SS_BITMAP
   System::Call 'user32::SetWindowLong(i $1, i -16, i $2)'
   ; Position full size, BOTTOM of Z-order
-  System::Call 'user32::SetWindowPos(i $1, i 1, i 0, i 0, i 320, i 200, i 0x0040)'
+  System::Call 'user32::SetWindowPos(i $1, i 1, i 0, i 0, i 400, i 300, i 0x0040)'
   ShowWindow $1 1
   InitPluginsDir
   File "/oname=$PLUGINSDIR\splash.bmp" "${BUILD_RESOURCES_DIR}\splash.bmp"
-  System::Call 'user32::LoadImage(i 0, t "$PLUGINSDIR\splash.bmp", i 0, i 320, i 200, i 0x0010) i.r2'
+  System::Call 'user32::LoadImage(i 0, t "$PLUGINSDIR\splash.bmp", i 0, i 400, i 300, i 0x0010) i.r2'
   SendMessage $1 0x0172 0 $2
 
   ; 7. Play the logo animation in the native Windows animation control.
   ; Unlike NSIS timers, SysAnimate32 keeps advancing while InstFiles extracts.
   InitPluginsDir
   File "/oname=$PLUGINSDIR\installer-logo.avi" "${BUILD_RESOURCES_DIR}\installer-logo.avi"
-  System::Call 'user32::CreateWindowEx(i 0, t "SysAnimate32", t "", i 0x50000004, i 120, i 16, i 80, i 80, i $0, i 0, i 0, i 0) i.r4'
+  System::Call 'user32::CreateWindowEx(i 0, t "SysAnimate32", t "", i 0x50000004, i 160, i 52, i 80, i 80, i $0, i 0, i 0, i 0) i.r4'
   StrCpy $InstallerLogoAnimation $4
-  SendMessage $4 0x0464 0 "STR:$PLUGINSDIR\installer-logo.avi"
+  ; ACM_OPENW (Unicode). ACM_OPENA cannot read NSIS Unicode file paths.
+  SendMessage $4 0x0467 0 "STR:$PLUGINSDIR\installer-logo.avi"
   SendMessage $4 0x0465 -1 -1
 
   ; 8. Style and position the determinate Progress Bar (1004).
   ; Keep it attached to the InstFiles dialog so NSIS can update its percentage.
   GetDlgItem $3 $0 1004
   StrCpy $InstallerProgress $3
-  ; Position: centered x=32, y=163, w=256 (80%), h=6, TOP of Z-order
-  System::Call 'user32::SetWindowPos(i $3, i 0, i 32, i 163, i 256, i 6, i 0x0040)'
+  ; Position: centered x=40, y=240, w=320 (80%), h=8, TOP of Z-order
+  System::Call 'user32::SetWindowPos(i $3, i 0, i 40, i 240, i 320, i 8, i 0x0040)'
   ShowWindow $3 1
 
   ; Remove Windows visual theme for flat look

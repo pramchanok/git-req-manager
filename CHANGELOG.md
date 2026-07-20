@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.12.3] - 2026-07-20
+
+### การปรับปรุง (Improvements)
+
+- **Windows Installer ขนาดเท่าหน้า Update Splash**: ขยายหน้าต่างติดตั้งจาก `320×200` เป็น `400×300` ให้ตรงกับ `assets/splash.html` พร้อมจัดตำแหน่งโลโก้ ข้อความ และ progress bar ใหม่ตามสัดส่วน
+- **Animation ลื่นขึ้นที่ 30 FPS**: เพิ่ม native logo animation จาก 15 FPS/30 เฟรม เป็น 30 FPS/60 เฟรม โดยคงรอบ animation สองวินาทีและคง progress bar แบบเปอร์เซ็นต์จริง
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้โลโก้หายจาก Windows Installer**: เปลี่ยนการเปิด AVI จาก ANSI `ACM_OPENA` เป็น Unicode `ACM_OPENW` ให้ตรงกับ NSIS Unicode และเพิ่มโลโก้ static ใน BMP เป็น fallback หาก animation เปิดไม่ได้
+
+---
+
 ## [1.12.2] - 2026-07-20
 
 ### การปรับปรุง (Improvements)

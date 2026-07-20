@@ -1,8 +1,8 @@
 Add-Type -AssemblyName System.Drawing
 
 $size = 80
-$fps = 15
-$frameCount = 30
+$fps = 30
+$frameCount = 60
 $assetsDir = Join-Path $PSScriptRoot '..\assets'
 $iconPath = Join-Path $assetsDir 'icon.png'
 $outputPath = Join-Path $assetsDir 'installer-logo.avi'
@@ -44,9 +44,9 @@ function New-AnimationFrame([int]$Index, [System.Drawing.Image]$Icon) {
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
 
-    # Match the splash gradient beneath the animation control (global y 16..95).
+    # Match the 400x300 splash gradient beneath the control (global y 52..131).
     for ($y = 0; $y -lt $size; $y++) {
-        $t = ($y + 16) / 199.0
+        $t = ($y + 52) / 299.0
         $r = [int](13 + ((22 - 13) * $t))
         $g = [int](17 + ((27 - 17) * $t))
         $b = [int](23 + ((34 - 23) * $t))

@@ -24,7 +24,9 @@ The inner `#32770` dialog has only control 1004 (progress), 1006 (static text), 
 - Preserve the existing flat-theme pattern.
 - Supply progress colors in BGR, not RGB.
 - Keep control 1004 determinate so NSIS continues to show real extraction progress. Do not add `PBS_MARQUEE` or send `PBM_SETMARQUEE`.
-- Animate the 80x80 logo region with the native `SysAnimate32` control and `assets/installer-logo.avi`; native playback continues while the synchronous InstFiles section blocks NSIS timers.
+- Keep the installer at 400x300 to match the Electron `assets/splash.html` BrowserWindow. Animate the centered 80x80 logo region with the native `SysAnimate32` control and `assets/installer-logo.avi`; native playback continues while the synchronous InstFiles section blocks NSIS timers.
+- Generate the two-second logo loop at 30 FPS (60 frames) for smooth native playback.
+- NSIS is Unicode: open the AVI with `ACM_OPENW` (`0x0467`), not `ACM_OPENA` (`0x0464`). Keep a static logo baked into `splash.bmp` as a failure-safe fallback.
 - Regenerate the logo animation with `scripts/generate-installer-animation.ps1` after changing its appearance.
 
 Launch `"$INSTDIR\GitLab MR Manager.exe"` without `--first-run` from the leave hook.
