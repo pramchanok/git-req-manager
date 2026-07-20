@@ -847,6 +847,13 @@ function setupIPC(): void {
     await client.cancelPipeline(projectId, pipelineId)
   })
 
+  ipcMain.handle('get-pipeline-jobs', async (_event, projectId: number, pipelineId: number) => {
+    if (!isConfigured()) return []
+    const settings = getSettings()
+    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+    return client.getPipelineJobs(projectId, pipelineId)
+  })
+
   ipcMain.handle('get-compare-diffs', async (_event, projectId: number, fromSha: string, toSha: string) => {
     if (!isConfigured()) return []
     const settings = getSettings()

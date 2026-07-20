@@ -1,4 +1,4 @@
-import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion, MRAwardEmoji } from './types'
+import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion, MRAwardEmoji, PipelineJob } from './types'
 
 class FetchWrapper {
   constructor(private baseUrl: string, private token: string) {}
@@ -581,6 +581,21 @@ export class GitLabClient {
 
   async cancelPipeline(projectId: number, pipelineId: number): Promise<void> {
     await this.http.post(`/projects/${projectId}/pipelines/${pipelineId}/cancel`)
+  }
+
+  async getPipelineJobs(projectId: number, pipelineId: number): Promise<PipelineJob[]> {
+    const { data } = await this.http.get(`/projects/${projectId}/pipelines/${pipelineId}/jobs`, {
+      params: { per_page: 100, include_retried: false },
+    })
+    return (data as Record<string, unknown>[]).map((job) => ({
+      id: job.id as number,
+      name: job.name as string,
+      stage: job.stage as string,
+      status: job.status as PipelineJob['status'],
+      allowFailure: (job.allow_failure as boolean) ?? false,
+      duration: (job.duration as number) ?? null,
+      webUrl: (job.web_url as string) ?? null,
+    }))
   }
 
   async closeMR(projectId: number, mrIid: number): Promise<void> {

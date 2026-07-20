@@ -285,7 +285,7 @@ export default function App() {
             className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-800 text-gray-400 hover:text-white transition-colors text-xs disabled:opacity-30"
             title="Refresh now"
           >
-            ↻
+            <span className={appState.isSyncing ? 'inline-block animate-spin' : ''}>↻</span>
           </button>
           <button
             onClick={() => {

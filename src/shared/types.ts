@@ -127,6 +127,20 @@ export interface AppState {
   ownerGroups: GitLabGroup[]
 }
 
+export type PipelineJobStatus =
+  | 'created' | 'pending' | 'running' | 'success' | 'failed'
+  | 'canceled' | 'skipped' | 'manual' | 'waiting_for_resource' | 'preparing' | 'scheduled'
+
+export interface PipelineJob {
+  id: number
+  name: string
+  stage: string
+  status: PipelineJobStatus
+  allowFailure: boolean
+  duration: number | null
+  webUrl: string | null
+}
+
 export type UpdateStatus =
   | 'idle'
   | 'disabled'
@@ -181,3 +195,4 @@ export type IpcChannel =
   | 'add-mr-award-emoji'
   | 'remove-mr-award-emoji'
   | 'get-mr-approvals'
+  | 'get-pipeline-jobs'

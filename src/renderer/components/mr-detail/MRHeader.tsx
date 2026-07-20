@@ -1,5 +1,6 @@
 import type { MergeRequest } from '../../../shared/types'
 import { GitCommit, Folder } from 'lucide-react'
+import PipelineMiniGraph from './PipelineMiniGraph'
 
 export type MRDetailTab = 'overview' | 'changes'
 
@@ -8,12 +9,12 @@ interface MRHeaderProps {
   activeTab: MRDetailTab
   onTabChange: (tab: MRDetailTab) => void
   diffsCount: number
-  processingAction: boolean
+  cancelingPipeline: boolean
   onCancelPipeline: () => void
 }
 
 /** Header ของหน้า MR Detail: ชื่อ MR, branch, badge สถานะ, pipeline, labels และแท็บ */
-export default function MRHeader({ mr, activeTab, onTabChange, diffsCount, processingAction, onCancelPipeline }: MRHeaderProps) {
+export default function MRHeader({ mr, activeTab, onTabChange, diffsCount, cancelingPipeline, onCancelPipeline }: MRHeaderProps) {
   return (
     <header className="sticky top-0 z-20 bg-[#0d1117]/80 backdrop-blur-xl border-b border-gray-800 shrink-0">
       <div className="px-6 py-5">
@@ -91,15 +92,27 @@ export default function MRHeader({ mr, activeTab, onTabChange, diffsCount, proce
                     PIPELINE {mr.pipelineStatus.toUpperCase()}
                   </button>
 
+                  {mr.pipelineId && (
+                    <PipelineMiniGraph
+                      projectId={mr.projectId}
+                      pipelineId={mr.pipelineId}
+                      pipelineStatus={mr.pipelineStatus}
+                    />
+                  )}
+
                   {mr.pipelineStatus === 'running' && (
                     <button
                       onClick={onCancelPipeline}
                       title="Cancel running pipeline"
-                      disabled={processingAction}
+                      disabled={cancelingPipeline}
                       className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-md border border-gray-700 bg-gray-800 text-gray-400 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/10 transition-colors disabled:opacity-50 shadow-sm"
                     >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      CANCEL
+                      {cancelingPipeline ? (
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      )}
+                      {cancelingPipeline ? 'CANCELING…' : 'CANCEL'}
                     </button>
                   )}
                 </div>

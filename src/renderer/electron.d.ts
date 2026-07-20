@@ -39,6 +39,7 @@ declare global {
       mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => Promise<void>
       closeMR: (projectId: number, mrIid: number) => Promise<void>
       cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
+      getPipelineJobs: (projectId: number, pipelineId: number) => Promise<import('../../shared/types').PipelineJob[]>
       getCompareDiffs: (projectId: number, fromSha: string, toSha: string) => Promise<import('../../shared/types').MRDiff[]>
       getCommitDiffs: (projectId: number, sha: string) => Promise<import('../../shared/types').MRDiff[]>
       getMRAwardEmojis: (projectId: number, mrIid: number) => Promise<MRAwardEmoji[]>

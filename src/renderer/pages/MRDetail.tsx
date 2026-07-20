@@ -35,7 +35,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [loadingDiscussions, setLoadingDiscussions] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
-  const [processingAction, setProcessingAction] = useState(false)
+  const [activeAction, setActiveAction] = useState<MRAction | null>(null)
+  const [pendingEmoji, setPendingEmoji] = useState<string | null>(null)
   const [removeSourceBranch, setRemoveSourceBranch] = useState(true)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(288) // 72 * 4 = 288px default
@@ -196,6 +197,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     if (emojiName === '+1') emojiName = 'thumbsup'
     if (emojiName === '-1') emojiName = 'thumbsdown'
 
+    setPendingEmoji(emojiName)
     try {
       const existing = awardEmojis.find(a => a.name === emojiName && a.user.id === currentUser.id)
 
@@ -216,6 +218,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     } catch (err) {
       console.error(err)
       onToast('Failed to update reaction', 'error')
+    } finally {
+      setPendingEmoji(null)
     }
   }
 
@@ -233,7 +237,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
 
   const handleAction = async (action: MRAction) => {
     if (!mr) return
-    setProcessingAction(true)
+    setActiveAction(action)
     try {
       if (action === 'approve') {
         await window.electronAPI.approveMR(projectId, mrIid)
@@ -269,7 +273,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       console.error(err)
       onToast(`Failed to ${action} MR`, 'error')
     } finally {
-      setProcessingAction(false)
+      setActiveAction(null)
     }
   }
 
@@ -298,7 +302,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
         activeTab={activeTab}
         onTabChange={setActiveTab}
         diffsCount={diffs.length}
-        processingAction={processingAction}
+        cancelingPipeline={activeAction === 'cancel-pipeline'}
         onCancelPipeline={() => handleAction('cancel-pipeline')}
       />
 
@@ -355,7 +359,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 </div>
 
                 {/* Award Emojis */}
-                <AwardEmojiBar emojiGroups={emojiGroups} onToggle={toggleAwardEmoji} />
+                <AwardEmojiBar emojiGroups={emojiGroups} onToggle={toggleAwardEmoji} pendingEmoji={pendingEmoji} />
 
                 {/* Discussion Thread */}
                 <DiscussionThread
@@ -393,7 +397,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       <MRActionBar
         mr={mr}
         currentUser={currentUser}
-        processingAction={processingAction}
+        activeAction={activeAction}
         removeSourceBranch={removeSourceBranch}
         onRemoveSourceBranchChange={setRemoveSourceBranch}
         onBack={onBack}

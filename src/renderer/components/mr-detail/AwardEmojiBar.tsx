@@ -8,10 +8,11 @@ export type EmojiGroups = Record<string, { count: number; hasVoted: boolean }>
 interface AwardEmojiBarProps {
   emojiGroups: EmojiGroups
   onToggle: (name: string) => void
+  pendingEmoji?: string | null
 }
 
 /** แถว award emoji (👍 👎 + reaction อื่นๆ) พร้อมปุ่มเปิด emoji picker */
-export default function AwardEmojiBar({ emojiGroups, onToggle }: AwardEmojiBarProps) {
+export default function AwardEmojiBar({ emojiGroups, onToggle, pendingEmoji }: AwardEmojiBarProps) {
   const [showPicker, setShowPicker] = useState(false)
 
   return (
@@ -29,9 +30,13 @@ export default function AwardEmojiBar({ emojiGroups, onToggle }: AwardEmojiBarPr
           <button
             key={name}
             onClick={() => onToggle(name)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors border ${hasVoted ? 'bg-[#1d4ed8]/20 border-[#1d4ed8] text-blue-400' : 'bg-[#21262d] border-transparent text-gray-400 hover:bg-[#30363d]'}`}
+            disabled={!!pendingEmoji}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors border disabled:cursor-wait ${
+              pendingEmoji === name ? 'bg-[#1d4ed8]/10 border-[#1d4ed8]/50 text-blue-400 animate-pulse' :
+              hasVoted ? 'bg-[#1d4ed8]/20 border-[#1d4ed8] text-blue-400' : 'bg-[#21262d] border-transparent text-gray-400 hover:bg-[#30363d]'
+            }`}
           >
-            <span className="text-base leading-none">{nativeChar}</span>
+            <span className={`text-base leading-none ${pendingEmoji === name ? 'opacity-60' : ''}`}>{nativeChar}</span>
             <span>{count}</span>
           </button>
         )

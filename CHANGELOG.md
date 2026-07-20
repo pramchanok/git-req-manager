@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.12.0] - 2026-07-20
+
+### คุณสมบัติใหม่ (New Features)
+
+- **Pipeline Mini Graph แบบ GitLab**: แสดงสถานะ pipeline ราย stage ในหน้า MR Detail ข้าง badge สถานะเดิม — ไอคอนสถานะแต่ละ stage เรียงตามลำดับจริงของ pipeline, hover เพื่อดูรายการ jobs ในแต่ละ stage พร้อมสถานะและ duration, คลิก job เพื่อเปิดหน้า job บน GitLab ได้ทันที และ auto-refresh ทุก 10 วินาทีขณะ pipeline กำลังทำงาน
+
+### การปรับปรุง (Improvements)
+
+- **ออกแบบปุ่ม "Delete source branch" ใหม่**: เปลี่ยนจาก checkbox เป็น toggle pill ที่คลิกได้ทั้งก้อน พร้อม mini switch และสถานะเปิด/ปิดที่ชัดเจน เข้ากับโทนของแอป
+- **Loading indicator ครบทุก action**: ปุ่ม Approve / Revoke / Merge / Close MR / Cancel Pipeline แสดง spinner พร้อมข้อความสถานะ (เช่น "Merging…") เฉพาะปุ่มที่กดขณะรอ API, emoji reaction แสดงสถานะกำลังส่งและป้องกันการกดซ้ำ, ปุ่ม refresh บน title bar หมุนขณะ sync
+
+---
+
 ## [1.11.0] - 2026-07-18
 
 ### คุณสมบัติใหม่ (New Features)
