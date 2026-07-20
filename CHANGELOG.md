@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.12.1] - 2026-07-20
+
+### การปรับปรุง (Improvements)
+
+- **Modern Windows Installer**: ออกแบบหน้าติดตั้ง Windows ใหม่ให้ตรงกับธีมของแอป (`#0d1117`) พร้อม native marquee animation ของ Windows progress control ซึ่งเคลื่อนไหวได้ต่อเนื่องระหว่าง extraction และใช้ static splash ที่ไม่ถูก dialog repaint ทับ
+- **เอกสาร Architecture และ Project Skills**: เพิ่มเอกสารภาพรวมโครงสร้าง process/data flow พร้อม Codex skills เฉพาะโครงการสำหรับ Electron features, GitLab API, release/packaging, NSIS installer, renderer UI และ sync/webhook debugging
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ animation ของ Windows Installer**: เปลี่ยนจาก NSIS script timer ซึ่งหยุดทำงานระหว่าง synchronous extraction มาใช้ animation ที่ทำงานใน native progress control พร้อมตัด animated bitmap assets ที่ไม่จำเป็น
+- **แสดง Changelog หลังอัปเดตอย่างเชื่อถือได้**: แก้ race condition ที่ main process ส่ง event ก่อน React ลง listener พร้อมเพิ่ม version baseline สำหรับ first install และ renderer-to-main startup handshake สำหรับการเปิด Changelog หลังอัปเดต
+
+---
+
 ## [1.12.0] - 2026-07-20
 
 ### คุณสมบัติใหม่ (New Features)
@@ -8,18 +22,11 @@
 
 ### การปรับปรุง (Improvements)
 
-- **Modern Animated NSIS Installer**: ออกแบบหน้าติดตั้ง Windows ใหม่ให้ตรงกับธีมของแอป (`#0d1117`) พร้อม animation แบบ 12 เฟรมที่มี orange glow pulse และ orbit highlight รอบไอคอน โดยยังใช้ progress bar จริงของ NSIS, จัดการ timer/GDI bitmap handles อย่างปลอดภัย และมี static splash fallback
-- **เอกสาร Architecture และ Project Skills**: เพิ่มเอกสารภาพรวมโครงสร้าง process/data flow พร้อม Codex skills เฉพาะโครงการสำหรับ Electron features, GitLab API, release/packaging, NSIS installer, renderer UI และ sync/webhook debugging
 - **ออกแบบปุ่ม "Delete source branch" ใหม่**: เปลี่ยนจาก checkbox เป็น toggle pill ที่คลิกได้ทั้งก้อน พร้อม mini switch และสถานะเปิด/ปิดที่ชัดเจน เข้ากับโทนของแอป
 - **Loading indicator ครบทุก action**: ปุ่ม Approve / Revoke / Merge / Close MR / Cancel Pipeline แสดง spinner พร้อมข้อความสถานะ (เช่น "Merging…") เฉพาะปุ่มที่กดขณะรอ API, emoji reaction แสดงสถานะกำลังส่งและป้องกันการกดซ้ำ, ปุ่ม refresh บน title bar หมุนขณะ sync
 - **หน้า MR Detail อัปเดตแบบเรียลไทม์**: broadcast ข้อมูล sync ไปทุกหน้าต่าง (ไม่ใช่แค่หน้าต่างหลัก) ทำให้หน้าต่าง MR Detail ที่เปิดอยู่ refresh สถานะ MR, approvals, discussions และ emoji ทันทีเมื่อ webhook/polling sync เสร็จ, โหลด diffs ใหม่อัตโนมัติเมื่อมี commit ใหม่ push เข้ามา (ตรวจจาก head SHA) และเร่ง fallback poll ของ discussions จาก 60 → 20 วินาที
 - **ปรับปรุง Performance**: หน้าต่างหลักเปิดเร็วขึ้นมาก — code splitting แยกหน้า MR Detail/Report ออกจาก bundle หลัก (เล็กลง 84% จาก ~2 MB เหลือ ~320 KB), cache สถานะ pipeline ราย MR (ข้ามการยิง API ซ้ำเมื่อ MR ไม่เปลี่ยนและสถานะเป็น terminal, TTL 5 นาที), cache รายชื่อ Owner Groups 10 นาที และหน้าต่าง MR Detail เช็คข้อมูลจาก state ที่ broadcast มาก่อน ถ้า MR นั้นไม่มีอะไรเปลี่ยนจะไม่ยิง API ซ้ำ
 - **สถานะ Pipeline แบบ push ผ่าน Webhook**: สมัครรับ `pipeline_events` ใน webhook ที่แอปจัดการให้อัตโนมัติ — สถานะ pipeline บน badge และ Dashboard อัปเดตเกือบทันทีเมื่อ pipeline เริ่ม/สำเร็จ/ล้มเหลว พร้อม debounce การ sync 2 วินาทีกัน event รัวจาก pipeline stage, โหมด webhook ลด poll สถานะ MR เหลือ fallback ทุก 30 วินาที (โหมด polling ยัง 15 วินาที) — webhook เดิมที่ลงทะเบียนไว้ก่อนหน้าจะได้รับ pipeline events หลังกด Save ใน Settings หนึ่งครั้ง และโหมด relay ต้องอัปเดต relay server ให้ forward pipeline event ด้วย
-
-### การแก้ไขข้อบกพร่อง (Bug Fixes)
-
-- **แก้ animation ของ Windows Installer**: เปลี่ยนจาก NSIS script timer ที่หยุดทำงานระหว่าง synchronous extraction มาใช้ native marquee animation ของ Windows progress control ทำให้แถบติดตั้งเคลื่อนไหวต่อเนื่องและลด animated bitmap assets ที่ไม่จำเป็น
-- **แสดง Changelog หลังอัปเดตอย่างเชื่อถือได้**: แก้ race condition ที่ main process ส่ง event ก่อน React ลง listener พร้อมเพิ่ม version baseline สำหรับ first install และ renderer-to-main startup handshake สำหรับการเปิด Changelog หลังอัปเดต
 
 ---
 
