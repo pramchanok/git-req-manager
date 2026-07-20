@@ -440,6 +440,7 @@ export class GitLabClient {
       author: this.mapUser(rawAuthor),
       assignees: rawAssignees.map(this.mapUser.bind(this)),
       reviewers: rawReviewers.map(this.mapUser.bind(this)),
+      sha: (mr.sha as string) ?? null,
       sourceBranch: mr.source_branch as string,
       targetBranch: mr.target_branch as string,
       webUrl: mr.web_url as string,

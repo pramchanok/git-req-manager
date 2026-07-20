@@ -127,15 +127,15 @@ async function startApp(): Promise<void> {
       updateTrayBadge(state.myReviewMRs.length)
       updateTrayMRs(state.myReviewMRs)
 
-      // Push state to renderer
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('app-state-updated', state)
+      // Push state to every renderer window (dashboard + MR detail windows)
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send('app-state-updated', state)
       }
     })
 
     setSyncStatusChangeCallback((isSyncing: boolean) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('sync-status-updated', isSyncing)
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send('sync-status-updated', isSyncing)
       }
     })
 

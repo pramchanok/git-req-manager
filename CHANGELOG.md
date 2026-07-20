@@ -10,6 +10,7 @@
 
 - **ออกแบบปุ่ม "Delete source branch" ใหม่**: เปลี่ยนจาก checkbox เป็น toggle pill ที่คลิกได้ทั้งก้อน พร้อม mini switch และสถานะเปิด/ปิดที่ชัดเจน เข้ากับโทนของแอป
 - **Loading indicator ครบทุก action**: ปุ่ม Approve / Revoke / Merge / Close MR / Cancel Pipeline แสดง spinner พร้อมข้อความสถานะ (เช่น "Merging…") เฉพาะปุ่มที่กดขณะรอ API, emoji reaction แสดงสถานะกำลังส่งและป้องกันการกดซ้ำ, ปุ่ม refresh บน title bar หมุนขณะ sync
+- **หน้า MR Detail อัปเดตแบบเรียลไทม์**: broadcast ข้อมูล sync ไปทุกหน้าต่าง (ไม่ใช่แค่หน้าต่างหลัก) ทำให้หน้าต่าง MR Detail ที่เปิดอยู่ refresh สถานะ MR, approvals, discussions และ emoji ทันทีเมื่อ webhook/polling sync เสร็จ, poll สถานะ MR ทุก 15 วินาทีขณะ pipeline กำลังทำงานให้ badge และปุ่ม Merge ตามสถานะจริง, โหลด diffs ใหม่อัตโนมัติเมื่อมี commit ใหม่ push เข้ามา (ตรวจจาก head SHA) และเร่ง fallback poll ของ discussions จาก 60 → 20 วินาที
 
 ---
 

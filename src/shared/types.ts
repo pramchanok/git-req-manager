@@ -45,6 +45,7 @@ export interface MergeRequest {
   upvotes: number
   downvotes: number
   userNotesCount: number
+  sha: string | null
   pipelineStatus: 'running' | 'success' | 'failed' | 'canceled' | null
   pipelineId: number | null
   pipelineWebUrl: string | null

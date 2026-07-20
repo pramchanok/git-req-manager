@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import type { GitLabUser, MergeRequest, MRDiff, MRDiscussion, MRAwardEmoji } from '../../shared/types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -104,8 +104,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
   }, [diffs, viewedFiles, diffStats])
 
-  const fetchDiffs = async () => {
-    setLoadingDiffs(true)
+  const fetchDiffs = async (silent = false) => {
+    if (!silent) setLoadingDiffs(true)
     try {
       const data = await window.electronAPI.getMRDiffs(projectId, mrIid)
       setDiffs(data)
@@ -139,37 +139,70 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [mrData, appState, approvals] = await Promise.all([
-          window.electronAPI.getMRByIid(projectId, mrIid),
-          window.electronAPI.getAppState(),
-          window.electronAPI.getMRApprovals(projectId, mrIid)
-        ])
+  /** โหลดตัว MR + approvals ใหม่ (ใช้ทั้งตอน mount, ตอนได้ push จาก main และตอน poll ระหว่าง pipeline วิ่ง) */
+  const refreshMR = async (notifyError = false) => {
+    try {
+      const [mrData, appState, approvals] = await Promise.all([
+        window.electronAPI.getMRByIid(projectId, mrIid),
+        window.electronAPI.getAppState(),
+        window.electronAPI.getMRApprovals(projectId, mrIid)
+      ])
 
-        if (mrData && appState.currentUser) {
-          mrData.hasApproved = approvals.approved_by.some(a => a.user.id === appState.currentUser?.id)
-        }
-
-        setMR(mrData)
-        setCurrentUser(appState.currentUser)
-      } catch (err) {
-        console.error(err)
-        onToast('Failed to load MR', 'error')
+      if (mrData && appState.currentUser) {
+        mrData.hasApproved = approvals.approved_by.some(a => a.user.id === appState.currentUser?.id)
       }
+
+      setMR(mrData)
+      setCurrentUser(appState.currentUser)
+    } catch (err) {
+      console.error(err)
+      if (notifyError) onToast('Failed to load MR', 'error')
     }
-    loadData()
+  }
+
+  useEffect(() => {
+    refreshMR(true)
     fetchDiscussions()
-    fetchDiffs()
     fetchAwardEmojis()
 
+    // fallback poll (โหมด polling หรือกรณี webhook หลุด) — discussions/emojis ทุก 20 วินาที
     const interval = setInterval(() => {
       fetchDiscussions()
       fetchAwardEmojis()
-    }, 60000)
-    return () => clearInterval(interval)
+    }, 20000)
+
+    // real-time: main process broadcast state ใหม่ทุกครั้งที่ sync (webhook/polling) → refresh ทันที
+    const unsubscribe = window.electronAPI.onAppStateUpdated(() => {
+      refreshMR()
+      fetchDiscussions()
+      fetchAwardEmojis()
+    })
+
+    return () => {
+      clearInterval(interval)
+      unsubscribe()
+    }
   }, [projectId, mrIid])
+
+  // pipeline กำลังวิ่ง → poll ตัว MR ทุก 15 วินาที ให้ badge/ปุ่ม Merge ตามสถานะจริง
+  useEffect(() => {
+    if (mr?.pipelineStatus !== 'running') return
+    const interval = setInterval(() => refreshMR(), 15000)
+    return () => clearInterval(interval)
+  }, [mr?.pipelineStatus, projectId, mrIid])
+
+  // โหลด diffs ครั้งแรก และโหลดซ้ำแบบเงียบๆ เมื่อ head sha เปลี่ยน (มี commit ใหม่ push เข้ามา)
+  const lastShaRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!mr) return
+    if (lastShaRef.current === null) {
+      lastShaRef.current = mr.sha
+      fetchDiffs()
+    } else if (mr.sha && mr.sha !== lastShaRef.current) {
+      lastShaRef.current = mr.sha
+      fetchDiffs(true)
+    }
+  }, [mr?.sha])
 
   const handleAddComment = async () => {
     if (!commentText.trim()) return
@@ -263,12 +296,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       onRefresh()
       // Note: we don't close the window on approve, just refresh so user can see it approved.
       // If merged or closed, it might make sense to close the window, but we leave it to the user.
-      const updatedMR = await window.electronAPI.getMRByIid(projectId, mrIid)
-      if (updatedMR && currentUser) {
-        const approvals = await window.electronAPI.getMRApprovals(projectId, mrIid)
-        updatedMR.hasApproved = approvals.approved_by.some(a => a.user.id === currentUser.id)
-      }
-      setMR(updatedMR)
+      await refreshMR()
     } catch (err) {
       console.error(err)
       onToast(`Failed to ${action} MR`, 'error')
