@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-report-file', filename, content),
   getChangelog: (): Promise<string | null> =>
     ipcRenderer.invoke('get-changelog'),
+  shouldShowChangelog: (): Promise<boolean> =>
+    ipcRenderer.invoke('should-show-changelog'),
   setLastSeenVersion: (): Promise<void> =>
     ipcRenderer.invoke('set-last-seen-version'),
   getOwnerGroups: (): Promise<import('./shared/types').GitLabGroup[]> =>

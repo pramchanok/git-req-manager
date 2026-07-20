@@ -16,6 +16,11 @@
 - **ปรับปรุง Performance**: หน้าต่างหลักเปิดเร็วขึ้นมาก — code splitting แยกหน้า MR Detail/Report ออกจาก bundle หลัก (เล็กลง 84% จาก ~2 MB เหลือ ~320 KB), cache สถานะ pipeline ราย MR (ข้ามการยิง API ซ้ำเมื่อ MR ไม่เปลี่ยนและสถานะเป็น terminal, TTL 5 นาที), cache รายชื่อ Owner Groups 10 นาที และหน้าต่าง MR Detail เช็คข้อมูลจาก state ที่ broadcast มาก่อน ถ้า MR นั้นไม่มีอะไรเปลี่ยนจะไม่ยิง API ซ้ำ
 - **สถานะ Pipeline แบบ push ผ่าน Webhook**: สมัครรับ `pipeline_events` ใน webhook ที่แอปจัดการให้อัตโนมัติ — สถานะ pipeline บน badge และ Dashboard อัปเดตเกือบทันทีเมื่อ pipeline เริ่ม/สำเร็จ/ล้มเหลว พร้อม debounce การ sync 2 วินาทีกัน event รัวจาก pipeline stage, โหมด webhook ลด poll สถานะ MR เหลือ fallback ทุก 30 วินาที (โหมด polling ยัง 15 วินาที) — webhook เดิมที่ลงทะเบียนไว้ก่อนหน้าจะได้รับ pipeline events หลังกด Save ใน Settings หนึ่งครั้ง และโหมด relay ต้องอัปเดต relay server ให้ forward pipeline event ด้วย
 
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ animation ของ Windows Installer**: เปลี่ยนจาก NSIS script timer ที่หยุดทำงานระหว่าง synchronous extraction มาใช้ native marquee animation ของ Windows progress control ทำให้แถบติดตั้งเคลื่อนไหวต่อเนื่องและลด animated bitmap assets ที่ไม่จำเป็น
+- **แสดง Changelog หลังอัปเดตอย่างเชื่อถือได้**: แก้ race condition ที่ main process ส่ง event ก่อน React ลง listener พร้อมเพิ่ม version baseline สำหรับ first install และ renderer-to-main startup handshake สำหรับการเปิด Changelog หลังอัปเดต
+
 ---
 
 ## [1.11.0] - 2026-07-18

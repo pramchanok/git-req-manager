@@ -115,6 +115,9 @@ export default function App() {
     // Load initial state
     window.electronAPI.getAppState().then(setAppState)
     window.electronAPI.getUpdateState().then(setUpdateState)
+    window.electronAPI.shouldShowChangelog().then((shouldShow) => {
+      if (shouldShow) setPage('changelog')
+    })
 
     // Listen for state updates from main process
     const unsubscribe = window.electronAPI.onAppStateUpdated((state) => {

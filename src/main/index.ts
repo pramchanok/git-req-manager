@@ -148,6 +148,15 @@ async function startApp(): Promise<void> {
 
     // Create Splash Screen
     const firstRun = isFirstRun() || process.argv.some(a => a.includes('--first-run'))
+    const currentVersion = app.getVersion()
+    const lastSeenVersion = getLastSeenVersion()
+
+    // Establish a baseline on a genuine first install. Existing installations
+    // with no baseline are treated as upgraded so they see the current notes.
+    if (firstRun && !lastSeenVersion) {
+      setLastSeenVersion(currentVersion)
+    }
+
     splashWindow = createSplashWindow(firstRun)
 
     setupIPC()
@@ -227,15 +236,6 @@ async function startApp(): Promise<void> {
       })
     } else {
       initializeUpdater()
-    }
-
-    // Show changelog automatically on first launch after an update
-    const currentVersion = app.getVersion()
-    const lastSeenVersion = getLastSeenVersion()
-    if (lastSeenVersion && lastSeenVersion !== currentVersion) {
-      mainWindow.webContents.once('did-finish-load', () => {
-        mainWindow?.webContents.send('show-changelog')
-      })
     }
 
     if (revealWindowOnReady) {
@@ -632,6 +632,12 @@ function setupIPC(): void {
     } catch {
       return null
     }
+  })
+
+  // Renderer asks after its listeners and state are ready. This avoids losing
+  // the startup event between BrowserWindow did-finish-load and React mount.
+  ipcMain.handle('should-show-changelog', () => {
+    return getLastSeenVersion() !== app.getVersion()
   })
 
   ipcMain.handle('set-last-seen-version', () => {

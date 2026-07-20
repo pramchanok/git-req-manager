@@ -26,6 +26,7 @@ declare global {
       exportReportPDF: () => Promise<boolean>
       saveReportFile: (filename: string, content: string) => Promise<boolean>
       getChangelog: () => Promise<string | null>
+      shouldShowChangelog: () => Promise<boolean>
       setLastSeenVersion: () => Promise<void>
       getOwnerGroups: () => Promise<GitLabGroup[]>
       setPinned: (pinned: boolean) => Promise<void>

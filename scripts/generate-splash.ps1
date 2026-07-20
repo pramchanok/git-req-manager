@@ -2,7 +2,6 @@ Add-Type -AssemblyName System.Drawing
 
 $width = 320
 $height = 200
-$frameCount = 12
 $assetsDir = Join-Path $PSScriptRoot '..\assets'
 $iconPath = Join-Path $assetsDir 'icon.png'
 
@@ -22,9 +21,8 @@ function New-RoundedRectanglePath {
     return $path
 }
 
-function New-SplashFrame {
+function New-SplashImage {
     param(
-        [int]$FrameIndex,
         [string]$OutputPath
     )
 
@@ -45,8 +43,7 @@ function New-SplashFrame {
     )
     $graphics.FillRectangle($backgroundBrush, $backgroundRect)
 
-    $phase = (2 * [Math]::PI * $FrameIndex) / $frameCount
-    $pulse = ([Math]::Sin($phase) + 1) / 2
+    $pulse = 0.5
     $centerX = 160
     $centerY = 56
 
@@ -62,10 +59,10 @@ function New-SplashFrame {
         $glowBrush.Dispose()
     }
 
-    # Orbiting highlight gives motion while keeping the product mark stable.
+    # A restrained highlight echoes the orange brand accent.
     $orbitRadius = 38
-    $orbitX = $centerX + ([Math]::Cos($phase) * $orbitRadius)
-    $orbitY = $centerY + ([Math]::Sin($phase) * 18)
+    $orbitX = $centerX + $orbitRadius
+    $orbitY = $centerY
     $orbitBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(180, 251, 146, 60))
     $graphics.FillEllipse($orbitBrush, $orbitX - 1.5, $orbitY - 1.5, 3, 3)
 
@@ -125,12 +122,7 @@ function New-SplashFrame {
     $bitmap.Dispose()
 }
 
-for ($frame = 0; $frame -lt $frameCount; $frame++) {
-    $framePath = Join-Path $assetsDir "splash-frame-$frame.bmp"
-    New-SplashFrame -FrameIndex $frame -OutputPath $framePath
-}
+$outputPath = Join-Path $assetsDir 'splash.bmp'
+New-SplashImage -OutputPath $outputPath
 
-# Keep a static fallback/preview at the legacy path.
-Copy-Item -LiteralPath (Join-Path $assetsDir 'splash-frame-0.bmp') -Destination (Join-Path $assetsDir 'splash.bmp') -Force
-
-Write-Host "Created $frameCount animated splash frames and splash.bmp fallback (320x200)"
+Write-Host "Created $outputPath (320x200)"
