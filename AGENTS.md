@@ -238,6 +238,8 @@ The NSIS InstFiles page inner dialog (`#32770`) has **only these controls**:
 - **Keep the inner dialog visible** but set its background to match the splash color (`SetCtlColors $0 "" 0x111827`). Stretch it to cover the full window area.
 - **`SetWindowTheme` with spaces** (`t " ", t " "`) removes the Windows visual theme from the progress bar for a flat look.
 - **Progress bar color messages**: `PBM_SETBKCOLOR = 0x2001` (track bg), `PBM_SETBARCOLOR = 0x0409` (fill). Colors must be in **BGR format**, not RGB.
+- Keep the InstFiles progress bar in determinate mode so it displays the real extraction percentage. Do not use `PBS_MARQUEE`/`PBM_SETMARQUEE` for visual animation.
+- Animate the logo area with a native `SysAnimate32` control playing `assets/installer-logo.avi`. Native AVI playback continues during synchronous extraction, unlike NSIS script timers.
 
 ### BMP Image Generation
 - Use `scripts/generate-splash.ps1` (PowerShell + .NET System.Drawing) for BMP generation with proper font rendering.

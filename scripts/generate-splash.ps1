@@ -3,23 +3,6 @@ Add-Type -AssemblyName System.Drawing
 $width = 320
 $height = 200
 $assetsDir = Join-Path $PSScriptRoot '..\assets'
-$iconPath = Join-Path $assetsDir 'icon.png'
-
-function New-RoundedRectanglePath {
-    param(
-        [System.Drawing.RectangleF]$Rectangle,
-        [float]$Radius
-    )
-
-    $diameter = $Radius * 2
-    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $path.AddArc($Rectangle.X, $Rectangle.Y, $diameter, $diameter, 180, 90)
-    $path.AddArc($Rectangle.Right - $diameter, $Rectangle.Y, $diameter, $diameter, 270, 90)
-    $path.AddArc($Rectangle.Right - $diameter, $Rectangle.Bottom - $diameter, $diameter, $diameter, 0, 90)
-    $path.AddArc($Rectangle.X, $Rectangle.Bottom - $diameter, $diameter, $diameter, 90, 90)
-    $path.CloseFigure()
-    return $path
-}
 
 function New-SplashImage {
     param(
@@ -43,39 +26,7 @@ function New-SplashImage {
     )
     $graphics.FillRectangle($backgroundBrush, $backgroundRect)
 
-    $pulse = 0.5
-    $centerX = 160
-    $centerY = 56
-
-    # Restrained orange pulse. Low-alpha layers keep the motion visible without
-    # competing with the product mark or resembling a loading spinner.
-    for ($layer = 3; $layer -ge 1; $layer--) {
-        $radius = 29 + ($layer * 7) + (2 * $pulse)
-        $alpha = [int](4 + ((4 - $layer) * 2) + (3 * $pulse))
-        $glowBrush = New-Object System.Drawing.SolidBrush(
-            [System.Drawing.Color]::FromArgb($alpha, 249, 115, 22)
-        )
-        $graphics.FillEllipse($glowBrush, $centerX - $radius, $centerY - $radius, $radius * 2, $radius * 2)
-        $glowBrush.Dispose()
-    }
-
-    # A restrained highlight echoes the orange brand accent.
-    $orbitRadius = 38
-    $orbitX = $centerX + $orbitRadius
-    $orbitY = $centerY
-    $orbitBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(180, 251, 146, 60))
-    $graphics.FillEllipse($orbitBrush, $orbitX - 1.5, $orbitY - 1.5, 3, 3)
-
-    # Stable glass tile and the real app icon.
-    $tileRect = [System.Drawing.RectangleF]::new(132, 28, 56, 56)
-    $tilePath = New-RoundedRectanglePath -Rectangle $tileRect -Radius 14
-    $tileBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(210, 30, 38, 49))
-    $tilePen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(48, 249, 115, 22), 1)
-    $graphics.FillPath($tileBrush, $tilePath)
-    $graphics.DrawPath($tilePen, $tilePath)
-
-    $icon = [System.Drawing.Image]::FromFile($iconPath)
-    $graphics.DrawImage($icon, 140, 36, 40, 40)
+    # The 80x80 logo area at (120, 16) is supplied by installer-logo.avi.
 
     $centerFormat = New-Object System.Drawing.StringFormat
     $centerFormat.Alignment = [System.Drawing.StringAlignment]::Center
@@ -102,11 +53,6 @@ function New-SplashImage {
 
     $bitmap.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Bmp)
 
-    $icon.Dispose()
-    $tilePath.Dispose()
-    $tileBrush.Dispose()
-    $tilePen.Dispose()
-    $orbitBrush.Dispose()
     $backgroundBrush.Dispose()
     $borderPen.Dispose()
     $titleFont.Dispose()

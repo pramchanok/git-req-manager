@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.2] - 2026-07-20
+
+### การปรับปรุง (Improvements)
+
+- **Animation ของ Windows Installer อยู่ที่โลโก้**: ย้าย animation ออกจาก progress bar ไปยังบริเวณโลโก้ โดยใช้ native Windows `SysAnimate32` และ AVI แบบสร้างซ้ำได้ เพื่อให้ animation ทำงานต่อเนื่องระหว่าง NSIS แตกไฟล์
+- **Progress bar แสดงความคืบหน้าจริง**: คืนแถบติดตั้งเป็น determinate progress ตามเปอร์เซ็นต์การแตกไฟล์จริง แทนแถบ marquee ที่วิ่งวน
+
+---
+
 ## [1.12.1] - 2026-07-20
 
 ### การปรับปรุง (Improvements)

@@ -1,6 +1,7 @@
 !ifndef BUILD_UNINSTALLER
 
 Var InstallerProgress
+Var InstallerLogoAnimation
 
 !macro customInstallMode
   ; Skip the "Choose Installation Options" page completely
@@ -80,7 +81,17 @@ Function onInstFilesShow
   System::Call 'user32::LoadImage(i 0, t "$PLUGINSDIR\splash.bmp", i 0, i 320, i 200, i 0x0010) i.r2'
   SendMessage $1 0x0172 0 $2
 
-  ; 7. Style and position the Progress Bar (1004)
+  ; 7. Play the logo animation in the native Windows animation control.
+  ; Unlike NSIS timers, SysAnimate32 keeps advancing while InstFiles extracts.
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\installer-logo.avi" "${BUILD_RESOURCES_DIR}\installer-logo.avi"
+  System::Call 'user32::CreateWindowEx(i 0, t "SysAnimate32", t "", i 0x50000004, i 120, i 16, i 80, i 80, i $0, i 0, i 0, i 0) i.r4'
+  StrCpy $InstallerLogoAnimation $4
+  SendMessage $4 0x0464 0 "STR:$PLUGINSDIR\installer-logo.avi"
+  SendMessage $4 0x0465 -1 -1
+
+  ; 8. Style and position the determinate Progress Bar (1004).
+  ; Keep it attached to the InstFiles dialog so NSIS can update its percentage.
   GetDlgItem $3 $0 1004
   StrCpy $InstallerProgress $3
   ; Position: centered x=32, y=163, w=256 (80%), h=6, TOP of Z-order
@@ -90,10 +101,9 @@ Function onInstFilesShow
   ; Remove Windows visual theme for flat look
   System::Call 'uxtheme::SetWindowTheme(i $3, t " ", t " ")'
 
-  ; Native marquee animation runs in the Windows progress control itself, so
-  ; it stays smooth while the synchronous InstFiles section extracts files.
+  ; Explicitly remove PBS_MARQUEE and retain the normal NSIS percentage mode.
   System::Call 'user32::GetWindowLong(i $3, i -16) i.r2'
-  IntOp $2 $2 | 0x08 ; PBS_MARQUEE
+  IntOp $2 $2 & 0xFFFFFFF7
   System::Call 'user32::SetWindowLong(i $3, i -16, i $2)'
 
   ; PBM_SETBKCOLOR: track = slate-700 #374151 -> BGR 0x514137
@@ -101,12 +111,11 @@ Function onInstFilesShow
 
   ; PBM_SETBARCOLOR: fill = orange-500 #F97316 -> BGR 0x1673F9
   SendMessage $3 0x0409 0 0x1673F9
-  ; PBM_SETMARQUEE: enable, 30ms animation interval
-  SendMessage $3 0x040A 1 30
 FunctionEnd
 
 Function onInstFilesLeave
-  SendMessage $InstallerProgress 0x040A 0 0
+  ; ACM_STOP
+  SendMessage $InstallerLogoAnimation 0x0466 0 0
 
   ; Launch app normally
   Exec '"$INSTDIR\GitLab MR Manager.exe"'
