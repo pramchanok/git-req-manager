@@ -190,6 +190,16 @@ Provide a 44×44px image for the 22×22 logical size.
 **Always ask for permission before bumping the version**: Before running \
 pm version\ or modifying the version in \package.json\, you MUST ask the user if they have already released the current version. Do not bump versions automatically without user confirmation.
 
+## Manual Release Tagging Rules
+
+- Use the manual `Release All Platforms` workflow as the canonical release path.
+- After bumping version and updating `CHANGELOG.md`, test, commit, and push `main` **without creating a tag locally**.
+- Enter the exact version when starting the workflow. The `prepare` job must validate `package.json`, `package-lock.json`, `CHANGELOG.md`, existing tags, and existing releases before builds start.
+- Create `v${VERSION}` only in the `finalize` job after all platform builds succeed. Never force-move a release tag.
+- If a command that creates or pushes a tag is canceled, inspect both local and remote tag state; cancellation can occur after the tag was already pushed.
+- Delete an accidental tag only when it has no GitHub Release and the user explicitly approves deleting that exact local/remote tag.
+- After editing a workflow, start a new manual run. Do not use **Re-run jobs** on an older run because GitHub uses that run's original workflow snapshot.
+
 ## UI and Design Rules
 
 - **Premium Aesthetics**: Always prioritize a premium, modern design aesthetic (e.g., similar to VS Code, GitHub, or Vercel). Use rich colors, dark modes, glassmorphism, and dynamic animations where appropriate.
