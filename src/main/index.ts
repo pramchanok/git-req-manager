@@ -253,10 +253,10 @@ async function startApp(): Promise<void> {
         if (!useRelay) {
           startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
             // Real-time merge notification for the MR author
-            if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+            if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
               void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
             }
-            syncNow()
+            requestWebhookSync()
           })
         }
         if (settings.webhookUseTunnel) {
@@ -419,6 +419,16 @@ function getOrCreateMainWindow(): BrowserWindow {
   return registerMainWindow(createWindow())
 }
 
+// Debounce sync จาก webhook event — pipeline ที่ stage เปลี่ยนรัวๆ จะ trigger แค่ครั้งเดียว
+let webhookSyncTimer: NodeJS.Timeout | null = null
+function requestWebhookSync(delayMs = 2000): void {
+  if (webhookSyncTimer) clearTimeout(webhookSyncTimer)
+  webhookSyncTimer = setTimeout(() => {
+    webhookSyncTimer = null
+    syncNow()
+  }, delayMs)
+}
+
 /**
  * Relay mode (Custom Webhook URL): รับ event ผ่าน Socket.IO จาก relay server
  * relay ส่ง authorId/mrIid มาด้วย ทำให้แจ้งเตือน "MR ถูก merge" แบบ real-time ได้
@@ -430,7 +440,7 @@ function startRelaySocket(publicUrl: string): void {
     if (data?.action === 'merge' && data.authorId && data.projectId && data.mrIid) {
       void handleWebhookMerge(data.authorId, data.projectId, data.mrIid)
     }
-    syncNow()
+    requestWebhookSync()
   })
 }
 
@@ -517,10 +527,10 @@ function setupIPC(): void {
       if (!useRelay) {
         startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
           // Real-time merge notification for the MR author
-          if (payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+          if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
             void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
           }
-          syncNow()
+          requestWebhookSync()
         })
       } else {
         // Relay mode: event เข้าทาง Socket.IO — ปิด local HTTP server (ลด attack surface)

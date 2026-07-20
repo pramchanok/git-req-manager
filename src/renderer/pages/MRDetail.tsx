@@ -184,12 +184,18 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }, [projectId, mrIid])
 
-  // pipeline กำลังวิ่ง → poll ตัว MR ทุก 15 วินาที ให้ badge/ปุ่ม Merge ตามสถานะจริง
+  // โหมด webhook: pipeline_events จะ push สถานะมาแทน — poll ตัว MR เหลือแค่ fallback ช้าๆ (30 วิ)
+  // โหมด polling: ไม่มี push → poll ทุก 15 วิ ระหว่าง pipeline วิ่ง ให้ badge/ปุ่ม Merge ตามสถานะจริง
+  const [webhookMode, setWebhookMode] = useState(false)
+  useEffect(() => {
+    window.electronAPI.getSettings().then(s => setWebhookMode(s.webhookEnabled)).catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (mr?.pipelineStatus !== 'running') return
-    const interval = setInterval(() => refreshMR(), 15000)
+    const interval = setInterval(() => refreshMR(), webhookMode ? 30000 : 15000)
     return () => clearInterval(interval)
-  }, [mr?.pipelineStatus, projectId, mrIid])
+  }, [mr?.pipelineStatus, webhookMode, projectId, mrIid])
 
   // โหลด diffs ครั้งแรก และโหลดซ้ำแบบเงียบๆ เมื่อ head sha เปลี่ยน (มี commit ใหม่ push เข้ามา)
   const lastShaRef = useRef<string | null>(null)

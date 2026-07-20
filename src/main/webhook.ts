@@ -2,8 +2,9 @@ import http from 'http'
 import os from 'os'
 
 type WebhookPayload = {
+  eventType: 'merge_request' | 'pipeline'
   mrId: number | null
-  action: string | null       // 'open' | 'merge' | 'close' | 'update' | 'reopen'
+  action: string | null       // MR: 'open' | 'merge' | 'close' | 'update' | 'reopen' — pipeline: status เช่น 'running' | 'success' | 'failed'
   authorId: number | null     // object_attributes.author_id
   projectId: number | null    // object_attributes.target_project_id
   mrIid: number | null        // object_attributes.iid
@@ -16,6 +17,7 @@ let server: http.Server | null = null
 let currentPort = 0
 
 const GITLAB_MR_HOOK = 'Merge Request Hook'
+const GITLAB_PIPELINE_HOOK = 'Pipeline Hook'
 
 function getLocalIP(): string {
   const nets = os.networkInterfaces()
@@ -91,12 +93,25 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
         if (eventType === GITLAB_MR_HOOK) {
           const attrs = payload?.object_attributes ?? {}
           onEvent({
+            eventType: 'merge_request',
             mrId: attrs.id ?? null,
             action: attrs.action ?? null,
             authorId: attrs.author_id ?? null,
             projectId: attrs.target_project_id ?? null,
             mrIid: attrs.iid ?? null,
             targetBranch: attrs.target_branch ?? null,
+          })
+        } else if (eventType === GITLAB_PIPELINE_HOOK) {
+          const attrs = payload?.object_attributes ?? {}
+          const mr = payload?.merge_request ?? {}
+          onEvent({
+            eventType: 'pipeline',
+            mrId: mr.id ?? null,
+            action: attrs.status ?? null,
+            authorId: null,
+            projectId: payload?.project?.id ?? null,
+            mrIid: mr.iid ?? null,
+            targetBranch: mr.target_branch ?? null,
           })
         }
 

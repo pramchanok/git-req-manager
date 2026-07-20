@@ -10,7 +10,8 @@
 
 - **ออกแบบปุ่ม "Delete source branch" ใหม่**: เปลี่ยนจาก checkbox เป็น toggle pill ที่คลิกได้ทั้งก้อน พร้อม mini switch และสถานะเปิด/ปิดที่ชัดเจน เข้ากับโทนของแอป
 - **Loading indicator ครบทุก action**: ปุ่ม Approve / Revoke / Merge / Close MR / Cancel Pipeline แสดง spinner พร้อมข้อความสถานะ (เช่น "Merging…") เฉพาะปุ่มที่กดขณะรอ API, emoji reaction แสดงสถานะกำลังส่งและป้องกันการกดซ้ำ, ปุ่ม refresh บน title bar หมุนขณะ sync
-- **หน้า MR Detail อัปเดตแบบเรียลไทม์**: broadcast ข้อมูล sync ไปทุกหน้าต่าง (ไม่ใช่แค่หน้าต่างหลัก) ทำให้หน้าต่าง MR Detail ที่เปิดอยู่ refresh สถานะ MR, approvals, discussions และ emoji ทันทีเมื่อ webhook/polling sync เสร็จ, poll สถานะ MR ทุก 15 วินาทีขณะ pipeline กำลังทำงานให้ badge และปุ่ม Merge ตามสถานะจริง, โหลด diffs ใหม่อัตโนมัติเมื่อมี commit ใหม่ push เข้ามา (ตรวจจาก head SHA) และเร่ง fallback poll ของ discussions จาก 60 → 20 วินาที
+- **หน้า MR Detail อัปเดตแบบเรียลไทม์**: broadcast ข้อมูล sync ไปทุกหน้าต่าง (ไม่ใช่แค่หน้าต่างหลัก) ทำให้หน้าต่าง MR Detail ที่เปิดอยู่ refresh สถานะ MR, approvals, discussions และ emoji ทันทีเมื่อ webhook/polling sync เสร็จ, โหลด diffs ใหม่อัตโนมัติเมื่อมี commit ใหม่ push เข้ามา (ตรวจจาก head SHA) และเร่ง fallback poll ของ discussions จาก 60 → 20 วินาที
+- **สถานะ Pipeline แบบ push ผ่าน Webhook**: สมัครรับ `pipeline_events` ใน webhook ที่แอปจัดการให้อัตโนมัติ — สถานะ pipeline บน badge และ Dashboard อัปเดตเกือบทันทีเมื่อ pipeline เริ่ม/สำเร็จ/ล้มเหลว พร้อม debounce การ sync 2 วินาทีกัน event รัวจาก pipeline stage, โหมด webhook ลด poll สถานะ MR เหลือ fallback ทุก 30 วินาที (โหมด polling ยัง 15 วินาที) — webhook เดิมที่ลงทะเบียนไว้ก่อนหน้าจะได้รับ pipeline events หลังกด Save ใน Settings หนึ่งครั้ง และโหมด relay ต้องอัปเดต relay server ให้ forward pipeline event ด้วย
 
 ---
 

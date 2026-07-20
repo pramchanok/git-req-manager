@@ -247,6 +247,7 @@ export class GitLabClient {
     const payload: Record<string, unknown> = {
       url: webhookUrl,
       merge_requests_events: true,
+      pipeline_events: true,
       description: myDesc,
       enable_ssl_verification: webhookUrl.startsWith('https'),
     }
