@@ -267,6 +267,11 @@ async function startApp(): Promise<void> {
             if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
               void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
             }
+            // คอมเมนต์ใหม่ — push ตรงไปหน้า MR Detail ที่เปิดอยู่ ไม่ต้อง full sync
+            if (payload.eventType === 'note' && payload.projectId && payload.mrIid) {
+              broadcastMRNoteEvent(payload.projectId, payload.mrIid)
+              return
+            }
             requestWebhookSync()
           })
         }
@@ -441,6 +446,17 @@ function requestWebhookSync(delayMs = 2000): void {
 }
 
 /**
+ * แจ้ง renderer ว่ามีคอมเมนต์/discussion ใหม่บน MR ตัวหนึ่ง — หน้า MR Detail ที่เปิด MR นั้นอยู่
+ * จะดึง discussions ใหม่แบบเงียบๆ ทันที (ไม่ต้อง poll). ไม่ trigger full sync เพราะคอมเมนต์
+ * ไม่กระทบรายการ review/open MR — ประหยัดการยิง API
+ */
+function broadcastMRNoteEvent(projectId: number, mrIid: number): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('mr-note-event', { projectId, mrIid })
+  }
+}
+
+/**
  * Relay mode (Custom Webhook URL): รับ event ผ่าน Socket.IO จาก relay server
  * relay ส่ง authorId/mrIid มาด้วย ทำให้แจ้งเตือน "MR ถูก merge" แบบ real-time ได้
  */
@@ -450,6 +466,11 @@ function startRelaySocket(publicUrl: string): void {
   connectSocketClient(serverUrl, (data) => {
     if (data?.action === 'merge' && data.authorId && data.projectId && data.mrIid) {
       void handleWebhookMerge(data.authorId, data.projectId, data.mrIid)
+    }
+    // คอมเมนต์ใหม่ผ่าน relay (ถ้า relay server forward eventType 'note' มาให้) — push ตรง ไม่ full sync
+    if (data?.eventType === 'note' && data.projectId && data.mrIid) {
+      broadcastMRNoteEvent(data.projectId, data.mrIid)
+      return
     }
     requestWebhookSync()
   })
@@ -545,6 +566,11 @@ function setupIPC(): void {
           // Real-time merge notification for the MR author
           if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
             void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
+          }
+          // คอมเมนต์ใหม่ — push ตรงไปหน้า MR Detail ที่เปิดอยู่ ไม่ต้อง full sync
+          if (payload.eventType === 'note' && payload.projectId && payload.mrIid) {
+            broadcastMRNoteEvent(payload.projectId, payload.mrIid)
+            return
           }
           requestWebhookSync()
         })

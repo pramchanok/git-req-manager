@@ -56,6 +56,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('sync-status-updated', (_event, isSyncing: boolean) => callback(isSyncing))
     return () => ipcRenderer.removeAllListeners('sync-status-updated')
   },
+  onMRNoteEvent: (callback: (data: { projectId: number; mrIid: number }) => void) => {
+    const handler = (_event: unknown, data: { projectId: number; mrIid: number }) => callback(data)
+    ipcRenderer.on('mr-note-event', handler)
+    return () => ipcRenderer.removeListener('mr-note-event', handler)
+  },
   onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => {
     ipcRenderer.on('tunnel-status', (_event, data) => callback(data))
     return () => ipcRenderer.removeAllListeners('tunnel-status')

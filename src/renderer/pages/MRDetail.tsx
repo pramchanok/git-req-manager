@@ -117,14 +117,14 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
-  const fetchDiscussions = async () => {
-    setLoadingDiscussions(true)
+  const fetchDiscussions = async (silent = false) => {
+    if (!silent) setLoadingDiscussions(true)
     try {
       const data = await window.electronAPI.getMRDiscussions(projectId, mrIid)
       setDiscussions(data)
     } catch (err) {
       console.error(err)
-      onToast('Failed to load discussions', 'error')
+      if (!silent) onToast('Failed to load discussions', 'error')
     } finally {
       setLoadingDiscussions(false)
     }
@@ -166,8 +166,9 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     fetchAwardEmojis()
 
     // fallback poll (โหมด polling หรือกรณี webhook หลุด) — discussions/emojis ทุก 20 วินาที
+    // ยิงแบบ silent: อัปเดตข้อมูลเบื้องหลังโดยไม่โชว์ spinner → ไม่เกิดอาการกระพริบ
     const interval = setInterval(() => {
-      fetchDiscussions()
+      fetchDiscussions(true)
       fetchAwardEmojis()
     }, 20000)
 
@@ -183,13 +184,22 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
         return
       }
       refreshMR()
-      fetchDiscussions()
+      fetchDiscussions(true)
+      fetchAwardEmojis()
+    })
+
+    // real-time: โหมด webhook — main ส่ง note-event ตรงมาเมื่อมีคอมเมนต์ใหม่บน MR นี้
+    // ดึง discussions/emojis ใหม่แบบเงียบทันที ไม่ต้องรอ poll 20 วิ
+    const unsubscribeNote = window.electronAPI.onMRNoteEvent(({ projectId: p, mrIid: i }) => {
+      if (p !== projectId || i !== mrIid) return
+      fetchDiscussions(true)
       fetchAwardEmojis()
     })
 
     return () => {
       clearInterval(interval)
       unsubscribe()
+      unsubscribeNote()
     }
   }, [projectId, mrIid])
 

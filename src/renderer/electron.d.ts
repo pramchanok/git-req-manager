@@ -49,6 +49,7 @@ declare global {
       getMRApprovals: (projectId: number, mrIid: number) => Promise<{ approved_by: { user: GitLabUser }[] }>
       onAppStateUpdated: (callback: (state: AppState) => void) => () => void
       onSyncStatusUpdated: (callback: (isSyncing: boolean) => void) => () => void
+      onMRNoteEvent: (callback: (data: { projectId: number; mrIid: number }) => void) => () => void
       onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => () => void
       onUpdateStateChanged: (callback: (state: UpdateState) => void) => () => void
       onShowSettings: (callback: () => void) => () => void

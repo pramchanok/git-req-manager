@@ -2,9 +2,9 @@ import http from 'http'
 import os from 'os'
 
 type WebhookPayload = {
-  eventType: 'merge_request' | 'pipeline'
+  eventType: 'merge_request' | 'pipeline' | 'note'
   mrId: number | null
-  action: string | null       // MR: 'open' | 'merge' | 'close' | 'update' | 'reopen' — pipeline: status เช่น 'running' | 'success' | 'failed'
+  action: string | null       // MR: 'open' | 'merge' | 'close' | 'update' | 'reopen' — pipeline: status เช่น 'running' | 'success' | 'failed' — note: 'note'
   authorId: number | null     // object_attributes.author_id
   projectId: number | null    // object_attributes.target_project_id
   mrIid: number | null        // object_attributes.iid
@@ -18,6 +18,7 @@ let currentPort = 0
 
 const GITLAB_MR_HOOK = 'Merge Request Hook'
 const GITLAB_PIPELINE_HOOK = 'Pipeline Hook'
+const GITLAB_NOTE_HOOK = 'Note Hook'
 
 function getLocalIP(): string {
   const nets = os.networkInterfaces()
@@ -113,6 +114,21 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
             mrIid: mr.iid ?? null,
             targetBranch: mr.target_branch ?? null,
           })
+        } else if (eventType === GITLAB_NOTE_HOOK) {
+          // Note Hook ยิงทั้งคอมเมนต์บน MR/issue/commit/snippet — สนใจเฉพาะที่อยู่บน MR
+          const attrs = payload?.object_attributes ?? {}
+          const mr = payload?.merge_request ?? {}
+          if (attrs.noteable_type === 'MergeRequest' && mr.iid) {
+            onEvent({
+              eventType: 'note',
+              mrId: mr.id ?? null,
+              action: 'note',
+              authorId: null,
+              projectId: payload?.project?.id ?? mr.target_project_id ?? null,
+              mrIid: mr.iid ?? null,
+              targetBranch: mr.target_branch ?? null,
+            })
+          }
         }
 
         res.writeHead(200)
