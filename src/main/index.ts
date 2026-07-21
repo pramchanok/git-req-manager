@@ -14,6 +14,7 @@ import {
   hideWindow,
 } from './tray'
 import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId, getLastSeenVersion, setLastSeenVersion, isFirstRun } from './store'
+import { setLinuxAutostart } from './linux-autostart'
 import {
   startScheduler,
   stopScheduler,
@@ -107,16 +108,26 @@ async function startApp(): Promise<void> {
     } else if (process.platform === 'darwin' && storedSettings.launchAtStartup) {
       // Register login item when the setting is on (e.g. fresh install with default ON)
       app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
+    } else if (process.platform === 'linux') {
+      // Electron's login-item API is a no-op on Linux; manage a freedesktop
+      // autostart .desktop file so the setting takes effect on login.
+      setLinuxAutostart(storedSettings.launchAtStartup)
     }
 
     // Sync login item status from OS to store on startup.
     // Pass the same args used in setLoginItemSettings so Windows can match the registry entry.
-    const loginSettings = app.getLoginItemSettings(
-      process.platform === 'win32' ? { args: ['--openedAtLogin'] } : {}
-    )
-    if (storedSettings.launchAtStartup !== loginSettings.openAtLogin) {
-      storedSettings.launchAtStartup = loginSettings.openAtLogin
-      saveSettings(storedSettings)
+    // Skip on Linux: getLoginItemSettings always reports openAtLogin=false there,
+    // which would clobber the stored setting on every launch. On Linux the stored
+    // setting is the source of truth and setLinuxAutostart() above already made the
+    // autostart file match it.
+    if (process.platform !== 'linux') {
+      const loginSettings = app.getLoginItemSettings(
+        process.platform === 'win32' ? { args: ['--openedAtLogin'] } : {}
+      )
+      if (storedSettings.launchAtStartup !== loginSettings.openAtLogin) {
+        storedSettings.launchAtStartup = loginSettings.openAtLogin
+        saveSettings(storedSettings)
+      }
     }
 
     mainWindow = registerMainWindow(createWindow())
@@ -213,7 +224,7 @@ async function startApp(): Promise<void> {
             // Show main window
             if (isInitialLaunch) {
                const { wasOpenedAsHidden } = app.getLoginItemSettings()
-               const startHidden = wasOpenedAsHidden || (process.platform === 'win32' && (process.argv.includes('--openedAtLogin') || process.argv.includes('--hidden')))
+               const startHidden = wasOpenedAsHidden || ((process.platform === 'win32' || process.platform === 'linux') && (process.argv.includes('--openedAtLogin') || process.argv.includes('--hidden')))
                
                if (startHidden) {
                  if (process.platform === 'darwin') app.dock?.hide()
@@ -510,13 +521,18 @@ function setupIPC(): void {
     resetSchedulerCache()
 
     // Apply launch at startup
-    app.setLoginItemSettings({
-      openAtLogin: settings.launchAtStartup,
-      openAsHidden: true,   // start minimized to tray, not visible
-      // Pass explicit arg on Windows so we can reliably detect startup launches
-      // via process.argv instead of the unreliable wasOpenedAtLogin property.
-      args: process.platform === 'win32' ? ['--openedAtLogin'] : [],
-    })
+    if (process.platform === 'linux') {
+      // Electron's login-item API is a no-op on Linux — manage the autostart file.
+      setLinuxAutostart(settings.launchAtStartup)
+    } else {
+      app.setLoginItemSettings({
+        openAtLogin: settings.launchAtStartup,
+        openAsHidden: true,   // start minimized to tray, not visible
+        // Pass explicit arg on Windows so we can reliably detect startup launches
+        // via process.argv instead of the unreliable wasOpenedAtLogin property.
+        args: process.platform === 'win32' ? ['--openedAtLogin'] : [],
+      })
+    }
 
     if (settings.webhookEnabled) {
       // Webhook active — ปิด polling, sync ครั้งเดียวตอนเริ่ม

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.12.4] - 2026-07-21
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ "เริ่มพร้อมเปิดเครื่อง" ไม่ทำงานบน Linux**: Electron API `setLoginItemSettings()` เป็น no-op บน Linux ทำให้สวิตช์ไม่มีผลจริง เปลี่ยนมาจัดการไฟล์ autostart ตามมาตรฐาน freedesktop (`~/.config/autostart/<appId>.desktop`) เอง โดยตั้งชื่อไฟล์ตาม `build.appId` จาก `package.json` และรองรับทั้ง AppImage (`$APPIMAGE`) และ deb
+- **แก้สวิตช์ startup เด้งกลับเป็นปิดเองบน Linux**: เดิม `getLoginItemSettings()` คืน `openAtLogin: false` เสมอบน Linux ทำให้ค่าถูกเขียนทับเป็น `false` ทุกครั้งที่เปิดแอป — ข้าม logic sync-from-OS นี้บน Linux โดยให้ค่าใน store เป็น source of truth
+- **เริ่มแบบซ่อนลง tray เมื่อเปิดจาก autostart บน Linux**: รองรับ flag `--openedAtLogin` บน Linux เช่นเดียวกับ Windows
+
+---
+
 ## [1.12.3] - 2026-07-20
 
 ### การปรับปรุง (Improvements)
