@@ -5,6 +5,7 @@ import type { MergeRequest, UpdateStatus } from '../shared/types'
 import { checkForUpdates, installDownloadedUpdate } from './updater'
 
 let tray: Tray | null = null
+let trayMenu: Menu | null = null
 let pendingCount = 0
 let mrList: MergeRequest[] = []
 let windowRef: BrowserWindow | null = null
@@ -71,6 +72,14 @@ export function createTray(mainWindow: BrowserWindow): Tray {
       showWindow(win)
     }
   })
+
+  if (process.platform === 'darwin') {
+    // On macOS, setContextMenu also opens the menu on a normal click. Keep
+    // left-click for toggling the window and show the menu only on right-click.
+    tray.on('right-click', () => {
+      if (tray && trayMenu) tray.popUpContextMenu(trayMenu)
+    })
+  }
 
   return tray
 }
@@ -156,7 +165,7 @@ function updateTrayMenu(): void {
     )
   }
 
-  const contextMenu = Menu.buildFromTemplate([
+  trayMenu = Menu.buildFromTemplate([
     {
       label: pendingCount > 0 ? `📋 ${pendingCount} MR(s) need review` : '📋 No pending MRs',
       enabled: false,
@@ -201,7 +210,9 @@ function updateTrayMenu(): void {
     },
   ])
 
-  tray.setContextMenu(contextMenu)
+  if (process.platform !== 'darwin') {
+    tray.setContextMenu(trayMenu)
+  }
 }
 
 function showWindow(win: BrowserWindow): void {
@@ -279,5 +290,6 @@ export function hideWindow(win: BrowserWindow): void {
 export function destroyTray(): void {
   tray?.destroy()
   tray = null
+  trayMenu = null
   windowRef = null
 }
