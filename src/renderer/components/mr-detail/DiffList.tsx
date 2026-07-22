@@ -30,11 +30,11 @@ export default function DiffList({ diffs, loading, viewedFiles, onToggleViewed, 
 
   return (
     <div className="space-y-6">
-      {diffs.map((diff, index) => {
+      {diffs.map((diff) => {
         const isViewed = viewedFiles.has(diff.newPath)
         const stats = diffStats.get(diff.newPath)
         return (
-          <div id={`diff-${diff.newPath}`} key={index} className={`bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-all`}>
+          <div id={`diff-${diff.newPath}`} key={diff.newPath} className={`bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-all`}>
             {/* File Header */}
             <div className="bg-gray-800/50 px-4 py-2 text-sm font-mono text-gray-300 border-b border-gray-800 flex justify-between items-center group">
               <div className="flex items-center gap-3">

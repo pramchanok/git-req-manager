@@ -34,8 +34,8 @@ export default function FilesSidebar({ fileTree, filesCount, collapsed, onToggle
       </div>
       {!collapsed && (
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-          {fileTree.map((node, i) => (
-            <FileTreeNodeView key={i} node={node} />
+          {fileTree.map((node) => (
+            <FileTreeNodeView key={node.path} node={node} />
           ))}
         </div>
       )}

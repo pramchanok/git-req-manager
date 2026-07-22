@@ -17,8 +17,8 @@ export const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, dept
           <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
           <span className="text-xs truncate">{node.name}</span>
         </div>
-        {expanded && node.children?.map((child, i) => (
-          <FileTreeNodeView key={i} node={child} depth={depth + 1} />
+        {expanded && node.children?.map((child) => (
+          <FileTreeNodeView key={child.path} node={child} depth={depth + 1} />
         ))}
       </div>
     )

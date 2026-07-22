@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import parseDiff from 'parse-diff'
 import { CommitDiffModal } from '../components/CommitDiffModal'
-import { buildFileTree } from '../utils/pathTree'
+import { buildFileTree, getFilePathsInTreeOrder } from '../utils/pathTree'
 import MRHeader, { MRDetailTab } from '../components/mr-detail/MRHeader'
 import FilesSidebar from '../components/mr-detail/FilesSidebar'
 import DiffList from '../components/mr-detail/DiffList'
@@ -103,6 +103,13 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const fileTree = useMemo(() => {
     return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
   }, [diffs, viewedFiles, diffStats])
+
+  const orderedDiffs = useMemo(() => {
+    const diffsByPath = new Map(diffs.map(diff => [diff.newPath, diff]))
+    return getFilePathsInTreeOrder(fileTree)
+      .map(path => diffsByPath.get(path))
+      .filter((diff): diff is MRDiff => diff !== undefined)
+  }, [diffs, fileTree])
 
   const fetchDiffs = async (silent = false) => {
     if (!silent) setLoadingDiffs(true)
@@ -435,7 +442,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
             ) : (
               <div className="space-y-6 animate-fade-in">
                 <DiffList
-                  diffs={diffs}
+                  diffs={orderedDiffs}
                   loading={loadingDiffs}
                   viewedFiles={viewedFiles}
                   onToggleViewed={toggleViewedFile}

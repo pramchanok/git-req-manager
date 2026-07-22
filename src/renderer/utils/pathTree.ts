@@ -8,6 +8,21 @@ export interface FileTreeNode {
   deletions?: number
 }
 
+/** Return file paths in the exact depth-first order rendered by the sidebar. */
+export function getFilePathsInTreeOrder(nodes: FileTreeNode[]): string[] {
+  const paths: string[] = []
+
+  for (const node of nodes) {
+    if (node.isDirectory) {
+      if (node.children) paths.push(...getFilePathsInTreeOrder(node.children))
+    } else {
+      paths.push(node.path)
+    }
+  }
+
+  return paths
+}
+
 export function buildFileTree(
   filePaths: string[],
   viewedPaths: Set<string>,
