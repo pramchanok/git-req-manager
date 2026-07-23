@@ -46,6 +46,14 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
   const [awardEmojis, setAwardEmojis] = useState<MRAwardEmoji[]>([])
   const [currentUser, setCurrentUser] = useState<GitLabUser | null>(null)
+  const sidebarElementRef = useRef<HTMLDivElement>(null)
+  const resizerElementRef = useRef<HTMLDivElement>(null)
+  const resizeFrameRef = useRef<number | null>(null)
+  const pendingSidebarWidthRef = useRef<number | null>(null)
+  const resizeStartXRef = useRef(0)
+  const resizeStartWidthRef = useRef(sidebarWidth)
+  const displayedSidebarWidthRef = useRef(sidebarWidth)
+  const lastLiveResizeAtRef = useRef(0)
 
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
   const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
@@ -62,28 +70,68 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   }, [viewedFiles, storageKey])
 
   useEffect(() => {
+    const applyPendingSidebarWidth = (persist: boolean) => {
+      const pendingWidth = pendingSidebarWidthRef.current
+      if (pendingWidth === null) return
+
+      if (resizerElementRef.current) {
+        const now = performance.now()
+        const shouldUpdateSidebar = persist || now - lastLiveResizeAtRef.current >= 50
+
+        if (shouldUpdateSidebar) {
+          if (sidebarElementRef.current) {
+            sidebarElementRef.current.style.width = `${pendingWidth}px`
+          }
+          displayedSidebarWidthRef.current = pendingWidth
+          lastLiveResizeAtRef.current = now
+          resizerElementRef.current.style.transform = ''
+        } else {
+          const delta = pendingWidth - displayedSidebarWidthRef.current
+          resizerElementRef.current.style.transform = `translateX(${delta}px)`
+        }
+      }
+      if (persist) setSidebarWidth(pendingWidth)
+      if (persist) pendingSidebarWidthRef.current = null
+    }
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return
-      const newWidth = Math.max(200, Math.min(e.clientX, 600))
-      setSidebarWidth(newWidth)
-      if (newWidth < 220 && !sidebarCollapsed) {
-        setSidebarCollapsed(true)
-      } else if (newWidth >= 220 && sidebarCollapsed) {
-        setSidebarCollapsed(false)
-      }
+      const newWidth = Math.max(200, Math.min(resizeStartWidthRef.current + e.clientX - resizeStartXRef.current, 600))
+      pendingSidebarWidthRef.current = newWidth
+
+      if (resizeFrameRef.current !== null) return
+      resizeFrameRef.current = window.requestAnimationFrame(() => {
+        resizeFrameRef.current = null
+        applyPendingSidebarWidth(false)
+      })
     }
     const handleMouseUp = () => {
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current)
+        resizeFrameRef.current = null
+      }
+      applyPendingSidebarWidth(true)
       setIsResizing(false)
     }
     if (isResizing) {
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
     }
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current)
+        resizeFrameRef.current = null
+      }
+      if (resizerElementRef.current) resizerElementRef.current.style.transform = ''
+      pendingSidebarWidthRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
     }
-  }, [isResizing, sidebarCollapsed])
+  }, [isResizing])
 
   const diffStats = useMemo(() => {
     const stats = new Map<string, { additions: number; deletions: number }>()
@@ -377,11 +425,19 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
             collapsed={sidebarCollapsed}
             onToggleCollapsed={() => setSidebarCollapsed(!sidebarCollapsed)}
             width={sidebarWidth}
-            onStartResize={() => setIsResizing(true)}
+            sidebarRef={sidebarElementRef}
+            resizerRef={resizerElementRef}
+            onStartResize={(startX) => {
+              resizeStartXRef.current = startX
+              resizeStartWidthRef.current = sidebarWidth
+              displayedSidebarWidthRef.current = sidebarWidth
+              lastLiveResizeAtRef.current = 0
+              setIsResizing(true)
+            }}
           />
         )}
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+        <div className="diff-scroll-container flex-1 overflow-y-auto custom-scrollbar relative">
           <div className={`${activeTab === 'changes' ? 'w-full' : 'max-w-5xl mx-auto'} p-6 pb-20`}>
             {activeTab === 'changes' && (
               <div className="mb-4 flex justify-end">

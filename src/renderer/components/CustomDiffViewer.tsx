@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react'
+import { memo, useMemo } from 'react'
 import parseDiff from 'parse-diff'
 import Prism from 'prismjs'
 import 'prismjs/themes/prism-tomorrow.css'
@@ -21,11 +21,7 @@ interface CustomDiffViewerProps {
   viewMode?: 'inline' | 'split'
 }
 
-export const CustomDiffViewer: React.FC<CustomDiffViewerProps> = ({ diffString, viewMode = 'inline' }) => {
-  useEffect(() => {
-    Prism.highlightAll()
-  }, [diffString, viewMode])
-
+export const CustomDiffViewer = memo(function CustomDiffViewer({ diffString, viewMode = 'inline' }: CustomDiffViewerProps) {
   const files = useMemo(() => {
     try {
       return parseDiff(diffString)
@@ -217,4 +213,4 @@ export const CustomDiffViewer: React.FC<CustomDiffViewerProps> = ({ diffString, 
       </div>
     </div>
   )
-}
+})

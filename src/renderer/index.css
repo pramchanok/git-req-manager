@@ -26,6 +26,16 @@
   background: #475569;
 }
 
+/* Keep large file trees and diff cards from forcing the whole page to lay out at once. */
+.file-tree-scroll {
+  contain: layout paint;
+}
+
+.diff-file-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+
 body {
   margin: 0;
   padding: 0;

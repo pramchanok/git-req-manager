@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { FileTreeNode } from '../../utils/pathTree'
 
 /** โหนดไฟล์/โฟลเดอร์ใน sidebar ของแท็บ Changes (คลิกไฟล์เพื่อ scroll ไปที่ diff) */
-export const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) => {
+export const FileTreeNodeView = memo(function FileTreeNodeView({ node, depth = 0 }: { node: FileTreeNode, depth?: number }) {
   const [expanded, setExpanded] = useState(true)
 
   if (node.isDirectory) {
@@ -29,7 +29,23 @@ export const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, dept
       className={`flex items-center justify-between py-1 px-2 hover:bg-white/5 cursor-pointer select-none rounded group ${node.isViewed ? 'opacity-50' : ''}`}
       style={{ paddingLeft: `${depth * 12 + 20}px` }}
       onClick={() => {
-        document.getElementById(`diff-${node.path}`)?.scrollIntoView({ behavior: 'smooth' })
+        const target = document.getElementById(`diff-${node.path}`)
+        if (!target) return
+        const scrollContainer = target.closest<HTMLElement>('.diff-scroll-container')
+        if (!scrollContainer) return
+
+        requestAnimationFrame(() => {
+          // Force the selected card to lay out before measuring its exact header position.
+          target.style.contentVisibility = 'visible'
+          const targetTop = target.getBoundingClientRect().top
+          const containerTop = scrollContainer.getBoundingClientRect().top
+          const top = scrollContainer.scrollTop + targetTop - containerTop - 16
+
+          scrollContainer.scrollTo({
+            top: Math.max(0, top),
+            behavior: 'smooth',
+          })
+        })
       }}
     >
       <div className="flex items-center gap-1.5 overflow-hidden">
@@ -43,4 +59,4 @@ export const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, dept
       </div>
     </div>
   )
-}
+})

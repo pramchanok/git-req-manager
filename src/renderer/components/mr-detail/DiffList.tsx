@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { MRDiff } from '../../../shared/types'
 import { CustomDiffViewer } from '../CustomDiffViewer'
 
@@ -11,7 +12,7 @@ interface DiffListProps {
 }
 
 /** ลิสต์ diff ของทุกไฟล์ในแท็บ Changes พร้อม checkbox "Viewed" */
-export default function DiffList({ diffs, loading, viewedFiles, onToggleViewed, diffStats, viewMode }: DiffListProps) {
+function DiffList({ diffs, loading, viewedFiles, onToggleViewed, diffStats, viewMode }: DiffListProps) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -34,7 +35,7 @@ export default function DiffList({ diffs, loading, viewedFiles, onToggleViewed, 
         const isViewed = viewedFiles.has(diff.newPath)
         const stats = diffStats.get(diff.newPath)
         return (
-          <div id={`diff-${diff.newPath}`} key={diff.newPath} className={`bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-all`}>
+          <div id={`diff-${diff.newPath}`} key={diff.newPath} className={`diff-file-card scroll-mt-4 bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-[opacity,border-color] duration-150`}>
             {/* File Header */}
             <div className="bg-gray-800/50 px-4 py-2 text-sm font-mono text-gray-300 border-b border-gray-800 flex justify-between items-center group">
               <div className="flex items-center gap-3">
@@ -69,3 +70,5 @@ export default function DiffList({ diffs, loading, viewedFiles, onToggleViewed, 
     </div>
   )
 }
+
+export default memo(DiffList)

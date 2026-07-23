@@ -13,6 +13,10 @@ let windowFactory: (() => BrowserWindow) | null = null
 let updateStatus: UpdateStatus = 'idle'
 let updateVersion: string | null = null
 
+// Keep this GUID stable across releases so macOS can restore the user's
+// menu-bar tray icon position after relaunches and auto-updates.
+const TRAY_GUID = '5d4bd7b4-2d92-4b3b-9a25-1dd447cdbf1f'
+
 function getOrCreateWindow(): BrowserWindow | null {
   if (windowRef && !windowRef.isDestroyed()) return windowRef
   if (windowFactory) {
@@ -55,7 +59,7 @@ function createIcon(state: 'default' | 'active' | 'update'): Electron.NativeImag
 
 export function createTray(mainWindow: BrowserWindow): Tray {
   windowRef = mainWindow
-  tray = new Tray(createIcon('default'))
+  tray = new Tray(createIcon('default'), TRAY_GUID)
   tray.setToolTip('GitLab MR Manager')
   updateTrayMenu()
 
