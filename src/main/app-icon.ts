@@ -9,11 +9,14 @@ export const windowsAppUserModelId = process.env.NODE_ENV === 'development'
   : 'com.gitlab-req-manager.desktop'
 
 function getWindowsTaskbarIconPath(): string | undefined {
-  // In dev mode this is a real filesystem path. Packaged assets live inside
-  // app.asar, so electron-builder's executable icon remains the source of
-  // truth for the packaged app.
-  if (process.platform !== 'win32' || app.isPackaged) return undefined
-  return path.join(app.getAppPath(), 'assets', 'icon.ico')
+  if (process.platform !== 'win32') return undefined
+
+  // Windows taskbar metadata cannot reliably resolve an icon from inside
+  // app.asar. In a packaged build the icon is embedded in the executable;
+  // in dev mode use the real ICO file from the workspace.
+  return app.isPackaged
+    ? process.execPath
+    : path.join(app.getAppPath(), 'assets', 'icon.ico')
 }
 
 /**
