@@ -1,8 +1,6 @@
 import { Notification, shell, app } from 'electron'
-import path from 'path'
 import type { GitLabGroup, MergeRequest } from '../shared/types'
 import { addNotifiedMRId, clearNotifiedMRIds, getNotifiedMRIds, removeNotifiedMRId } from './store'
-import { getAppIcon } from './app-icon'
 
 // Lazy-initialized from persisted store so we don't re-notify after restart
 let _notifiedMRIds: Set<number> | null = null
@@ -17,101 +15,72 @@ function getTracked(): Set<number> {
   return _notifiedMRIds
 }
 
+function showNotification(title: string, body: string, onClick?: () => void): void {
+  if (!Notification.isSupported()) return
+
+  const notification = new Notification({
+    title,
+    body,
+    silent: false,
+  })
+
+  if (onClick) notification.on('click', onClick)
+  notification.show()
+}
+
+function openMR(mr: MergeRequest): () => void {
+  return () => {
+    if (_mrClickHandler) {
+      _mrClickHandler(mr.projectId, mr.iid)
+    } else {
+      shell.openExternal(mr.webUrl)
+    }
+  }
+}
+
 export function notifyNewMRs(newMRs: MergeRequest[]): void {
   for (const mr of newMRs) {
     if (getTracked().has(mr.id)) continue
     getTracked().add(mr.id)
     addNotifiedMRId(mr.id)
 
-    if (!Notification.isSupported()) continue
-
-    const notification = new Notification({
-      title: 'GitLab MR Manager',
-      body: `${mr.author.name} requested your review: ${mr.title}`,
-      icon: getAppIcon(),
-      silent: false,
-    })
-
-    notification.on('click', () => {
-      if (_mrClickHandler) {
-        _mrClickHandler(mr.projectId, mr.iid)
-      } else {
-        shell.openExternal(mr.webUrl)
-      }
-    })
-
-    notification.show()
+    showNotification(
+      '🔔 มี MR ใหม่รอ Review',
+      `${mr.author.name} ขอให้คุณช่วย Review\n!${mr.iid} · ${mr.title}`,
+      openMR(mr),
+    )
   }
 }
 
 export function notifyMRMerged(mr: MergeRequest): void {
-  if (!Notification.isSupported()) return
-
-  const notification = new Notification({
-    title: 'GitLab MR Manager - Merged',
-    body: `"${mr.title}" ถูก merge เข้า ${mr.targetBranch} แล้ว`,
-    icon: getAppIcon(),
-    silent: false,
-  })
-
-  notification.on('click', () => {
-    if (_mrClickHandler) {
-      _mrClickHandler(mr.projectId, mr.iid)
-    } else {
-      shell.openExternal(mr.webUrl)
-    }
-  })
-
-  notification.show()
+  showNotification(
+    '✅ MR ถูก Merge แล้ว',
+    `!${mr.iid} · ${mr.title}\nเข้า ${mr.targetBranch} แล้ว`,
+    openMR(mr),
+  )
 }
 
 
 export function notifyCIPipelineFailed(mrs: MergeRequest[]): void {
   for (const mr of mrs) {
-    if (!Notification.isSupported()) continue
-
-    const notification = new Notification({
-      title: 'GitLab MR Manager - CI Failed',
-      body: `Pipeline failed: ${mr.title}`,
-      icon: getAppIcon(),
-      silent: false,
-    })
-
-    notification.on('click', () => {
-      if (_mrClickHandler) {
-        _mrClickHandler(mr.projectId, mr.iid)
-      } else {
-        shell.openExternal(mr.webUrl)
-      }
-    })
-
-    notification.show()
+    showNotification(
+      '❌ Pipeline ล้มเหลว',
+      `!${mr.iid} · ${mr.title}`,
+      openMR(mr),
+    )
   }
 }
 
 export function notifyLabelsChanged(mr: MergeRequest, added: string[], removed: string[]): void {
-  if (!Notification.isSupported()) return
-
   const parts: string[] = []
-  if (added.length > 0) parts.push(`+ ${added.join(', ')}`)
-  if (removed.length > 0) parts.push(`- ${removed.join(', ')}`)
+  if (added.length > 0) parts.push(`เพิ่ม: ${added.join(', ')}`)
+  if (removed.length > 0) parts.push(`ลบ: ${removed.join(', ')}`)
 
-  const notification = new Notification({
-    title: 'GitLab MR Manager - Label Changed',
-    body: `${mr.title}\n${parts.join(' · ')}`,
-    icon: getAppIcon(),
-    silent: false,
-  })
-
-  notification.on('click', () => {
-    if (_mrClickHandler) {
-      _mrClickHandler(mr.projectId, mr.iid)
-    } else {
-      shell.openExternal(mr.webUrl)
-    }
-  })
-
-  notification.show()
+  showNotification(
+    '🏷️ Label ถูกเปลี่ยน',
+    `!${mr.iid} · ${mr.title}\n${parts.join(' · ')}`,
+    openMR(mr),
+  )
 }
 
 export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): void {
@@ -123,36 +92,20 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
     addNotifiedMRId(mr.id)
   })
 
-  if (!Notification.isSupported()) return
-
   if (toNotify.length > 5) {
     // Bulk summary to avoid notification spam
-    const notification = new Notification({
-      title: 'GitLab MR Manager',
-      body: `${toNotify.length} new merge requests in ${group.name}`,
-      icon: getAppIcon(),
-      silent: false,
-    })
-    notification.on('click', () => {
-      shell.openExternal(`${group.webUrl}/-/merge_requests`)
-    })
-    notification.show()
+    showNotification(
+      `👥 มี MR ใหม่ ${toNotify.length} รายการ`,
+      `ในกลุ่ม ${group.name}\nเปิดดูรายการทั้งหมดเพื่อ Review`,
+      () => shell.openExternal(`${group.webUrl}/-/merge_requests`),
+    )
   } else {
     for (const mr of toNotify) {
-      const notification = new Notification({
-        title: `GitLab MR Manager - ${group.name}`,
-        body: `${mr.author.name}: ${mr.title}`,
-        icon: getAppIcon(),
-        silent: false,
-      })
-      notification.on('click', () => {
-        if (_mrClickHandler) {
-          _mrClickHandler(mr.projectId, mr.iid)
-        } else {
-          shell.openExternal(mr.webUrl)
-        }
-      })
-      notification.show()
+      showNotification(
+        `🔔 มี MR ใหม่ใน ${group.name}`,
+        `${mr.author.name} ขอให้คุณช่วย Review\n!${mr.iid} · ${mr.title}`,
+        openMR(mr),
+      )
     }
   }
 }
@@ -168,18 +121,9 @@ export function removeTrackedMR(id: number): void {
 }
 
 export function testNotification(): void {
-  if (!Notification.isSupported()) return
-
-  const notification = new Notification({
-    title: 'GitLab MR Manager',
-    body: '🎉 นี่คือการแจ้งเตือนทดสอบระบบ!\nหากคุณเห็นข้อความนี้ แปลว่าระบบแจ้งเตือนทำงานได้ปกติ',
-    icon: getAppIcon(),
-    silent: false,
-  })
-
-  notification.on('click', () => {
-    app.focus()
-  })
-
-  notification.show()
+  showNotification(
+    '🔔 ทดสอบ Notification',
+    'ระบบแจ้งเตือนทำงานปกติ',
+    () => app.focus(),
+  )
 }
