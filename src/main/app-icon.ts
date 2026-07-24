@@ -5,8 +5,8 @@ import path from 'path'
 let cachedAppIcon: Electron.NativeImage | null | undefined
 
 export const windowsAppUserModelId = process.env.NODE_ENV === 'development'
-  ? 'com.gitlab-req-manager.desktop.dev'
-  : 'com.gitlab-req-manager.desktop'
+  ? 'com.gitlab-req-manager.desktop.dev.v2'
+  : 'com.gitlab-req-manager.desktop.v2'
 
 function getWindowsTaskbarIconPath(): string | undefined {
   if (process.platform !== 'win32') return undefined
