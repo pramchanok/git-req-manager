@@ -329,7 +329,9 @@ function createWindow(): BrowserWindow {
     resizable: false,
     frame: false,
     show: false,
-    skipTaskbar: process.platform !== 'darwin',
+    // Keep a real Windows taskbar button so Windows can apply setAppDetails()
+    // and the application icon instead of exposing electron.exe's identity.
+    skipTaskbar: process.platform === 'linux',
     icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, '../preload.js'),

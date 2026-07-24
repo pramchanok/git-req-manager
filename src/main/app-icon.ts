@@ -5,7 +5,7 @@ import path from 'path'
 let cachedAppIcon: Electron.NativeImage | null | undefined
 
 export const windowsAppUserModelId = process.env.NODE_ENV === 'development'
-  ? 'com.gitlab-req-manager.desktop.dev'
+  ? process.execPath
   : 'com.gitlab-req-manager.desktop'
 export const windowsToastActivatorClsid = '{6A5D3AA1-1A29-4C91-9FCB-1C5A6C9E8F42}'
 
@@ -17,21 +17,25 @@ export function configureWindowsAppIdentity(): void {
 
 /** Repair Windows shortcuts with the metadata required by notifications. */
 export function ensureWindowsShortcuts(): void {
-  if (process.platform !== 'win32' || !app.isPackaged) return
+  if (process.platform !== 'win32') return
 
+  const isDevelopment = !app.isPackaged
   const executablePath = process.execPath
+  const appPath = app.getAppPath()
+  const shortcutName = isDevelopment ? 'GitLab MR Manager (Development)' : 'GitLab MR Manager'
   const shortcutDetails: Electron.ShortcutDetails = {
     target: executablePath,
-    cwd: path.dirname(executablePath),
+    args: isDevelopment ? `"${appPath}"` : undefined,
+    cwd: isDevelopment ? appPath : path.dirname(executablePath),
     description: 'GitLab MR Manager',
-    icon: executablePath,
+    icon: isDevelopment ? path.join(appPath, 'assets', 'icon.ico') : executablePath,
     iconIndex: 0,
     appUserModelId: windowsAppUserModelId,
     toastActivatorClsid: windowsToastActivatorClsid,
   }
   const shortcutPaths = [
-    path.join(app.getPath('desktop'), 'GitLab MR Manager.lnk'),
-    path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'GitLab MR Manager', 'GitLab MR Manager.lnk'),
+    path.join(app.getPath('desktop'), `${shortcutName}.lnk`),
+    path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', shortcutName, `${shortcutName}.lnk`),
   ]
 
   for (const shortcutPath of shortcutPaths) {
