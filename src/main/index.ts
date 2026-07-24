@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
@@ -52,13 +52,12 @@ import {
 } from './single-instance'
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, Settings } from '../shared/types'
+import { applyAppIconToWindow, getAppIcon, windowsAppUserModelId } from './app-icon'
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 let isQuitting = false
 let revealWindowOnReady = false
 let isInitialLaunch = true
-const windowsAppUserModelId = 'com.gitlab-req-manager.desktop'
-
 app.setName('GitLab MR Manager')
 
 if (process.platform === 'win32') {
@@ -131,6 +130,11 @@ async function startApp(): Promise<void> {
     }
 
     mainWindow = registerMainWindow(createWindow())
+
+    if (process.platform === 'darwin') {
+      const icon = getAppIcon()
+      if (icon) app.dock?.setIcon(icon)
+    }
     setTunnelUrlCallback((url) => autoSyncWebhooks(`${url}/webhook`))
 
     setStateChangeCallback((state: AppState) => {
@@ -315,14 +319,6 @@ void startApp().catch((error) => {
 })
 
 function createWindow(): BrowserWindow {
-  let icon: Electron.NativeImage | undefined
-  try {
-    const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-    icon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
-  } catch (err) {
-    console.warn('[app] failed to load window icon:', err)
-  }
-
   const win = new BrowserWindow({
     width: 380,
     height: 560,
@@ -330,13 +326,14 @@ function createWindow(): BrowserWindow {
     frame: false,
     show: false,
     skipTaskbar: process.platform !== 'darwin',
-    icon: icon,
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, '../preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
+  applyAppIconToWindow(win)
 
   if (process.env.NODE_ENV === 'development') {
     win.loadURL('http://localhost:5173')
@@ -363,12 +360,6 @@ function createWindow(): BrowserWindow {
 }
 
 function createSplashWindow(firstRun: boolean): BrowserWindow {
-  let icon: Electron.NativeImage | undefined
-  try {
-    const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-    icon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
-  } catch (err) {}
-
   const win = new BrowserWindow({
     width: 400,
     height: 300,
@@ -377,13 +368,14 @@ function createSplashWindow(firstRun: boolean): BrowserWindow {
     resizable: false,
     show: false,
     center: true,
-    icon: icon,
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, '../splash-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
+  applyAppIconToWindow(win)
 
   win.loadFile(path.join(app.getAppPath(), 'assets', 'splash.html'))
 
@@ -701,25 +693,20 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => {
-    let windowIcon: Electron.NativeImage | undefined
-    try {
-      const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-      windowIcon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
-    } catch (e) {}
-
     const reportWin = new BrowserWindow({
       width: 1000,
       height: 700,
       resizable: true,
       frame: true,
       title: `Developer Report: ${name}`,
-      icon: windowIcon,
+      icon: getAppIcon(),
       webPreferences: {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
       },
     })
+    applyAppIconToWindow(reportWin)
 
     reportWin.setMenuBarVisibility(false)
 
@@ -740,25 +727,20 @@ function setupIPC(): void {
   })
 
   function openMRWindow(projectId: number, mrIid: number) {
-    let windowIcon: Electron.NativeImage | undefined
-    try {
-      const iconPath = path.join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png')
-      windowIcon = nativeImage.createFromBuffer(fs.readFileSync(iconPath))
-    } catch (e) {}
-
     const mrWin = new BrowserWindow({
       width: 1200,
       height: 800,
       resizable: true,
       frame: true,
       title: `MR !${mrIid}`,
-      icon: windowIcon,
+      icon: getAppIcon(),
       webPreferences: {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
       },
     })
+    applyAppIconToWindow(mrWin)
 
     mrWin.setMenuBarVisibility(false)
 

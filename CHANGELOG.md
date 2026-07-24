@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.9] - 2026-07-24
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ไอคอน Electron บน Windows ในโหมด dev**: แยก App User Model ID ของ dev ออกจาก release และกำหนดไอคอน taskbar ผ่าน Windows app details เพื่อไม่ให้ไอคอน Electron ถูกนำมาใช้แทน
+- **ทำให้ไอคอนแอปสม่ำเสมอ**: ใช้ไอคอน GitLab MR Manager กับหน้าต่าง รายงาน MR, notification และ Dock/Taskbar ตามแพลตฟอร์ม
+
+---
+
 ## [1.12.8] - 2026-07-23
 
 ### การแก้ไขข้อบกพร่อง (Bug Fixes)

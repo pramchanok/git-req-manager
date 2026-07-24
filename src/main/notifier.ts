@@ -2,6 +2,7 @@ import { Notification, shell, app } from 'electron'
 import path from 'path'
 import type { GitLabGroup, MergeRequest } from '../shared/types'
 import { addNotifiedMRId, clearNotifiedMRIds, getNotifiedMRIds, removeNotifiedMRId } from './store'
+import { getAppIcon } from './app-icon'
 
 // Lazy-initialized from persisted store so we don't re-notify after restart
 let _notifiedMRIds: Set<number> | null = null
@@ -27,6 +28,7 @@ export function notifyNewMRs(newMRs: MergeRequest[]): void {
     const notification = new Notification({
       title: 'GitLab MR Manager',
       body: `${mr.author.name} requested your review: ${mr.title}`,
+      icon: getAppIcon(),
       silent: false,
     })
 
@@ -48,6 +50,7 @@ export function notifyMRMerged(mr: MergeRequest): void {
   const notification = new Notification({
     title: 'GitLab MR Manager - Merged',
     body: `"${mr.title}" ถูก merge เข้า ${mr.targetBranch} แล้ว`,
+    icon: getAppIcon(),
     silent: false,
   })
 
@@ -70,6 +73,7 @@ export function notifyCIPipelineFailed(mrs: MergeRequest[]): void {
     const notification = new Notification({
       title: 'GitLab MR Manager - CI Failed',
       body: `Pipeline failed: ${mr.title}`,
+      icon: getAppIcon(),
       silent: false,
     })
 
@@ -95,6 +99,7 @@ export function notifyLabelsChanged(mr: MergeRequest, added: string[], removed: 
   const notification = new Notification({
     title: 'GitLab MR Manager - Label Changed',
     body: `${mr.title}\n${parts.join(' · ')}`,
+    icon: getAppIcon(),
     silent: false,
   })
 
@@ -125,6 +130,7 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
     const notification = new Notification({
       title: 'GitLab MR Manager',
       body: `${toNotify.length} new merge requests in ${group.name}`,
+      icon: getAppIcon(),
       silent: false,
     })
     notification.on('click', () => {
@@ -136,6 +142,7 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
       const notification = new Notification({
         title: `GitLab MR Manager - ${group.name}`,
         body: `${mr.author.name}: ${mr.title}`,
+        icon: getAppIcon(),
         silent: false,
       })
       notification.on('click', () => {
@@ -166,6 +173,7 @@ export function testNotification(): void {
   const notification = new Notification({
     title: 'GitLab MR Manager',
     body: '🎉 นี่คือการแจ้งเตือนทดสอบระบบ!\nหากคุณเห็นข้อความนี้ แปลว่าระบบแจ้งเตือนทำงานได้ปกติ',
+    icon: getAppIcon(),
     silent: false,
   })
 

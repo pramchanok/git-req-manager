@@ -2,6 +2,7 @@ import { app, BrowserWindow, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { UpdateDownloadedEvent, UpdateInfo, ProgressInfo } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
+import { getAppIcon } from './app-icon'
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
@@ -213,6 +214,7 @@ export function initializeUpdater(): void {
       const notification = new Notification({
         title: 'GitLab MR Manager — Update ready',
         body: `Version ${info.version} has been downloaded. Click to install.`,
+        icon: getAppIcon(),
       })
       notification.on('click', () => {
         const win = getMainWindow()
