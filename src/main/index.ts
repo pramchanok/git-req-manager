@@ -52,7 +52,12 @@ import {
 } from './single-instance'
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, Settings } from '../shared/types'
-import { applyAppIconToWindow, getAppIcon, windowsAppUserModelId } from './app-icon'
+import {
+  applyAppIconToWindow,
+  configureWindowsAppIdentity,
+  ensureWindowsShortcuts,
+  getAppIcon,
+} from './app-icon'
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 let isQuitting = false
@@ -60,9 +65,7 @@ let revealWindowOnReady = false
 let isInitialLaunch = true
 app.setName('GitLab MR Manager')
 
-if (process.platform === 'win32') {
-  app.setAppUserModelId(windowsAppUserModelId)
-}
+configureWindowsAppIdentity()
 
 function exitDuplicateInstance(): never {
   app.exit(0)
@@ -89,6 +92,7 @@ async function startApp(): Promise<void> {
   }
 
   app.whenReady().then(() => {
+    ensureWindowsShortcuts()
     const storedSettings = getSettings()
 
     if (process.platform === 'win32') {
