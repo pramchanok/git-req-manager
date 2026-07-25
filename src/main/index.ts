@@ -63,6 +63,7 @@ let splashWindow: BrowserWindow | null = null
 let isQuitting = false
 let revealWindowOnReady = false
 let isInitialLaunch = true
+const isDevelopment = process.env.NODE_ENV === 'development'
 app.setName('GitLab MR Manager')
 
 configureWindowsAppIdentity()
@@ -95,7 +96,7 @@ async function startApp(): Promise<void> {
     ensureWindowsShortcuts()
     const storedSettings = getSettings()
 
-    if (process.platform === 'win32') {
+    if (!isDevelopment && process.platform === 'win32') {
       // Migration from <=v1.2.1: registry entries were set without args, so
       // wasOpenedAtLogin was unreliable (true on every launch, not just startup).
       // Remove old-format entry (no args) and re-register with --openedAtLogin
@@ -108,10 +109,10 @@ async function startApp(): Promise<void> {
           args: ['--openedAtLogin'],
         })
       }
-    } else if (process.platform === 'darwin' && storedSettings.launchAtStartup) {
+    } else if (!isDevelopment && process.platform === 'darwin' && storedSettings.launchAtStartup) {
       // Register login item when the setting is on (e.g. fresh install with default ON)
       app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
-    } else if (process.platform === 'linux') {
+    } else if (!isDevelopment && process.platform === 'linux') {
       // Electron's login-item API is a no-op on Linux; manage a freedesktop
       // autostart .desktop file so the setting takes effect on login.
       setLinuxAutostart(storedSettings.launchAtStartup)
@@ -123,7 +124,7 @@ async function startApp(): Promise<void> {
     // which would clobber the stored setting on every launch. On Linux the stored
     // setting is the source of truth and setLinuxAutostart() above already made the
     // autostart file match it.
-    if (process.platform !== 'linux') {
+    if (!isDevelopment && process.platform !== 'linux') {
       const loginSettings = app.getLoginItemSettings(
         process.platform === 'win32' ? { args: ['--openedAtLogin'] } : {}
       )
@@ -540,7 +541,11 @@ function setupIPC(): void {
     resetSchedulerCache()
 
     // Apply launch at startup
-    if (process.platform === 'linux') {
+    if (isDevelopment) {
+      // Development runs must never register electron.exe as a Windows
+      // startup item. The runtime has no app path and opens Electron's
+      // welcome window after the next login.
+    } else if (process.platform === 'linux') {
       // Electron's login-item API is a no-op on Linux — manage the autostart file.
       setLinuxAutostart(settings.launchAtStartup)
     } else {
