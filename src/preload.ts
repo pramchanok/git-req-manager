@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Settings, AppState, UpdateState, GitLabGroup } from './shared/types'
+import type { Settings, AppState, OpenFileInIDEResult, UpdateState, GitLabGroup } from './shared/types'
 
 /**
  * Subscribe แบบผูกกับ handler ตัวเอง — ห้ามใช้ removeAllListeners เพราะหลาย component
@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testNotification: (): Promise<void> => ipcRenderer.invoke('test-notification'),
   triggerSync: (): Promise<void> => ipcRenderer.invoke('trigger-sync'),
   openUrl: (url: string): Promise<void> => ipcRenderer.invoke('open-url', url),
+  openFileInIDE: (projectId: number, projectName: string, relativePath: string): Promise<OpenFileInIDEResult> =>
+    ipcRenderer.invoke('open-file-in-ide', projectId, projectName, relativePath),
   getUpdateState: (): Promise<UpdateState> => ipcRenderer.invoke('get-update-state'),
   checkForUpdates: (): Promise<UpdateState> => ipcRenderer.invoke('check-for-updates'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),

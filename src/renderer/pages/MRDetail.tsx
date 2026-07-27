@@ -96,6 +96,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
   const [awardEmojis, setAwardEmojis] = useState<MRAwardEmoji[]>([])
   const [currentUser, setCurrentUser] = useState<GitLabUser | null>(null)
+  const [copiedPath, setCopiedPath] = useState<string | null>(null)
+  const [openingPath, setOpeningPath] = useState<string | null>(null)
   // mrRef ต้องประกาศก่อน effect ที่อ่านค่ามัน (effect ตอน mount ใช้เทียบ MR ตัวปัจจุบัน)
   const mrRef = useRef<MergeRequest | null>(null)
   const lastShaRef = useRef<string | null>(null)
@@ -452,6 +454,44 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     })
   }
 
+  const copyFilePath = async (filePath: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(filePath)
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = filePath
+        textArea.style.position = 'fixed'
+        textArea.style.opacity = '0'
+        document.body.appendChild(textArea)
+        textArea.select()
+        const copied = document.execCommand('copy')
+        textArea.remove()
+        if (!copied) throw new Error('Clipboard copy failed')
+      }
+      setCopiedPath(filePath)
+      onToast('File path copied', 'success')
+      window.setTimeout(() => setCopiedPath((current) => current === filePath ? null : current), 1500)
+    } catch (err) {
+      console.error(err)
+      onToast('Failed to copy file path', 'error')
+    }
+  }
+
+  const openFileInIDE = async (filePath: string) => {
+    setOpeningPath(filePath)
+    try {
+      const result = await window.electronAPI.openFileInIDE(projectId, mr?.projectName ?? '', filePath)
+      if (result.opened) onToast(result.message ?? 'File opened in IDE', 'success')
+      else if (result.message !== 'Repository selection canceled.') onToast(result.message ?? 'Failed to open file in IDE', 'error')
+    } catch (err) {
+      console.error(err)
+      onToast('Failed to open file in IDE', 'error')
+    } finally {
+      setOpeningPath(null)
+    }
+  }
+
   if (!mr) {
     return (
       <div className="flex flex-col h-screen bg-[#0d1117] items-center justify-center">
@@ -558,6 +598,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   loading={loadingDiffs}
                   viewedFiles={viewedFiles}
                   onToggleViewed={toggleViewedFile}
+                  onCopyPath={copyFilePath}
+                  onOpenInIDE={openFileInIDE}
+                  copiedPath={copiedPath}
+                  openingPath={openingPath}
                   diffStats={diffStats}
                   viewMode={diffViewMode}
                 />

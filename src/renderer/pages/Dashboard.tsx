@@ -49,6 +49,10 @@ export default function Dashboard({ appState }: DashboardProps) {
     return 0
   })
 
+  const hasPreviousData = Boolean(
+    appState.lastSyncedAt || appState.myReviewMRs.length > 0 || appState.allOpenMRs.length > 0
+  )
+
   if (!appState.isConfigured && !appState.isSyncing) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
@@ -61,7 +65,7 @@ export default function Dashboard({ appState }: DashboardProps) {
     )
   }
 
-  if (appState.error) {
+  if (appState.error && !hasPreviousData) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
         <div className="text-3xl">⚠️</div>
@@ -136,6 +140,22 @@ export default function Dashboard({ appState }: DashboardProps) {
           </div>
         )}
       </div>
+
+      {appState.error && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-300"
+        >
+          <span className="min-w-0 truncate" title={appState.error}>{appState.error}</span>
+          <button
+            onClick={() => window.electronAPI.triggerSync()}
+            disabled={appState.isSyncing}
+            className="shrink-0 text-blue-300 hover:text-blue-200 hover:underline disabled:opacity-50"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex bg-gray-900/50 px-3 py-2 border-b border-gray-800/50 gap-2 flex-shrink-0">

@@ -19,6 +19,7 @@ interface StoreSchema {
   teamReportGroupId: number
   lastSeenVersion: string
   notifyOnMyMRMerged: boolean
+  localRepoPaths: Record<string, string>
   hasRunBefore: boolean
   launchAtStartupDefaultApplied: boolean
 }
@@ -42,6 +43,7 @@ const DEFAULTS: StoreSchema = {
   teamReportGroupId: 0,
   lastSeenVersion: '',
   notifyOnMyMRMerged: true,
+  localRepoPaths: {},
   hasRunBefore: false,
   launchAtStartupDefaultApplied: false,
 }
@@ -170,6 +172,15 @@ export function getTeamReportGroupId(): number | null {
 
 export function saveTeamReportGroupId(id: number | null): void {
   store.set('teamReportGroupId', id ?? 0)
+}
+
+export function getLocalRepoPath(projectKey: string): string | null {
+  const repoPath = read('localRepoPaths')[projectKey]
+  return typeof repoPath === 'string' && repoPath.length > 0 ? repoPath : null
+}
+
+export function saveLocalRepoPath(projectKey: string, repoPath: string): void {
+  store.set('localRepoPaths', { ...read('localRepoPaths'), [projectKey]: repoPath })
 }
 
 export function hasNotifiedMergedMRId(id: number): boolean {

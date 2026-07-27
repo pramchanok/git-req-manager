@@ -126,11 +126,6 @@ FunctionEnd
 !endif ; BUILD_UNINSTALLER
 
 !macro customInstall
-  CreateDirectory "$SMPROGRAMS\GitLab MR Manager"
-  ; Set the shortcut icon explicitly. Windows can otherwise inherit the
-  ; Electron host icon when the app is launched from a shell shortcut.
-  CreateShortCut "$SMPROGRAMS\GitLab MR Manager\GitLab MR Manager.lnk" "$INSTDIR\GitLab MR Manager.exe" "" "$INSTDIR\GitLab MR Manager.exe" 0
-  CreateShortCut "$DESKTOP\GitLab MR Manager.lnk" "$INSTDIR\GitLab MR Manager.exe" "" "$INSTDIR\GitLab MR Manager.exe" 0
 !macroend
 
 !macro customUnInstall

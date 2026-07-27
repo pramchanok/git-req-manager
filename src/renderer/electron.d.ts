@@ -1,4 +1,4 @@
-import type { AppState, GitLabGroup, GitLabUser, MergeRequest, Settings, UpdateState, MRAwardEmoji } from '../../shared/types'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest, OpenFileInIDEResult, Settings, UpdateState, MRAwardEmoji } from '../../shared/types'
 
 declare global {
   interface Window {
@@ -9,6 +9,7 @@ declare global {
       testNotification: () => Promise<void>
       triggerSync: () => Promise<void>
       openUrl: (url: string) => Promise<void>
+      openFileInIDE: (projectId: number, projectName: string, relativePath: string) => Promise<OpenFileInIDEResult>
       getUpdateState: () => Promise<UpdateState>
       checkForUpdates: () => Promise<UpdateState>
       installUpdate: () => Promise<void>

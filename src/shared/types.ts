@@ -65,6 +65,11 @@ export interface MRDiff {
   deletedFile: boolean
 }
 
+export interface OpenFileInIDEResult {
+  opened: boolean
+  message?: string
+}
+
 export interface MRNote {
   id: number
   body: string

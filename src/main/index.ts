@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import type { OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
+import which from 'which'
 import {
   createTray,
   updateTrayBadge,
@@ -13,7 +15,7 @@ import {
   showTrayWindow,
   hideWindow,
 } from './tray'
-import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId, getLastSeenVersion, setLastSeenVersion, isFirstRun } from './store'
+import { getSettings, saveSettings, isConfigured, getTeamReportGroupId, saveTeamReportGroupId, getLastSeenVersion, setLastSeenVersion, isFirstRun, getLocalRepoPath, saveLocalRepoPath } from './store'
 import { setLinuxAutostart } from './linux-autostart'
 import {
   startScheduler,
@@ -51,11 +53,10 @@ import {
   setSecondInstanceHandler,
 } from './single-instance'
 import { GitLabClient } from '../shared/gitlab'
-import type { AppState, Settings } from '../shared/types'
+import type { AppState, OpenFileInIDEResult, Settings } from '../shared/types'
 import {
   applyAppIconToWindow,
   configureWindowsAppIdentity,
-  ensureWindowsShortcuts,
   getAppIcon,
 } from './app-icon'
 let mainWindow: BrowserWindow | null = null
@@ -93,7 +94,6 @@ async function startApp(): Promise<void> {
   }
 
   app.whenReady().then(() => {
-    ensureWindowsShortcuts()
     const storedSettings = getSettings()
 
     if (!isDevelopment && process.platform === 'win32') {
@@ -650,6 +650,106 @@ function setupIPC(): void {
       return
     }
     return shell.openExternal(url)
+  })
+
+  ipcMain.handle('open-file-in-ide', async (_event, projectId: number, projectName: string, relativePath: string): Promise<OpenFileInIDEResult> => {
+    if (!Number.isSafeInteger(projectId) || projectId <= 0 || typeof projectName !== 'string' || typeof relativePath !== 'string') {
+      return { opened: false, message: 'Invalid project or file path.' }
+    }
+
+    const normalizedPath = relativePath.replace(/\\/g, '/')
+    const pathParts = normalizedPath.split('/').filter(Boolean)
+    if (
+      !normalizedPath ||
+      normalizedPath === '/dev/null' ||
+      normalizedPath.includes('\0') ||
+      path.posix.isAbsolute(normalizedPath) ||
+      path.win32.isAbsolute(normalizedPath) ||
+      /^[A-Za-z]:\//.test(normalizedPath) ||
+      pathParts.some((part) => part === '..' || part.includes('\0'))
+    ) {
+      return { opened: false, message: 'This diff does not contain a safe local file path.' }
+    }
+
+    const settings = getSettings()
+    const projectKey = `${settings.gitlabUrl}:${projectId}`
+    const resolveRepoRoot = (candidate: string | null): string | null => {
+      if (!candidate) return null
+      try {
+        const realPath = fs.realpathSync(path.resolve(candidate))
+        return fs.statSync(realPath).isDirectory() ? realPath : null
+      } catch {
+        return null
+      }
+    }
+    const isPathInside = (root: string, target: string): boolean => {
+      const relative = path.relative(root, target)
+      return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+    }
+
+    let repoRoot = resolveRepoRoot(getLocalRepoPath(projectKey))
+
+    if (!repoRoot) {
+      const dialogOptions: OpenDialogOptions = {
+        title: `Select the local repository for ${projectName || `project #${projectId}`}`,
+        properties: ['openDirectory'],
+      }
+      const ownerWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+      const selection = ownerWindow
+        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+      if (selection.canceled || selection.filePaths.length === 0) {
+        return { opened: false, message: 'Repository selection canceled.' }
+      }
+      repoRoot = resolveRepoRoot(selection.filePaths[0])
+      if (!repoRoot) {
+        return { opened: false, message: 'The selected repository folder is not accessible.' }
+      }
+      saveLocalRepoPath(projectKey, repoRoot)
+    }
+
+    const candidatePath = path.resolve(repoRoot, ...pathParts)
+    if (!isPathInside(repoRoot, candidatePath)) {
+      return { opened: false, message: 'The selected path is outside the local repository.' }
+    }
+
+    let absolutePath: string
+    try {
+      absolutePath = fs.realpathSync(candidatePath)
+      if (!fs.statSync(absolutePath).isFile() || !isPathInside(repoRoot, absolutePath)) {
+        return { opened: false, message: 'The selected path is outside the local repository.' }
+      }
+    } catch {
+      return {
+        opened: false,
+        message: 'File was not found in the selected repository. Checkout the MR branch first.',
+      }
+    }
+
+    const ideCandidates = [
+      { name: 'VS Code', command: 'code', scheme: 'vscode' },
+      { name: 'Cursor', command: 'cursor', scheme: 'cursor' },
+      { name: 'Windsurf', command: 'windsurf', scheme: 'windsurf' },
+    ]
+
+    for (const ide of ideCandidates) {
+      try {
+        await which(ide.command)
+        const encodedPath = absolutePath
+          .replace(/\\/g, '/')
+          .split('/')
+          .map((part, index) => index === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part))
+          .join('/')
+        await shell.openExternal(`${ide.scheme}://file/${encodedPath}`)
+        return { opened: true, message: `Opened in ${ide.name}.` }
+      } catch {
+        // Try the next supported IDE or the OS file association below.
+      }
+    }
+
+    const openError = await shell.openPath(absolutePath)
+    if (openError) return { opened: false, message: `Could not open the file: ${openError}` }
+    return { opened: true, message: 'Opened with the default application.' }
   })
   ipcMain.handle('get-update-state', () => getUpdateState())
   ipcMain.handle('check-for-updates', () => checkForUpdates())

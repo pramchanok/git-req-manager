@@ -1,4 +1,4 @@
-import { app, nativeImage, shell } from 'electron'
+import { app, nativeImage } from 'electron'
 import fs from 'fs'
 import path from 'path'
 
@@ -13,50 +13,6 @@ export function configureWindowsAppIdentity(): void {
   if (process.platform !== 'win32') return
   app.setAppUserModelId(windowsAppUserModelId)
   app.setToastActivatorCLSID(windowsToastActivatorClsid)
-}
-
-/** Repair Windows shortcuts with the metadata required by notifications. */
-export function ensureWindowsShortcuts(): void {
-  if (process.platform !== 'win32') return
-
-  const isDevelopment = !app.isPackaged
-  const executablePath = process.execPath
-  const appPath = app.getAppPath()
-  const shortcutName = isDevelopment ? 'GitLab MR Manager (Development)' : 'GitLab MR Manager'
-  const shortcutDetails: Electron.ShortcutDetails = {
-    target: executablePath,
-    args: isDevelopment ? `"${appPath}"` : undefined,
-    cwd: isDevelopment ? appPath : path.dirname(executablePath),
-    description: 'GitLab MR Manager',
-    icon: isDevelopment ? path.join(appPath, 'assets', 'icon.ico') : executablePath,
-    iconIndex: 0,
-    appUserModelId: windowsAppUserModelId,
-    toastActivatorClsid: windowsToastActivatorClsid,
-  }
-  const shortcutPaths = [
-    path.join(app.getPath('desktop'), `${shortcutName}.lnk`),
-    path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', shortcutName, `${shortcutName}.lnk`),
-  ]
-
-  for (const shortcutPath of shortcutPaths) {
-    try {
-      fs.mkdirSync(path.dirname(shortcutPath), { recursive: true })
-      let written = shell.writeShortcutLink(shortcutPath, 'replace', shortcutDetails)
-      if (!written) {
-        // A shortcut created by an older installer can reject replacement when
-        // its target belongs to a different Windows user/profile.
-        try {
-          fs.unlinkSync(shortcutPath)
-        } catch {
-          // It may not exist yet; let the create operation handle that case.
-        }
-        written = shell.writeShortcutLink(shortcutPath, 'create', shortcutDetails)
-      }
-      if (!written) console.warn(`[app] failed to write shortcut: ${shortcutPath}`)
-    } catch (error) {
-      console.warn(`[app] failed to repair shortcut ${shortcutPath}:`, error)
-    }
-  }
 }
 
 function getWindowsTaskbarIconPath(): string | undefined {

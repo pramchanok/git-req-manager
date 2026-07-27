@@ -83,4 +83,24 @@ describe('GitLabClient Report Queries', () => {
     expect(requestUrl.searchParams.get('updated_after')).toBe('2026-07-01T00:00:00.000Z')
     expect(requestUrl.searchParams.has('updated_before')).toBe(false)
   })
+
+  test('retries transient network failures for GET requests', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 7, name: 'Reviewer' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const user = await client.getCurrentUser()
+
+    expect(user.id).toBe(7)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  test('does not retry authentication failures', async () => {
+    const fetchMock = vi.fn(async () => new Response('401', { status: 401, statusText: 'Unauthorized' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(client.getCurrentUser()).rejects.toThrow('GitLab API Error: 401 Unauthorized')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

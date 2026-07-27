@@ -3,6 +3,8 @@ import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRD
 // ทุก request มี timeout — ถ้าปล่อยค้าง scheduler จะติดธง isSyncing ไว้ตลอด
 // แล้วรอบ sync ถัดๆ ไปจะถูก skip ทั้งหมดจนกว่าจะรีสตาร์ทแอป
 const REQUEST_TIMEOUT_MS = 30_000
+const MAX_GET_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 250
 
 const PER_PAGE = 100
 // กันลูป pagination ไม่รู้จบถ้า API ตอบผิดสัญญา (100 หน้า = 10,000 รายการ)
@@ -45,38 +47,83 @@ class FetchWrapper {
       }
     }
 
-    let res: Response
-    try {
-      res = await fetch(url.toString(), {
-        method,
-        headers: {
-          'PRIVATE-TOKEN': this.token,
-          'Content-Type': 'application/json',
-        },
-        body: options.data ? JSON.stringify(options.data) : undefined,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      })
-    } catch (err) {
-      const name = err instanceof Error ? err.name : ''
-      if (name === 'TimeoutError' || name === 'AbortError') {
-        throw new Error(`GitLab API Timeout: ${method} ${path} took longer than ${REQUEST_TIMEOUT_MS}ms`)
+    const maxAttempts = method === 'GET' ? MAX_GET_ATTEMPTS : 1
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let res: Response
+      try {
+        res = await fetch(url.toString(), {
+          method,
+          headers: {
+            'PRIVATE-TOKEN': this.token,
+            'Content-Type': 'application/json',
+          },
+          body: options.data ? JSON.stringify(options.data) : undefined,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        })
+      } catch (err) {
+        const name = err instanceof Error ? err.name : ''
+        const isTimeout = name === 'TimeoutError' || name === 'AbortError'
+        if (attempt < maxAttempts && (isTimeout || isRetryableNetworkError(err))) {
+          await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1))
+          continue
+        }
+        if (isTimeout) {
+          throw new Error(`GitLab API Timeout: ${method} ${path} took longer than ${REQUEST_TIMEOUT_MS}ms`)
+        }
+        throw new Error(`GitLab API Network Error: ${method} ${path}: ${getErrorMessage(err)}`)
       }
-      throw err
+
+      if (!res.ok) {
+        const errText = (await res.text().catch(() => '')).slice(0, 500)
+        if (attempt < maxAttempts && isRetryableStatus(res.status)) {
+          await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1))
+          continue
+        }
+        throw new Error(`GitLab API Error: ${res.status} ${res.statusText}${errText ? ` ${errText}` : ''}`)
+      }
+
+      const data: any = res.status !== 204 ? await res.json().catch(() => ({})) : {}
+      return { data }
     }
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '')
-      throw new Error(`GitLab API Error: ${res.status} ${res.statusText} ${errText}`)
-    }
-
-    const data: any = res.status !== 204 ? await res.json().catch(() => ({})) : {}
-    return { data }
+    throw new Error(`GitLab API request failed: ${method} ${path}`)
   }
 
   get(path: string, options?: any) { return this.request('GET', path, options) }
   post(path: string, data?: any) { return this.request('POST', path, { data }) }
   put(path: string, data?: any) { return this.request('PUT', path, { data }) }
   delete(path: string) { return this.request('DELETE', path) }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'TypeError' && /fetch failed/i.test(error.message)) return true
+
+  const cause = (error as Error & { cause?: { code?: string } }).cause
+  return [
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'ETIMEDOUT',
+    'UND_ERR_CONNECT_TIMEOUT',
+  ].includes(cause?.code ?? '')
+}
+
+function getErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return String(error)
+  const cause = (error as Error & { cause?: { code?: string } }).cause
+  const causeCode = cause?.code ? ` (${cause.code})` : ''
+  return `${error.message || 'request could not be completed'}${causeCode}`
 }
 
 export class GitLabClient {
