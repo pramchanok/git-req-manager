@@ -20,7 +20,7 @@ declare global {
       getGroupMembers: (groupId: number) => Promise<GitLabUser[]>
       getTeamReportGroup: () => Promise<number | null>
       setTeamReportGroup: (id: number | null) => Promise<void>
-      getGroupMRsInTimeframe: (groupId: number, since: string, until?: string) => Promise<MergeRequest[]>
+      getGroupMRsInTimeframe: (groupId: number, since: string) => Promise<MergeRequest[]>
       openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => Promise<void>
       openMRWindow: (projectId: number, mrIid: number) => Promise<void>
       exportReportPDF: () => Promise<boolean>

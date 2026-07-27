@@ -6,6 +6,7 @@ import DonutChart from '../components/report/DonutChart'
 import ActivityBarChart from '../components/report/ActivityBarChart'
 import ReportMRCard from '../components/report/ReportMRCard'
 import { buildReportMarkdown, buildReportCSV } from '../utils/reportBuilder'
+import { getTimeframeRange, shiftReferenceDate, isWithin, type Timeframe } from '../utils/timeframe'
 
 // ── Main Page Component ──────────────────────────────────────────────────────
 export default function ReportDetail() {
@@ -21,9 +22,9 @@ export default function ReportDetail() {
   const [mrSearchQuery, setMRSearchQuery] = useState('')
 
   // Timeframe and Reference Date State (Making report detail dynamic & interactive)
-  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>(() => {
+  const [timeframe, setTimeframe] = useState<Timeframe>(() => {
     const params = new URLSearchParams(window.location.search)
-    return (params.get('timeframe') || 'weekly') as 'daily' | 'weekly' | 'monthly'
+    return (params.get('timeframe') || 'weekly') as Timeframe
   })
   const [referenceDate, setReferenceDate] = useState<Date>(new Date())
 
@@ -50,31 +51,14 @@ export default function ReportDetail() {
   }, [groups, groupId])
 
   // 2. Calculate date range dynamically
-  const { sinceIso, timeframeLabel } = useMemo(() => {
-    const d = new Date(referenceDate)
-    let label = ''
-
-    if (timeframe === 'daily') {
-      d.setHours(0, 0, 0, 0)
-      label = `Daily Report (${d.toLocaleDateString()})`
-    } else if (timeframe === 'weekly') {
-      const day = d.getDay()
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-      d.setDate(diff)
-      d.setHours(0, 0, 0, 0)
-      const end = new Date(d)
-      end.setDate(end.getDate() + 6)
-      end.setHours(23, 59, 59, 999)
-      label = `Weekly Report: ${d.toLocaleDateString()} - ${end.toLocaleDateString()}`
-    } else if (timeframe === 'monthly') {
-      d.setDate(1)
-      d.setHours(0, 0, 0, 0)
-      label = `Monthly Report: ${d.toLocaleString('default', { month: 'long', year: 'numeric' })}`
-    }
-
+  const { sinceIso, untilIso, timeframeLabel } = useMemo(() => {
+    const range = getTimeframeRange(timeframe, referenceDate)
+    const prefix =
+      timeframe === 'daily' ? 'Daily Report' : timeframe === 'weekly' ? 'Weekly Report' : 'Monthly Report'
     return {
-      sinceIso: d.toISOString(),
-      timeframeLabel: label,
+      sinceIso: range.sinceIso,
+      untilIso: range.untilIso,
+      timeframeLabel: timeframe === 'daily' ? `${prefix} (${range.label})` : `${prefix}: ${range.label}`,
     }
   }, [timeframe, referenceDate])
 
@@ -124,12 +108,18 @@ export default function ReportDetail() {
     }
   }, [timeframe, referenceDate])
 
-  // Fetch from the earliest date needed (minimum of timeframe start and chart start)
-  const fetchSinceIso = useMemo(() => {
-    const reportTime = new Date(sinceIso).getTime()
-    const chartTime = new Date(chartInfo.chartSinceIso).getTime()
-    return new Date(Math.min(reportTime, chartTime)).toISOString()
-  }, [sinceIso, chartInfo])
+  // ดึงข้อมูลให้ครอบทั้งช่วงรายงานและช่วงของกราฟ (กราฟอาจกินวันนอกช่วงรายงาน)
+  const { fetchSinceIso, fetchUntilIso } = useMemo(() => {
+    const chartDays = chartInfo.chartDays
+    const chartStart = chartDays[0].timestamp
+    // ปลายวันของแท่งสุดท้ายในกราฟ
+    const chartEnd = chartDays[chartDays.length - 1].timestamp + 24 * 60 * 60 * 1000 - 1
+
+    return {
+      fetchSinceIso: new Date(Math.min(new Date(sinceIso).getTime(), chartStart)).toISOString(),
+      fetchUntilIso: new Date(Math.max(new Date(untilIso).getTime(), chartEnd)).toISOString(),
+    }
+  }, [sinceIso, untilIso, chartInfo])
 
   // 3. Fetch Group MRs in this timeframe
   useEffect(() => {
@@ -161,32 +151,32 @@ export default function ReportDetail() {
     return () => {
       active = false
     }
-  }, [groupId, fetchSinceIso])
+  }, [groupId, fetchSinceIso, fetchUntilIso])
 
   // 4. Filter and Aggregate data for target developer
   const developerData = useMemo(() => {
-    const authored = groupMRs.filter(
-      (mr) => mr.author.username === username && mr.createdAt >= sinceIso
-    )
+    const authored: MergeRequest[] = []
+    const merged: MergeRequest[] = []
+    const reviewed: MergeRequest[] = []
 
-    const merged = groupMRs.filter(
-      (mr) =>
-        mr.author.username === username &&
-        mr.state === 'merged' &&
-        mr.mergedAt &&
-        mr.mergedAt >= sinceIso
-    )
+    for (const mr of groupMRs) {
+      const isAuthor = mr.author.username === username
 
-    const reviewed = groupMRs.filter(
-      (mr) =>
-        mr.author.username !== username &&
+      if (isAuthor && isWithin(mr.createdAt, sinceIso, untilIso)) authored.push(mr)
+      if (isAuthor && mr.state === 'merged' && isWithin(mr.mergedAt, sinceIso, untilIso)) merged.push(mr)
+
+      if (
+        !isAuthor &&
+        isWithin(mr.updatedAt, sinceIso, untilIso) &&
         (mr.reviewers.some((r) => r.username === username) ||
-          mr.assignees.some((a) => a.username === username)) &&
-        mr.updatedAt >= sinceIso
-    )
+          mr.assignees.some((a) => a.username === username))
+      ) {
+        reviewed.push(mr)
+      }
+    }
 
     return { authored, merged, reviewed }
-  }, [groupMRs, username, sinceIso])
+  }, [groupMRs, username, sinceIso, untilIso])
 
   // Compute 7-day activity timeline based on local midnight timestamps
   const dailyActivity = useMemo(() => {
@@ -227,18 +217,7 @@ export default function ReportDetail() {
 
   // 5. Navigate timeframe (previous/next)
   const handleNavigateTimeframe = (direction: 'prev' | 'next') => {
-    const offset = direction === 'prev' ? -1 : 1
-    const newDate = new Date(referenceDate)
-
-    if (timeframe === 'daily') {
-      newDate.setDate(newDate.getDate() + offset)
-    } else if (timeframe === 'weekly') {
-      newDate.setDate(newDate.getDate() + offset * 7)
-    } else if (timeframe === 'monthly') {
-      newDate.setMonth(newDate.getMonth() + offset)
-    }
-
-    setReferenceDate(newDate)
+    setReferenceDate((current) => shiftReferenceDate(timeframe, current, direction))
   }
 
   // 6. Generate Markdown Content

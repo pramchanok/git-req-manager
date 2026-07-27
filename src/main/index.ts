@@ -264,34 +264,7 @@ async function startApp(): Promise<void> {
     }
 
     if (isConfigured()) {
-      const settings = getSettings()
-      if (settings.webhookEnabled) {
-        syncNow()
-        ensureTunnelWebhookSecret(settings)
-        const useRelay = !settings.webhookUseTunnel && !!settings.webhookPublicUrl.trim()
-        // Relay mode: event เข้าทาง Socket.IO — ไม่ต้องเปิด local HTTP server (ลด attack surface)
-        if (!useRelay) {
-          startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
-            // Real-time merge notification for the MR author
-            if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
-              void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
-            }
-            // คอมเมนต์ใหม่ — push ตรงไปหน้า MR Detail ที่เปิดอยู่ ไม่ต้อง full sync
-            if (payload.eventType === 'note' && payload.projectId && payload.mrIid) {
-              broadcastMRNoteEvent(payload.projectId, payload.mrIid)
-              return
-            }
-            requestWebhookSync()
-          })
-        }
-        if (settings.webhookUseTunnel) {
-          startTunnel(settings.webhookPort)
-        } else if (useRelay) {
-          startRelaySocket(settings.webhookPublicUrl)
-        }
-      } else {
-        startScheduler(settings.refreshIntervalMinutes)
-      }
+      applySyncMode(getSettings(), { isStartup: true })
     }
   })
 
@@ -455,6 +428,67 @@ function broadcastMRNoteEvent(projectId: number, mrIid: number): void {
   }
 }
 
+/** Handler กลางของ webhook event — ใช้ร่วมกันทั้ง local HTTP server และ relay socket */
+function handleWebhookPayload(payload: {
+  eventType?: string
+  action?: string | null
+  authorId?: number | null
+  projectId?: number | null
+  mrIid?: number | null
+}): void {
+  // Real-time merge notification for the MR author
+  if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
+    void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
+  }
+  // คอมเมนต์ใหม่ — push ตรงไปหน้า MR Detail ที่เปิดอยู่ ไม่ต้อง full sync
+  if (payload.eventType === 'note' && payload.projectId && payload.mrIid) {
+    broadcastMRNoteEvent(payload.projectId, payload.mrIid)
+    return
+  }
+  requestWebhookSync()
+}
+
+/**
+ * ตั้งโหมดรับข้อมูลตาม settings — จุดเดียวที่ตัดสินใจว่าจะใช้ webhook (tunnel/relay/local)
+ * หรือ polling. เดิมโค้ดชุดนี้ถูกก๊อปไว้สองที่ (ตอน startup กับตอน save-settings)
+ * ซึ่งเสี่ยงแก้ที่หนึ่งแล้วลืมอีกที่
+ */
+function applySyncMode(settings: Settings, opts: { isStartup?: boolean } = {}): void {
+  if (!settings.webhookEnabled) {
+    stopWebhookServer()
+    stopTunnel()
+    disconnectSocketClient()
+    startScheduler(settings.refreshIntervalMinutes)
+    return
+  }
+
+  // Webhook active — ปิด polling, sync ครั้งเดียวตอนเริ่ม
+  stopScheduler()
+  syncNow()
+  ensureTunnelWebhookSecret(settings)
+
+  const useRelay = !settings.webhookUseTunnel && !!settings.webhookPublicUrl.trim()
+
+  // Relay mode: event เข้าทาง Socket.IO — ไม่ต้องเปิด local HTTP server (ลด attack surface)
+  if (useRelay) {
+    stopWebhookServer()
+  } else {
+    startWebhookServer(settings.webhookPort, settings.webhookSecret, handleWebhookPayload)
+  }
+
+  if (settings.webhookUseTunnel) {
+    disconnectSocketClient()
+    startTunnel(settings.webhookPort)
+  } else {
+    stopTunnel()
+    if (useRelay) {
+      // ตอน startup ข้าม auto-sync webhook — hook ถูกลงทะเบียนไว้แล้วจากรอบก่อน
+      if (!opts.isStartup) autoSyncWebhooks(settings.webhookPublicUrl.trim())
+      startRelaySocket(settings.webhookPublicUrl)
+    }
+  }
+}
+
 /**
  * Relay mode (Custom Webhook URL): รับ event ผ่าน Socket.IO จาก relay server
  * relay ส่ง authorId/mrIid มาด้วย ทำให้แจ้งเตือน "MR ถูก merge" แบบ real-time ได้
@@ -463,15 +497,11 @@ function startRelaySocket(publicUrl: string): void {
   const serverUrl = extractServerUrl(publicUrl)
   if (!serverUrl) return
   connectSocketClient(serverUrl, (data) => {
-    if (data?.action === 'merge' && data.authorId && data.projectId && data.mrIid) {
-      void handleWebhookMerge(data.authorId, data.projectId, data.mrIid)
-    }
-    // คอมเมนต์ใหม่ผ่าน relay (ถ้า relay server forward eventType 'note' มาให้) — push ตรง ไม่ full sync
-    if (data?.eventType === 'note' && data.projectId && data.mrIid) {
-      broadcastMRNoteEvent(data.projectId, data.mrIid)
-      return
-    }
-    requestWebhookSync()
+    // relay ไม่ได้ส่ง eventType มาทุกกรณี — ถ้าเป็น merge ให้ตีความเป็น merge_request event
+    handleWebhookPayload({
+      ...data,
+      eventType: data?.eventType ?? (data?.action === 'merge' ? 'merge_request' : undefined),
+    })
   })
 }
 
@@ -492,7 +522,7 @@ async function autoSyncWebhooks(webhookUrl: string): Promise<void> {
   const settings = getSettings()
   if (!settings.webhookEnabled || !settings.gitlabUrl || !settings.accessToken) return
 
-  const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+  const client = getClient()
 
   try {
     const user = await client.getCurrentUser()
@@ -517,6 +547,49 @@ async function autoSyncWebhooks(webhookUrl: string): Promise<void> {
   }
 }
 
+/**
+ * GitLabClient ใช้ซ้ำได้ตราบใดที่ URL/token ไม่เปลี่ยน — cache ไว้แทนที่จะ new ทุก IPC call
+ * resetGitLabClient() ถูกเรียกตอน save-settings เพื่อบังคับสร้างใหม่ด้วยค่าที่อัปเดตแล้ว
+ */
+let cachedClient: { client: GitLabClient; url: string; token: string } | null = null
+
+function getClient(): GitLabClient {
+  const { gitlabUrl, accessToken } = getSettings()
+  if (!cachedClient || cachedClient.url !== gitlabUrl || cachedClient.token !== accessToken) {
+    cachedClient = { client: new GitLabClient(gitlabUrl, accessToken), url: gitlabUrl, token: accessToken }
+  }
+  return cachedClient.client
+}
+
+function resetGitLabClient(): void {
+  cachedClient = null
+}
+
+/**
+ * ลงทะเบียน IPC handler ที่ต้องใช้ GitLab API — รวมด่าน isConfigured และการสร้าง client
+ * ไว้ที่เดียว. ส่ง fallback มาเมื่อ "ยังไม่ได้ตั้งค่า" ควรคืนค่าว่างแทนการ throw
+ * (เช่น list ที่ renderer เอาไปวนแสดงผล) ถ้าไม่ส่งจะ throw ให้ renderer จัดการ
+ */
+function handleWithClient<T>(
+  channel: string,
+  fn: (client: GitLabClient, ...args: any[]) => Promise<T>,
+  fallback?: T
+): void {
+  ipcMain.handle(channel, async (_event, ...args: any[]) => {
+    if (!isConfigured()) {
+      if (fallback !== undefined) return fallback
+      throw new Error('GitLab is not configured')
+    }
+    try {
+      return await fn(getClient(), ...args)
+    } catch (err) {
+      console.error(`[ipc] ${channel} failed:`, err instanceof Error ? err.message : String(err))
+      if (fallback !== undefined) return fallback
+      throw err
+    }
+  })
+}
+
 function setupIPC(): void {
   ipcMain.handle('get-settings', () => getSettings())
   ipcMain.handle('test-notification', () => testNotification())
@@ -539,6 +612,7 @@ function setupIPC(): void {
     // Settings (URL/token) may have changed — drop cached user identity
     // so the next sync re-authenticates as the correct account.
     resetSchedulerCache()
+    resetGitLabClient()
 
     // Apply launch at startup
     if (isDevelopment) {
@@ -558,45 +632,7 @@ function setupIPC(): void {
       })
     }
 
-    if (settings.webhookEnabled) {
-      // Webhook active — ปิด polling, sync ครั้งเดียวตอนเริ่ม
-      stopScheduler()
-      syncNow()
-      ensureTunnelWebhookSecret(settings)
-      const useRelay = !settings.webhookUseTunnel && !!settings.webhookPublicUrl.trim()
-      if (!useRelay) {
-        startWebhookServer(settings.webhookPort, settings.webhookSecret, (payload) => {
-          // Real-time merge notification for the MR author
-          if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
-            void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
-          }
-          // คอมเมนต์ใหม่ — push ตรงไปหน้า MR Detail ที่เปิดอยู่ ไม่ต้อง full sync
-          if (payload.eventType === 'note' && payload.projectId && payload.mrIid) {
-            broadcastMRNoteEvent(payload.projectId, payload.mrIid)
-            return
-          }
-          requestWebhookSync()
-        })
-      } else {
-        // Relay mode: event เข้าทาง Socket.IO — ปิด local HTTP server (ลด attack surface)
-        stopWebhookServer()
-      }
-      if (settings.webhookUseTunnel) {
-        disconnectSocketClient()
-        startTunnel(settings.webhookPort)
-      } else {
-        stopTunnel()
-        if (useRelay) {
-          autoSyncWebhooks(settings.webhookPublicUrl.trim())
-          startRelaySocket(settings.webhookPublicUrl)
-        }
-      }
-    } else {
-      stopWebhookServer()
-      stopTunnel()
-      disconnectSocketClient()
-      startScheduler(settings.refreshIntervalMinutes)
-    }
+    applySyncMode(settings)
   })
 
   ipcMain.handle('get-app-state', () => getAppState())
@@ -638,33 +674,10 @@ function setupIPC(): void {
     return { available: !!bin, path: bin }
   })
 
-  ipcMain.handle('get-merged-mrs-by-author', async (_event, username: string) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getMergedMRsByAuthor(username)
-  })
-
-  ipcMain.handle('get-gitlab-groups', async () => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getGroups()
-  })
-
-  ipcMain.handle('search-projects', async (_event, query: string) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.searchProjects(query)
-  })
-
-  ipcMain.handle('get-group-members', async (_event, groupId: number) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getGroupMembers(groupId)
-  })
+  handleWithClient('get-merged-mrs-by-author', (c, username: string) => c.getMergedMRsByAuthor(username), [])
+  handleWithClient('get-gitlab-groups', (c) => c.getGroups(), [])
+  handleWithClient('search-projects', (c, query: string) => c.searchProjects(query), [])
+  handleWithClient('get-group-members', (c, groupId: number) => c.getGroupMembers(groupId), [])
 
   ipcMain.handle('get-team-report-group', () => getTeamReportGroupId())
 
@@ -689,19 +702,12 @@ function setupIPC(): void {
     setLastSeenVersion(app.getVersion())
   })
 
-  ipcMain.handle('get-owner-groups', async () => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getOwnerGroups().catch(() => [])
-  })
-
-  ipcMain.handle('get-group-mrs-in-timeframe', async (_event, groupId: number, since: string, until?: string) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getGroupMRsInTimeframe(groupId, since, until).catch(() => [])
-  })
+  handleWithClient('get-owner-groups', (c) => c.getOwnerGroups(), [])
+  handleWithClient(
+    'get-group-mrs-in-timeframe',
+    (c, groupId: number, since: string) => c.getGroupMRsInTimeframe(groupId, since),
+    []
+  )
 
   ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => {
     const reportWin = new BrowserWindow({
@@ -774,12 +780,7 @@ function setupIPC(): void {
     openMRWindow(projectId, mrIid)
   })
 
-  ipcMain.handle('get-mr-by-iid', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) throw new Error('Not configured')
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getMRByIid(projectId, mrIid)
-  })
+  handleWithClient('get-mr-by-iid', (c, projectId: number, mrIid: number) => c.getMRByIid(projectId, mrIid))
 
   ipcMain.handle('export-report-pdf', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -834,109 +835,23 @@ function setupIPC(): void {
   })
 
   // ────── In-App Review & MR Actions ──────
+  // อ่านข้อมูล: มี fallback ค่าว่าง เพราะ renderer เอาไปวนแสดงผลตรงๆ
+  handleWithClient('get-mr-diffs', (c, projectId: number, mrIid: number) => c.getMRDiffs(projectId, mrIid), [])
+  handleWithClient('get-mr-discussions', (c, projectId: number, mrIid: number) => c.getMRDiscussions(projectId, mrIid), [])
+  handleWithClient('get-pipeline-jobs', (c, projectId: number, pipelineId: number) => c.getPipelineJobs(projectId, pipelineId), [])
+  handleWithClient('get-compare-diffs', (c, projectId: number, fromSha: string, toSha: string) => c.getCompareDiffs(projectId, fromSha, toSha), [])
+  handleWithClient('get-commit-diffs', (c, projectId: number, sha: string) => c.getCommitDiffs(projectId, sha), [])
+  handleWithClient('get-mr-award-emojis', (c, projectId: number, mrIid: number) => c.getMRAwardEmojis(projectId, mrIid), [])
+  handleWithClient('get-mr-approvals', (c, projectId: number, mrIid: number) => c.getMRApprovals(projectId, mrIid))
 
-  ipcMain.handle('get-mr-diffs', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getMRDiffs(projectId, mrIid)
-  })
-
-  ipcMain.handle('get-mr-approvals', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) throw new Error('Not configured')
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getMRApprovals(projectId, mrIid)
-  })
-
-  ipcMain.handle('get-mr-discussions', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getMRDiscussions(projectId, mrIid)
-  })
-
-  ipcMain.handle('add-mr-note', async (_event, projectId: number, mrIid: number, body: string) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.addMRNote(projectId, mrIid, body)
-  })
-
-  ipcMain.handle('approve-mr', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.approveMR(projectId, mrIid)
-  })
-
-  ipcMain.handle('unapprove-mr', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.unapproveMR(projectId, mrIid)
-  })
-
-  ipcMain.handle('merge-mr', async (_event, projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.mergeMR(projectId, mrIid, options)
-  })
-
-  ipcMain.handle('close-mr', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.closeMR(projectId, mrIid)
-  })
-
-  ipcMain.handle('cancel-pipeline', async (_event, projectId: number, pipelineId: number) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.cancelPipeline(projectId, pipelineId)
-  })
-
-  ipcMain.handle('get-pipeline-jobs', async (_event, projectId: number, pipelineId: number) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getPipelineJobs(projectId, pipelineId)
-  })
-
-  ipcMain.handle('get-compare-diffs', async (_event, projectId: number, fromSha: string, toSha: string) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return await client.getCompareDiffs(projectId, fromSha, toSha)
-  })
-
-  ipcMain.handle('get-commit-diffs', async (_event, projectId: number, sha: string) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return await client.getCommitDiffs(projectId, sha)
-  })
-
-  ipcMain.handle('get-mr-award-emojis', async (_event, projectId: number, mrIid: number) => {
-    if (!isConfigured()) return []
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return await client.getMRAwardEmojis(projectId, mrIid)
-  })
-
-  ipcMain.handle('add-mr-award-emoji', async (_event, projectId: number, mrIid: number, name: string) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.addMRAwardEmoji(projectId, mrIid, name)
-  })
-
-  ipcMain.handle('remove-mr-award-emoji', async (_event, projectId: number, mrIid: number, awardId: number) => {
-    if (!isConfigured()) return
-    const settings = getSettings()
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    await client.removeMRAwardEmoji(projectId, mrIid, awardId)
-  })
+  // เขียนข้อมูล: ไม่มี fallback — ต้อง throw ให้ renderer โชว์ toast ว่าล้มเหลว
+  // (ของเดิม return เงียบๆ ทำให้ UI ขึ้นว่าสำเร็จทั้งที่ไม่ได้ทำอะไรเลย)
+  handleWithClient('add-mr-note', (c, projectId: number, mrIid: number, body: string) => c.addMRNote(projectId, mrIid, body))
+  handleWithClient('approve-mr', (c, projectId: number, mrIid: number) => c.approveMR(projectId, mrIid))
+  handleWithClient('unapprove-mr', (c, projectId: number, mrIid: number) => c.unapproveMR(projectId, mrIid))
+  handleWithClient('merge-mr', (c, projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => c.mergeMR(projectId, mrIid, options))
+  handleWithClient('close-mr', (c, projectId: number, mrIid: number) => c.closeMR(projectId, mrIid))
+  handleWithClient('cancel-pipeline', (c, projectId: number, pipelineId: number) => c.cancelPipeline(projectId, pipelineId))
+  handleWithClient('add-mr-award-emoji', (c, projectId: number, mrIid: number, name: string) => c.addMRAwardEmoji(projectId, mrIid, name))
+  handleWithClient('remove-mr-award-emoji', (c, projectId: number, mrIid: number, awardId: number) => c.removeMRAwardEmoji(projectId, mrIid, awardId))
 }

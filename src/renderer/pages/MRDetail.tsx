@@ -26,6 +26,56 @@ interface MRDetailProps {
   onToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
+// ── สถานะ "ไฟล์ที่ดูแล้ว" เก็บใน localStorage แยก key ต่อ MR ──
+const VIEWED_KEY_PREFIX = 'mr-viewed-'
+const VIEWED_ENTRY_TTL = 30 * 24 * 60 * 60 * 1000 // 30 วัน
+
+type ViewedEntry = { paths: string[]; savedAt: number }
+
+function readViewedFiles(key: string): Set<string> {
+  try {
+    const saved = localStorage.getItem(key)
+    if (!saved) return new Set()
+    const parsed = JSON.parse(saved)
+    // รองรับรูปแบบเดิมที่เก็บเป็น array เปล่าๆ ไม่มี savedAt
+    return new Set<string>(Array.isArray(parsed) ? parsed : ((parsed as ViewedEntry).paths ?? []))
+  } catch {
+    return new Set()
+  }
+}
+
+/** ลบสถานะของ MR ที่ไม่ได้แตะมานาน — เดิมเขียน key ใหม่เรื่อยๆ โดยไม่มีใครลบ */
+function pruneViewedFileEntries(): void {
+  try {
+    const now = Date.now()
+    const stale: string[] = []
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(VIEWED_KEY_PREFIX)) continue
+
+      const raw = localStorage.getItem(key)
+      if (!raw) continue
+
+      try {
+        const parsed = JSON.parse(raw)
+        // รูปแบบเดิม (array) ไม่มี timestamp — เก็บไว้ก่อนเพื่อไม่ให้ผู้ใช้
+        // สูญเสียสถานะเดิม; เมื่อเปิด MR นั้นอีกครั้ง effect ด้านบนจะ migrate เป็น object
+        if (Array.isArray(parsed)) continue
+
+        const savedAt = (parsed as ViewedEntry).savedAt
+        if (typeof savedAt !== 'number' || now - savedAt > VIEWED_ENTRY_TTL) stale.push(key)
+      } catch {
+        stale.push(key)
+      }
+    }
+
+    for (const key of stale) localStorage.removeItem(key)
+  } catch {
+    // localStorage ใช้ไม่ได้ — ข้ามการเก็บกวาดไปเลย
+  }
+}
+
 export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast }: MRDetailProps) {
   const [mr, setMR] = useState<MergeRequest | null>(null)
   const [activeTab, setActiveTab] = useState<MRDetailTab>('overview')
@@ -46,6 +96,9 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [activeCommitDiff, setActiveCommitDiff] = useState<{ fromSha?: string; toSha: string } | null>(null)
   const [awardEmojis, setAwardEmojis] = useState<MRAwardEmoji[]>([])
   const [currentUser, setCurrentUser] = useState<GitLabUser | null>(null)
+  // mrRef ต้องประกาศก่อน effect ที่อ่านค่ามัน (effect ตอน mount ใช้เทียบ MR ตัวปัจจุบัน)
+  const mrRef = useRef<MergeRequest | null>(null)
+  const lastShaRef = useRef<string | null>(null)
   const sidebarElementRef = useRef<HTMLDivElement>(null)
   const resizerElementRef = useRef<HTMLDivElement>(null)
   const resizeFrameRef = useRef<number | null>(null)
@@ -56,18 +109,23 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const lastLiveResizeAtRef = useRef(0)
 
   const storageKey = `mr-viewed-${projectId}-${mrIid}`
-  const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem(storageKey)
-      return saved ? new Set(JSON.parse(saved)) : new Set()
-    } catch {
-      return new Set()
-    }
-  })
+  const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => readViewedFiles(storageKey))
 
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(Array.from(viewedFiles)))
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ paths: Array.from(viewedFiles), savedAt: Date.now() })
+      )
+    } catch {
+      // storage เต็ม/ถูกปิด — ไม่ใช่เรื่องคอขาดบาดตาย ปล่อยผ่าน
+    }
   }, [viewedFiles, storageKey])
+
+  // เก็บกวาดสถานะ "ไฟล์ที่ดูแล้ว" ของ MR เก่า — เดิมเขียน key ใหม่ต่อ MR โดยไม่มีใครลบ
+  useEffect(() => {
+    pruneViewedFileEntries()
+  }, [])
 
   useEffect(() => {
     const applyPendingSidebarWidth = (persist: boolean) => {
@@ -272,8 +330,6 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   }, [mr?.pipelineStatus, webhookMode, projectId, mrIid])
 
   // โหลด diffs ครั้งแรก และโหลดซ้ำแบบเงียบๆ เมื่อ head sha เปลี่ยน (มี commit ใหม่ push เข้ามา)
-  const lastShaRef = useRef<string | null>(null)
-  const mrRef = useRef<MergeRequest | null>(null)
   useEffect(() => { mrRef.current = mr }, [mr])
   useEffect(() => {
     if (!mr) return

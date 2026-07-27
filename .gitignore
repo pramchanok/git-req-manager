@@ -3,6 +3,7 @@ dist/
 release/
 release-temp/
 test-install/
+.claude/
 
 *.log
 npm-debug.log*

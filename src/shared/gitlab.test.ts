@@ -1,4 +1,4 @@
-import { expect, test, describe } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { GitLabClient } from './gitlab'
 
 // Hack: we need to instantiate it to access private mapMR / mapUser, 
@@ -65,5 +65,22 @@ describe('GitLabClient Mappers', () => {
     expect(mr.assignees).toEqual([])
     expect(mr.labels).toEqual([])
     expect(mr.approvalsRequired).toBe(0)
+  })
+})
+
+describe('GitLabClient Report Queries', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('fetches report candidates after the start without excluding later-updated MRs', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await client.getGroupMRsInTimeframe(42, '2026-07-01T00:00:00.000Z')
+
+    const requestUrl = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(requestUrl.searchParams.get('updated_after')).toBe('2026-07-01T00:00:00.000Z')
+    expect(requestUrl.searchParams.has('updated_before')).toBe(false)
   })
 })

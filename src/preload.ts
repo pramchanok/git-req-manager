@@ -1,6 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { Settings, AppState, UpdateState, GitLabGroup } from './shared/types'
 
+/**
+ * Subscribe แบบผูกกับ handler ตัวเอง — ห้ามใช้ removeAllListeners เพราะหลาย component
+ * ฟังช่องเดียวกันได้ (เช่น App กับ MRDetail ต่างก็ฟัง 'app-state-updated')
+ * ตัวที่ unmount ก่อนจะลบ listener ของอีกตัวไปด้วย
+ */
+function subscribe<T extends unknown[]>(
+  channel: string,
+  callback: (...args: T) => void
+): () => void {
+  const handler = (_event: unknown, ...args: T) => callback(...args)
+  ipcRenderer.on(channel, handler)
+  return () => {
+    ipcRenderer.removeListener(channel, handler)
+  }
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: Settings): Promise<void> => ipcRenderer.invoke('save-settings', settings),
@@ -26,8 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-team-report-group'),
   setTeamReportGroup: (id: number | null): Promise<void> =>
     ipcRenderer.invoke('set-team-report-group', id),
-  getGroupMRsInTimeframe: (groupId: number, since: string, until?: string): Promise<import('./shared/types').MergeRequest[]> =>
-    ipcRenderer.invoke('get-group-mrs-in-timeframe', groupId, since, until),
+  getGroupMRsInTimeframe: (groupId: number, since: string): Promise<import('./shared/types').MergeRequest[]> =>
+    ipcRenderer.invoke('get-group-mrs-in-timeframe', groupId, since),
   openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number): Promise<void> =>
     ipcRenderer.invoke('open-report-window', username, name, avatarUrl, timeframe, groupId),
   openMRWindow: (projectId: number, mrIid: number): Promise<void> =>
@@ -48,35 +64,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('set-pinned', pinned),
   hideWindow: (): Promise<void> =>
     ipcRenderer.invoke('hide-window'),
-  onAppStateUpdated: (callback: (state: AppState) => void) => {
-    ipcRenderer.on('app-state-updated', (_event, state: AppState) => callback(state))
-    return () => ipcRenderer.removeAllListeners('app-state-updated')
-  },
-  onSyncStatusUpdated: (callback: (isSyncing: boolean) => void) => {
-    ipcRenderer.on('sync-status-updated', (_event, isSyncing: boolean) => callback(isSyncing))
-    return () => ipcRenderer.removeAllListeners('sync-status-updated')
-  },
-  onMRNoteEvent: (callback: (data: { projectId: number; mrIid: number }) => void) => {
-    const handler = (_event: unknown, data: { projectId: number; mrIid: number }) => callback(data)
-    ipcRenderer.on('mr-note-event', handler)
-    return () => ipcRenderer.removeListener('mr-note-event', handler)
-  },
-  onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) => {
-    ipcRenderer.on('tunnel-status', (_event, data) => callback(data))
-    return () => ipcRenderer.removeAllListeners('tunnel-status')
-  },
-  onUpdateStateChanged: (callback: (state: UpdateState) => void) => {
-    ipcRenderer.on('update-state-changed', (_event, state: UpdateState) => callback(state))
-    return () => ipcRenderer.removeAllListeners('update-state-changed')
-  },
-  onShowSettings: (callback: () => void) => {
-    ipcRenderer.on('show-settings', () => callback())
-    return () => ipcRenderer.removeAllListeners('show-settings')
-  },
-  onShowChangelog: (callback: () => void) => {
-    ipcRenderer.on('show-changelog', () => callback())
-    return () => ipcRenderer.removeAllListeners('show-changelog')
-  },
+  onAppStateUpdated: (callback: (state: AppState) => void) =>
+    subscribe<[AppState]>('app-state-updated', callback),
+  onSyncStatusUpdated: (callback: (isSyncing: boolean) => void) =>
+    subscribe<[boolean]>('sync-status-updated', callback),
+  onMRNoteEvent: (callback: (data: { projectId: number; mrIid: number }) => void) =>
+    subscribe<[{ projectId: number; mrIid: number }]>('mr-note-event', callback),
+  onTunnelStatus: (callback: (status: { status: string; url?: string; message?: string; synced?: number; failed?: number }) => void) =>
+    subscribe<[{ status: string; url?: string; message?: string; synced?: number; failed?: number }]>('tunnel-status', callback),
+  onUpdateStateChanged: (callback: (state: UpdateState) => void) =>
+    subscribe<[UpdateState]>('update-state-changed', callback),
+  onShowSettings: (callback: () => void) => subscribe<[]>('show-settings', callback),
+  onShowChangelog: (callback: () => void) => subscribe<[]>('show-changelog', callback),
   getMRByIid: (projectId: number, mrIid: number): Promise<import('./shared/types').MergeRequest> =>
     ipcRenderer.invoke('get-mr-by-iid', projectId, mrIid),
   getMRDiffs: (projectId: number, mrIid: number): Promise<import('./shared/types').MRDiff[]> =>

@@ -1,6 +1,6 @@
 import { Notification, shell, app } from 'electron'
 import type { GitLabGroup, MergeRequest } from '../shared/types'
-import { addNotifiedMRId, clearNotifiedMRIds, getNotifiedMRIds, removeNotifiedMRId } from './store'
+import { addNotifiedMRId, getNotifiedMRIds } from './store'
 
 // Lazy-initialized from persisted store so we don't re-notify after restart
 let _notifiedMRIds: Set<number> | null = null
@@ -108,16 +108,6 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
       )
     }
   }
-}
-
-export function clearTrackedMRs(): void {
-  getTracked().clear()
-  clearNotifiedMRIds()
-}
-
-export function removeTrackedMR(id: number): void {
-  getTracked().delete(id)
-  removeNotifiedMRId(id)
 }
 
 export function testNotification(): void {

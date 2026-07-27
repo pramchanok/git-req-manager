@@ -84,6 +84,8 @@ export function getAppState(): AppState {
 }
 
 export async function syncNow(): Promise<void> {
+  // Never overlap sync cycles: shared caches and notification history are mutated
+  // throughout the cycle, so starting a second cycle would create race conditions.
   if (currentState.isSyncing) return
 
   if (!isConfigured()) {
@@ -138,15 +140,17 @@ export async function syncNow(): Promise<void> {
     previousPipelineStatuses = new Map(reviewMRs.map((mr) => [mr.id, mr.pipelineStatus]))
     if (ciFailures.length > 0) notifyCIPipelineFailed(ciFailures)
 
+    const reviewMRIds = new Set(reviewMRs.map((mr) => mr.id))
+
     // Detect newly assigned review MRs for notifications
     const newReviewMRs = reviewMRs.filter((mr) => !previousReviewMRIds.has(mr.id))
     if (newReviewMRs.length > 0) {
       notifyNewMRs(newReviewMRs)
     }
-    previousReviewMRIds = new Set(reviewMRs.map((mr: MergeRequest) => mr.id))
+    previousReviewMRIds = reviewMRIds
 
     // Detect label changes across all tracked MRs
-    const allTrackedMRs = [...reviewMRs, ...allOpenMRs.filter((mr) => !reviewMRs.some((r) => r.id === mr.id))]
+    const allTrackedMRs = [...reviewMRs, ...allOpenMRs.filter((mr) => !reviewMRIds.has(mr.id))]
     if (previousMRLabels.size > 0) {
       for (const mr of allTrackedMRs) {
         const prev = previousMRLabels.get(mr.id)
@@ -274,10 +278,8 @@ export async function handleWebhookMerge(authorId: number, projectId: number, mr
   const currentUserId = cachedUser?.id
   if (!currentUserId || currentUserId !== authorId) return
 
-  const mr = await ((): Promise<MergeRequest | null> => {
-    const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
-    return client.getMRByIid(projectId, mrIid).catch(() => null)
-  })()
+  const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
+  const mr = await client.getMRByIid(projectId, mrIid).catch(() => null)
 
   if (!mr) return
   if (hasNotifiedMergedMRId(mr.id)) return

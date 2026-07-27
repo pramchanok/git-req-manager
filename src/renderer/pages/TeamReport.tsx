@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../../shared/types'
 import { SkeletonDevRow } from '../components/SkeletonCard'
+import { getTimeframeRange, shiftReferenceDate, isWithin, type Timeframe } from '../utils/timeframe'
 
 interface TeamReportProps {
   appState: AppState
@@ -20,7 +21,7 @@ export default function TeamReport({ appState }: TeamReportProps) {
   const [mrsLoading, setMrsLoading] = useState(false)
 
   // Timeframe and Navigation State
-  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const [timeframe, setTimeframe] = useState<Timeframe>('weekly')
   const [referenceDate, setReferenceDate] = useState<Date>(new Date())
 
   // Access Control Checks
@@ -79,35 +80,11 @@ export default function TeamReport({ appState }: TeamReportProps) {
       .finally(() => setMembersLoading(false))
   }, [selectedGroupId])
 
-  // 3. Compute date range (sinceIso & label)
-  const { sinceIso, timeframeLabel } = useMemo(() => {
-    const d = new Date(referenceDate)
-    let label = ''
-
-    if (timeframe === 'daily') {
-      d.setHours(0, 0, 0, 0)
-      label = d.toLocaleDateString()
-    } else if (timeframe === 'weekly') {
-      // Find Monday
-      const day = d.getDay()
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-      d.setDate(diff)
-      d.setHours(0, 0, 0, 0)
-      const end = new Date(d)
-      end.setDate(end.getDate() + 6)
-      end.setHours(23, 59, 59, 999)
-      label = `${d.toLocaleDateString()} - ${end.toLocaleDateString()}`
-    } else if (timeframe === 'monthly') {
-      d.setDate(1)
-      d.setHours(0, 0, 0, 0)
-      label = d.toLocaleString('default', { month: 'long', year: 'numeric' })
-    }
-
-    return {
-      sinceIso: d.toISOString(),
-      timeframeLabel: label,
-    }
-  }, [timeframe, referenceDate])
+  // 3. Compute date range (sinceIso, untilIso & label)
+  const { sinceIso, untilIso, label: timeframeLabel } = useMemo(
+    () => getTimeframeRange(timeframe, referenceDate),
+    [timeframe, referenceDate]
+  )
 
   // 4. Fetch Group MRs based on date range
   useEffect(() => {
@@ -133,93 +110,82 @@ export default function TeamReport({ appState }: TeamReportProps) {
     return () => {
       active = false
     }
-  }, [selectedGroupId, sinceIso, hasAccess])
+  }, [selectedGroupId, sinceIso, untilIso, hasAccess])
 
   // 5. Navigate timeframe (previous/next)
   const handleNavigateTimeframe = (direction: 'prev' | 'next') => {
-    const offset = direction === 'prev' ? -1 : 1
-    const newDate = new Date(referenceDate)
-
-    if (timeframe === 'daily') {
-      newDate.setDate(newDate.getDate() + offset)
-    } else if (timeframe === 'weekly') {
-      newDate.setDate(newDate.getDate() + offset * 7)
-    } else if (timeframe === 'monthly') {
-      newDate.setMonth(newDate.getMonth() + offset)
-    }
-
-    setReferenceDate(newDate)
+    setReferenceDate((current) => shiftReferenceDate(timeframe, current, direction))
   }
 
-  // 6. Aggregate Group metrics
+  /**
+   * 6. จัดกลุ่มยอดกิจกรรมตาม username ในรอบเดียว
+   * เดิมวน groupMembers × groupMRs × 3 ครั้ง และคำนวณใหม่ทุกครั้งที่พิมพ์ในช่องค้นหา
+   * ตอนนี้ index ครั้งเดียว (ไม่ผูกกับ search) แล้วค่อยกรองด้วย search ทีหลัง
+   */
+  const { statsByUsername, groupTotals } = useMemo(() => {
+    const stats = new Map<string, { created: number; merged: number; reviewed: number }>()
+    const bump = (username: string, key: 'created' | 'merged' | 'reviewed') => {
+      const entry = stats.get(username) ?? { created: 0, merged: 0, reviewed: 0 }
+      entry[key]++
+      stats.set(username, entry)
+    }
+
+    let created = 0
+    let merged = 0
+
+    for (const mr of groupMRs) {
+      const isCreated = isWithin(mr.createdAt, sinceIso, untilIso)
+      const isMerged = mr.state === 'merged' && isWithin(mr.mergedAt, sinceIso, untilIso)
+      const isUpdated = isWithin(mr.updatedAt, sinceIso, untilIso)
+
+      if (isCreated) {
+        created++
+        bump(mr.author.username, 'created')
+      }
+      if (isMerged) {
+        merged++
+        bump(mr.author.username, 'merged')
+      }
+
+      if (isUpdated) {
+        // reviewer/assignee ที่ไม่ใช่เจ้าของ MR นับเป็นการรีวิว — คนเดียวกันนับครั้งเดียวต่อ MR
+        const reviewers = new Set<string>()
+        for (const r of mr.reviewers) reviewers.add(r.username)
+        for (const a of mr.assignees) reviewers.add(a.username)
+        reviewers.delete(mr.author.username)
+        for (const username of reviewers) bump(username, 'reviewed')
+      }
+    }
+
+    return { statsByUsername: stats, groupTotals: { created, merged } }
+  }, [groupMRs, sinceIso, untilIso])
+
   const groupStats = useMemo(() => {
-    const created = groupMRs.filter((mr) => mr.createdAt >= sinceIso).length
-    const merged = groupMRs.filter(
-      (mr) => mr.state === 'merged' && mr.mergedAt && mr.mergedAt >= sinceIso
-    ).length
+    const activeCount = groupMembers.filter((m) => statsByUsername.has(m.username)).length
+    return { ...groupTotals, activeCount }
+  }, [groupMembers, statsByUsername, groupTotals])
 
-    // Active developers: has authored, merged, or been assigned/reviewer of updated MR
-    const activeUsernames = new Set<string>()
-    groupMRs.forEach((mr) => {
-      if (mr.createdAt >= sinceIso) activeUsernames.add(mr.author.username)
-      if (mr.state === 'merged' && mr.mergedAt && mr.mergedAt >= sinceIso) {
-        activeUsernames.add(mr.author.username)
-      }
-      mr.assignees.forEach((a) => activeUsernames.add(a.username))
-      mr.reviewers.forEach((r) => activeUsernames.add(r.username))
-    })
-
-    const activeCount = groupMembers.filter((m) => activeUsernames.has(m.username)).length
-
-    return { created, merged, activeCount }
-  }, [groupMRs, groupMembers, sinceIso])
-
-  // 7. Aggregate data per developer
+  // 7. ผูกยอดกิจกรรมเข้ากับรายชื่อสมาชิก แล้วกรอง/เรียง
   const devReportRows = useMemo(() => {
-    const rows = groupMembers.map((member) => {
-      const authored = groupMRs.filter(
-        (mr) => mr.author.username === member.username && mr.createdAt >= sinceIso
+    const query = search.trim().toLowerCase()
+
+    return groupMembers
+      .filter(
+        (m) =>
+          !query ||
+          m.name.toLowerCase().includes(query) ||
+          m.username.toLowerCase().includes(query)
       )
-
-      const merged = groupMRs.filter(
-        (mr) =>
-          mr.author.username === member.username &&
-          mr.state === 'merged' &&
-          mr.mergedAt &&
-          mr.mergedAt >= sinceIso
-      )
-
-      const reviewed = groupMRs.filter(
-        (mr) =>
-          mr.author.username !== member.username &&
-          (mr.reviewers.some((r) => r.username === member.username) ||
-            mr.assignees.some((a) => a.username === member.username)) &&
-          mr.updatedAt >= sinceIso
-      )
-
-      const totalActivity = authored.length + merged.length + reviewed.length
-
-      return {
-        user: member,
-        created: authored.length,
-        merged: merged.length,
-        reviewed: reviewed.length,
-        totalActivity,
-      }
-    })
-
-    // Filter by search query
-    const filtered = search.trim()
-      ? rows.filter(
-          (r) =>
-            r.user.name.toLowerCase().includes(search.toLowerCase()) ||
-            r.user.username.toLowerCase().includes(search.toLowerCase())
-        )
-      : rows
-
-    // Sort by activity descending
-    return [...filtered].sort((a, b) => b.totalActivity - a.totalActivity)
-  }, [groupMembers, groupMRs, sinceIso, search])
+      .map((member) => {
+        const { created, merged, reviewed } = statsByUsername.get(member.username) ?? {
+          created: 0,
+          merged: 0,
+          reviewed: 0,
+        }
+        return { user: member, created, merged, reviewed, totalActivity: created + merged + reviewed }
+      })
+      .sort((a, b) => b.totalActivity - a.totalActivity)
+  }, [groupMembers, statsByUsername, search])
 
   const maxActivity = useMemo(() => {
     const max = Math.max(...devReportRows.map((r) => r.totalActivity), 0)

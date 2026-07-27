@@ -1,5 +1,37 @@
 import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion, MRAwardEmoji, PipelineJob } from './types'
 
+// ทุก request มี timeout — ถ้าปล่อยค้าง scheduler จะติดธง isSyncing ไว้ตลอด
+// แล้วรอบ sync ถัดๆ ไปจะถูก skip ทั้งหมดจนกว่าจะรีสตาร์ทแอป
+const REQUEST_TIMEOUT_MS = 30_000
+
+const PER_PAGE = 100
+// กันลูป pagination ไม่รู้จบถ้า API ตอบผิดสัญญา (100 หน้า = 10,000 รายการ)
+const MAX_PAGES = 100
+// จำนวนโปรเจกต์ที่ดึง MR พร้อมกันได้สูงสุด
+const PROJECT_FETCH_CONCURRENCY = 6
+// จำนวนโปรเจกต์ที่ upsert webhook พร้อมกันได้สูงสุด
+const WEBHOOK_SYNC_CONCURRENCY = 4
+
+/** ยิงงานพร้อมกันแบบจำกัดจำนวน — กัน rate limit เวลาผู้ใช้เลือกโปรเจกต์ไว้เยอะ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let cursor = 0
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await fn(items[index])
+    }
+  })
+
+  await Promise.all(workers)
+  return results
+}
+
 class FetchWrapper {
   constructor(private baseUrl: string, private token: string) {}
 
@@ -12,20 +44,31 @@ class FetchWrapper {
         }
       }
     }
-    const res = await fetch(url.toString(), {
-      method,
-      headers: {
-        'PRIVATE-TOKEN': this.token,
-        'Content-Type': 'application/json',
-      },
-      body: options.data ? JSON.stringify(options.data) : undefined,
-    })
-    
+
+    let res: Response
+    try {
+      res = await fetch(url.toString(), {
+        method,
+        headers: {
+          'PRIVATE-TOKEN': this.token,
+          'Content-Type': 'application/json',
+        },
+        body: options.data ? JSON.stringify(options.data) : undefined,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+    } catch (err) {
+      const name = err instanceof Error ? err.name : ''
+      if (name === 'TimeoutError' || name === 'AbortError') {
+        throw new Error(`GitLab API Timeout: ${method} ${path} took longer than ${REQUEST_TIMEOUT_MS}ms`)
+      }
+      throw err
+    }
+
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       throw new Error(`GitLab API Error: ${res.status} ${res.statusText} ${errText}`)
     }
-    
+
     const data: any = res.status !== 204 ? await res.json().catch(() => ({})) : {}
     return { data }
   }
@@ -49,27 +92,30 @@ export class GitLabClient {
     return this.mapUser(data)
   }
 
-  async getAccessibleProjects(): Promise<GitLabProject[]> {
-    const projects: GitLabProject[] = []
-    let page = 1
+  /** ดึงครบทุกหน้าแบบ page-based — ใช้ร่วมกันทุก endpoint ที่ต้อง paginate */
+  private async fetchAllPages<T>(
+    path: string,
+    params: Record<string, unknown>,
+    map: (row: Record<string, unknown>) => T
+  ): Promise<T[]> {
+    const out: T[] = []
 
-    while (true) {
-      const { data } = await this.http.get('/projects', {
-        params: {
-          membership: true,
-          per_page: 100,
-          page,
-          order_by: 'last_activity_at',
-          sort: 'desc',
-        },
-      })
-      if (data.length === 0) break
-      projects.push(...data.map(this.mapProject))
-      if (data.length < 100) break
-      page++
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const { data } = await this.http.get(path, { params: { ...params, per_page: PER_PAGE, page } })
+      if (!Array.isArray(data) || data.length === 0) break
+      for (const row of data) out.push(map(row))
+      if (data.length < PER_PAGE) break
     }
 
-    return projects
+    return out
+  }
+
+  async getAccessibleProjects(): Promise<GitLabProject[]> {
+    return this.fetchAllPages(
+      '/projects',
+      { membership: true, order_by: 'last_activity_at', sort: 'desc' },
+      this.mapProject
+    )
   }
 
   async searchProjects(query: string): Promise<GitLabProject[]> {
@@ -82,91 +128,43 @@ export class GitLabClient {
         sort: 'desc',
       },
     })
-    return data.map((p: Record<string, unknown>) => this.mapProject(p))
+    return data.map(this.mapProject)
   }
 
   async getGroups(): Promise<GitLabGroup[]> {
-    const groups: GitLabGroup[] = []
-    let page = 1
-    while (true) {
-      const { data } = await this.http.get('/groups', {
-        params: { per_page: 100, page, order_by: 'name', sort: 'asc' },
-      })
-      if (data.length === 0) break
-      groups.push(...data.map((g: Record<string, unknown>) => this.mapGroup(g)))
-      if (data.length < 100) break
-      page++
-    }
-    return groups
+    return this.fetchAllPages('/groups', { order_by: 'name', sort: 'asc' }, this.mapGroup)
   }
 
   async getOwnerGroups(): Promise<GitLabGroup[]> {
-    const groups: GitLabGroup[] = []
-    let page = 1
-    while (true) {
-      const { data } = await this.http.get('/groups', {
-        params: { min_access_level: 50, per_page: 100, page, order_by: 'name', sort: 'asc' },
-      })
-      if (data.length === 0) break
-      groups.push(...data.map((g: Record<string, unknown>) => this.mapGroup(g)))
-      if (data.length < 100) break
-      page++
-    }
-    return groups
+    return this.fetchAllPages(
+      '/groups',
+      { min_access_level: 50, order_by: 'name', sort: 'asc' },
+      this.mapGroup
+    )
   }
 
   async getGroupOpenMRs(groupId: number): Promise<MergeRequest[]> {
-    const mrs: MergeRequest[] = []
-    let page = 1
-    while (true) {
-      const { data } = await this.http.get(`/groups/${groupId}/merge_requests`, {
-        params: { state: 'opened', per_page: 100, page, with_labels_details: true },
-      })
-      if (data.length === 0) break
-      mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
-      if (data.length < 100) break
-      page++
-    }
-    return mrs
+    return this.fetchAllPages(
+      `/groups/${groupId}/merge_requests`,
+      { state: 'opened', with_labels_details: true },
+      this.mapMR
+    )
   }
 
-  async getGroupMRsInTimeframe(groupId: number, since: string, until?: string): Promise<MergeRequest[]> {
-    const mrs: MergeRequest[] = []
-    let page = 1
-    const params: Record<string, unknown> = {
-      state: 'all',
-      per_page: 100,
-      updated_after: since,
-      with_labels_details: true,
-    }
-    if (until) {
-      params.updated_before = until
-    }
-    while (true) {
-      const { data } = await this.http.get(`/groups/${groupId}/merge_requests`, {
-        params: { ...params, page },
-      })
-      if (data.length === 0) break
-      mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
-      if (data.length < 100) break
-      page++
-    }
-    return mrs
+  async getGroupMRsInTimeframe(groupId: number, since: string): Promise<MergeRequest[]> {
+    return this.fetchAllPages(
+      `/groups/${groupId}/merge_requests`,
+      {
+        state: 'all',
+        updated_after: since,
+        with_labels_details: true,
+      },
+      this.mapMR
+    )
   }
 
   async getGroupMembers(groupId: number): Promise<GitLabUser[]> {
-    const members: GitLabUser[] = []
-    let page = 1
-    while (true) {
-      const { data } = await this.http.get(`/groups/${groupId}/members/all`, {
-        params: { per_page: 100, page },
-      })
-      if (data.length === 0) break
-      members.push(...data.map((u: Record<string, unknown>) => this.mapUser(u)))
-      if (data.length < 100) break
-      page++
-    }
-    return members
+    return this.fetchAllPages(`/groups/${groupId}/members/all`, {}, this.mapUser)
   }
 
   async getMRsForReview(userId: number): Promise<MergeRequest[]> {
@@ -179,7 +177,7 @@ export class GitLabClient {
         with_labels_details: true,
       },
     })
-    return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+    return data.map(this.mapMR)
   }
 
   async getAuthoredOpenMRs(authorId: number): Promise<MergeRequest[]> {
@@ -192,7 +190,7 @@ export class GitLabClient {
         with_labels_details: true,
       },
     })
-    return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+    return data.map(this.mapMR)
   }
 
   async getMRByIid(projectId: number, mrIid: number): Promise<MergeRequest | null> {
@@ -284,15 +282,18 @@ export class GitLabClient {
 
     let success = 0
     let failed = 0
-    for (let i = 0; i < ids.length; i++) {
+    let done = 0
+
+    await mapWithConcurrency(ids, WEBHOOK_SYNC_CONCURRENCY, async (id) => {
       try {
-        await this.upsertProjectWebhook(ids[i], webhookUrl, secret, username)
+        await this.upsertProjectWebhook(id, webhookUrl, secret, username)
         success++
       } catch {
         failed++
       }
-      onProgress?.(i + 1, ids.length)
-    }
+      onProgress?.(++done, ids.length)
+    })
+
     return { success, failed }
   }
 
@@ -309,7 +310,7 @@ export class GitLabClient {
         created_after: since,
       },
     })
-    return data.map((mr: Record<string, unknown>) => this.mapMR(mr))
+    return data.map(this.mapMR)
   }
 
   async getMRPipelines(projectId: number, mrIid: number): Promise<MergeRequest['pipelineStatus']> {
@@ -326,51 +327,31 @@ export class GitLabClient {
 
   async getAllOpenMRs(projectIds: number[]): Promise<MergeRequest[]> {
     if (projectIds.length === 0) {
-      const mrs: MergeRequest[] = []
-      let page = 1
-      while (true) {
-        const { data } = await this.http.get('/merge_requests', {
-          params: {
-            state: 'opened',
-            per_page: 100,
-            page,
-            scope: 'all',
-            with_labels_details: true,
-          },
-        })
-        if (data.length === 0) break
-        mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
-        if (data.length < 100) break
-        page++
-      }
-      return mrs
+      return this.fetchAllPages(
+        '/merge_requests',
+        { state: 'opened', scope: 'all', with_labels_details: true },
+        this.mapMR
+      )
     }
 
-    const results = await Promise.all(
-      projectIds.map(async (id) => {
-        const mrs: MergeRequest[] = []
-        let page = 1
-        try {
-          while (true) {
-            const { data } = await this.http.get(`/projects/${id}/merge_requests`, {
-              params: { state: 'opened', per_page: 100, page, with_labels_details: true },
-            })
-            if (data.length === 0) break
-            mrs.push(...data.map((mr: Record<string, unknown>) => this.mapMR(mr)))
-            if (data.length < 100) break
-            page++
-          }
-        } catch {
-          // silent: skip failed projects
-        }
-        return mrs
-      })
-    )
+    const results = await mapWithConcurrency(projectIds, PROJECT_FETCH_CONCURRENCY, async (id) => {
+      try {
+        return await this.fetchAllPages(
+          `/projects/${id}/merge_requests`,
+          { state: 'opened', with_labels_details: true },
+          this.mapMR
+        )
+      } catch {
+        return [] as MergeRequest[] // silent: skip failed projects
+      }
+    })
 
     return results.flat()
   }
 
-  private mapLabel(l: Record<string, unknown>): MRLabel {
+  // mapper ทุกตัวประกาศเป็น arrow property — ส่งเข้า .map()/callback ได้ตรงๆ
+  // โดยไม่ต้อง .bind(this) และไม่พังถ้าอนาคตมีการอ้าง this ข้างใน
+  private mapLabel = (l: Record<string, unknown>): MRLabel => {
     return {
       name: l.name as string,
       color: (l.color as string) ?? '#6b7280',
@@ -378,7 +359,7 @@ export class GitLabClient {
     }
   }
 
-  private mapGroup(g: Record<string, unknown>): GitLabGroup {
+  private mapGroup = (g: Record<string, unknown>): GitLabGroup => {
     return {
       id: g.id as number,
       name: g.name as string,
@@ -387,7 +368,7 @@ export class GitLabClient {
     }
   }
 
-  private mapUser(u: Record<string, unknown>): GitLabUser {
+  private mapUser = (u: Record<string, unknown>): GitLabUser => {
     return {
       id: u.id as number,
       name: u.name as string,
@@ -398,7 +379,7 @@ export class GitLabClient {
     }
   }
 
-  private mapProject(p: Record<string, unknown>): GitLabProject {
+  private mapProject = (p: Record<string, unknown>): GitLabProject => {
     return {
       id: p.id as number,
       name: p.name as string,
@@ -408,24 +389,21 @@ export class GitLabClient {
     }
   }
 
-  private mapMR(mr: Record<string, unknown>): MergeRequest {
+  private mapMR = (mr: Record<string, unknown>): MergeRequest => {
     const refs = mr.references as Record<string, unknown> | undefined
+    const projectNamespace = String(refs?.full ?? '').split('!')[0] ?? ''
+    const projectName = projectNamespace.split('/').pop() ?? ''
+
     const projectId =
       typeof mr.project_id === 'number'
         ? mr.project_id
-        : refs
-          ? parseInt(String(refs.full ?? '').split('!')[0]) || 0
-          : 0
+        : parseInt(projectNamespace) || 0
 
     const rawAuthor = mr.author as Record<string, unknown>
     const rawAssignees = (mr.assignees as Record<string, unknown>[]) ?? []
     const rawReviewers = (mr.reviewers as Record<string, unknown>[]) ?? []
 
-    const projectPathParts = String(
-      (mr.references as Record<string, unknown> | undefined)?.full ?? ''
-    ).split('!')
-    const projectNamespace = projectPathParts[0] ?? ''
-    const projectName = projectNamespace.split('/').pop() ?? ''
+    const headPipeline = mr.head_pipeline as Record<string, unknown> | undefined
 
     return {
       id: mr.id as number,
@@ -440,8 +418,8 @@ export class GitLabClient {
       updatedAt: mr.updated_at as string,
       mergedAt: (mr.merged_at as string | null) ?? null,
       author: this.mapUser(rawAuthor),
-      assignees: rawAssignees.map(this.mapUser.bind(this)),
-      reviewers: rawReviewers.map(this.mapUser.bind(this)),
+      assignees: rawAssignees.map(this.mapUser),
+      reviewers: rawReviewers.map(this.mapUser),
       sha: (mr.sha as string) ?? null,
       sourceBranch: mr.source_branch as string,
       targetBranch: mr.target_branch as string,
@@ -454,14 +432,14 @@ export class GitLabClient {
       upvotes: (mr.upvotes as number) ?? 0,
       downvotes: (mr.downvotes as number) ?? 0,
       userNotesCount: (mr.user_notes_count as number) ?? 0,
-      pipelineStatus: (mr.head_pipeline as Record<string, unknown> | undefined)?.status as MergeRequest['pipelineStatus'] ?? null,
-      pipelineId: (mr.head_pipeline as Record<string, unknown> | undefined)?.id as number ?? null,
-      pipelineWebUrl: (mr.head_pipeline as Record<string, unknown> | undefined)?.web_url as string ?? null,
+      pipelineStatus: (headPipeline?.status as MergeRequest['pipelineStatus']) ?? null,
+      pipelineId: (headPipeline?.id as number) ?? null,
+      pipelineWebUrl: (headPipeline?.web_url as string) ?? null,
       labels: Array.isArray(mr.labels)
         ? (mr.labels as Array<Record<string, unknown> | string>).map((l) =>
             typeof l === 'string'
               ? { name: l, color: '#6b7280', textColor: '#ffffff' }
-              : this.mapLabel(l as Record<string, unknown>)
+              : this.mapLabel(l)
           )
         : [],
       userCanMerge: ((mr.user as Record<string, unknown> | undefined)?.can_merge as boolean) ?? false,
@@ -470,48 +448,32 @@ export class GitLabClient {
   }
   // ────── In-App Review & MR Actions ──────
 
+  private mapDiff = (change: Record<string, unknown>): MRDiff => ({
+    diff: change.diff as string,
+    newPath: change.new_path as string,
+    oldPath: change.old_path as string,
+    aMode: change.a_mode as string,
+    bMode: change.b_mode as string,
+    newFile: change.new_file as boolean,
+    renamedFile: change.renamed_file as boolean,
+    deletedFile: change.deleted_file as boolean,
+  })
+
   async getMRDiffs(projectId: number, mrIid: number): Promise<MRDiff[]> {
     const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/changes`)
-    return (data.changes ?? []).map((change: Record<string, unknown>) => ({
-      diff: change.diff as string,
-      newPath: change.new_path as string,
-      oldPath: change.old_path as string,
-      aMode: change.a_mode as string,
-      bMode: change.b_mode as string,
-      newFile: change.new_file as boolean,
-      renamedFile: change.renamed_file as boolean,
-      deletedFile: change.deleted_file as boolean,
-    }))
+    return (data.changes ?? []).map(this.mapDiff)
   }
 
   async getCompareDiffs(projectId: number, fromSha: string, toSha: string): Promise<MRDiff[]> {
     const { data } = await this.http.get(`/projects/${projectId}/repository/compare`, {
       params: { from: fromSha, to: toSha }
     })
-    return (data.diffs ?? []).map((change: Record<string, unknown>) => ({
-      diff: change.diff as string,
-      newPath: change.new_path as string,
-      oldPath: change.old_path as string,
-      aMode: change.a_mode as string,
-      bMode: change.b_mode as string,
-      newFile: change.new_file as boolean,
-      renamedFile: change.renamed_file as boolean,
-      deletedFile: change.deleted_file as boolean,
-    }))
+    return (data.diffs ?? []).map(this.mapDiff)
   }
 
   async getCommitDiffs(projectId: number, sha: string): Promise<MRDiff[]> {
     const { data } = await this.http.get(`/projects/${projectId}/repository/commits/${sha}/diff`)
-    return (data ?? []).map((change: Record<string, unknown>) => ({
-      diff: change.diff as string,
-      newPath: change.new_path as string,
-      oldPath: change.old_path as string,
-      aMode: change.a_mode as string,
-      bMode: change.b_mode as string,
-      newFile: change.new_file as boolean,
-      renamedFile: change.renamed_file as boolean,
-      deletedFile: change.deleted_file as boolean,
-    }))
+    return (data ?? []).map(this.mapDiff)
   }
 
   async getMRDiscussions(projectId: number, mrIid: number): Promise<MRDiscussion[]> {

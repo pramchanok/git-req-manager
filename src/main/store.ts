@@ -23,70 +23,78 @@ interface StoreSchema {
   launchAtStartupDefaultApplied: boolean
 }
 
-const store = new Store<StoreSchema>({
-  defaults: {
-    gitlabUrl: 'https://gitlab.igenco.dev',
-    encryptedToken: '',
-    refreshIntervalMinutes: 5,
-    projectIds: [],
-    webhookEnabled: true,
-    webhookPort: 3847,
-    webhookSecret: '',
-    webhookPublicUrl: 'https://ig-server-eoffice.igenco.dev/gitlab-webhook',
-    webhookUseTunnel: false,
-    launchAtStartup: true,
-    notifyOwnerGroupIds: [],
-    notifiedMRIds: [],
-    notifiedMergedMRIds: [],
-    teamReportGroupId: 0,
-    lastSeenVersion: '',
-    notifyOnMyMRMerged: true,
-    hasRunBefore: false,
-    launchAtStartupDefaultApplied: false,
-  },
-})
+// แหล่งความจริงเดียวของค่า default — ทั้ง electron-store และ fallback ของ getSettings()
+// ใช้ชุดนี้ร่วมกัน เพื่อไม่ให้สองที่หลุดจากกัน (เคยมีเคส webhookEnabled true/false ไม่ตรงกัน)
+const DEFAULTS: StoreSchema = {
+  gitlabUrl: 'https://gitlab.igenco.dev',
+  encryptedToken: '',
+  refreshIntervalMinutes: 5,
+  projectIds: [],
+  webhookEnabled: true,
+  webhookPort: 3847,
+  webhookSecret: '',
+  webhookPublicUrl: 'https://ig-server-eoffice.igenco.dev/gitlab-webhook',
+  webhookUseTunnel: false,
+  launchAtStartup: true,
+  notifyOwnerGroupIds: [],
+  notifiedMRIds: [],
+  notifiedMergedMRIds: [],
+  teamReportGroupId: 0,
+  lastSeenVersion: '',
+  notifyOnMyMRMerged: true,
+  hasRunBefore: false,
+  launchAtStartupDefaultApplied: false,
+}
+
+const store = new Store<StoreSchema>({ defaults: DEFAULTS })
+
+function read<K extends keyof StoreSchema>(key: K): StoreSchema[K] {
+  return store.get(key, DEFAULTS[key]) as StoreSchema[K]
+}
 
 // ── One-time migration: เปลี่ยน default ของ "เริ่มพร้อมเปิดเครื่อง" เป็นเปิด ──
 // ครอบคลุมเครื่องที่ติดตั้งอยู่แล้ว (ซึ่งมีค่า false บันทึกไว้) — ทำครั้งเดียว
 // หลังจากนั้นผู้ใช้ยังปิดเองได้ตามปกติ
-if (!store.get('launchAtStartupDefaultApplied', false)) {
+if (!read('launchAtStartupDefaultApplied')) {
   store.set('launchAtStartup', true)
   store.set('launchAtStartupDefaultApplied', true)
 }
 
 const PLAIN_TOKEN_PREFIX = 'plain:'
 
-export function getSettings(): Settings {
-  const encryptedToken = store.get('encryptedToken', '')
-  let accessToken = ''
+// เพดานจำนวน MR id ที่จำไว้กันแจ้งเตือนซ้ำ — กันไฟล์ config โตไม่จำกัด
+const MAX_TRACKED_IDS = 500
 
-  if (encryptedToken) {
-    if (encryptedToken.startsWith(PLAIN_TOKEN_PREFIX)) {
-      // Fallback storage: OS keychain ไม่พร้อมใช้งานตอนบันทึก (เช่น Linux ไม่มี keyring)
-      accessToken = Buffer.from(encryptedToken.slice(PLAIN_TOKEN_PREFIX.length), 'base64').toString('utf-8')
-    } else {
-      try {
-        const buf = Buffer.from(encryptedToken, 'base64')
-        accessToken = safeStorage.decryptString(buf)
-      } catch {
-        accessToken = ''
-      }
-    }
+function decryptAccessToken(): string {
+  const encryptedToken = read('encryptedToken')
+  if (!encryptedToken) return ''
+
+  if (encryptedToken.startsWith(PLAIN_TOKEN_PREFIX)) {
+    // Fallback storage: OS keychain ไม่พร้อมใช้งานตอนบันทึก (เช่น Linux ไม่มี keyring)
+    return Buffer.from(encryptedToken.slice(PLAIN_TOKEN_PREFIX.length), 'base64').toString('utf-8')
   }
 
+  try {
+    return safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'))
+  } catch {
+    return ''
+  }
+}
+
+export function getSettings(): Settings {
   return {
-    gitlabUrl: store.get('gitlabUrl', 'https://gitlab.igenco.dev'),
-    accessToken,
-    refreshIntervalMinutes: store.get('refreshIntervalMinutes', 5),
-    projectIds: store.get('projectIds', []),
-    webhookEnabled: store.get('webhookEnabled', false),
-    webhookPort: store.get('webhookPort', 3847),
-    webhookSecret: store.get('webhookSecret', ''),
-    webhookPublicUrl: store.get('webhookPublicUrl', 'https://ig-server-eoffice.igenco.dev/gitlab-webhook'),
-    webhookUseTunnel: store.get('webhookUseTunnel', false),
-    launchAtStartup: store.get('launchAtStartup', true),
-    notifyOwnerGroupIds: store.get('notifyOwnerGroupIds', []),
-    notifyOnMyMRMerged: store.get('notifyOnMyMRMerged', true),
+    gitlabUrl: read('gitlabUrl'),
+    accessToken: decryptAccessToken(),
+    refreshIntervalMinutes: read('refreshIntervalMinutes'),
+    projectIds: read('projectIds'),
+    webhookEnabled: read('webhookEnabled'),
+    webhookPort: read('webhookPort'),
+    webhookSecret: read('webhookSecret'),
+    webhookPublicUrl: read('webhookPublicUrl'),
+    webhookUseTunnel: read('webhookUseTunnel'),
+    launchAtStartup: read('launchAtStartup'),
+    notifyOwnerGroupIds: read('notifyOwnerGroupIds'),
+    notifyOnMyMRMerged: read('notifyOnMyMRMerged'),
   }
 }
 
@@ -118,46 +126,36 @@ export function saveSettings(settings: Settings): void {
   // แล้ว save ทับจนหาย — ใช้ clearAccessToken() เมื่อต้องการ logout จริงๆ
 }
 
-export function clearAccessToken(): void {
-  store.set('encryptedToken', '')
-}
-
+/**
+ * ต้อง "ถอดรหัสได้จริง" ถึงจะนับว่าตั้งค่าแล้ว — ถ้าเช็คแค่ว่ามีสตริงใน encryptedToken
+ * เคสที่ safeStorage ถอดรหัสไม่ผ่าน (ย้ายเครื่อง / keychain เปลี่ยน) จะผ่านด่านนี้ไปได้
+ * แล้วยิง GitLab ด้วย token ว่างจนได้ 401 รัวๆ โดยผู้ใช้ไม่รู้ว่าต้องไปใส่ token ใหม่
+ */
 export function isConfigured(): boolean {
-  const url = store.get('gitlabUrl', '')
-  const token = store.get('encryptedToken', '')
-  return url.length > 0 && token.length > 0
+  return read('gitlabUrl').length > 0 && decryptAccessToken().length > 0
 }
 
 export function getNotifiedMRIds(): Set<number> {
-  return new Set(store.get('notifiedMRIds', []))
+  return new Set(read('notifiedMRIds'))
 }
 
 export function addNotifiedMRId(id: number): void {
-  const ids = store.get('notifiedMRIds', [])
+  const ids = read('notifiedMRIds')
   if (!ids.includes(id)) {
-    store.set('notifiedMRIds', [...ids, id])
+    store.set('notifiedMRIds', [...ids, id].slice(-MAX_TRACKED_IDS))
   }
 }
 
 export function pruneNotifiedMRIds(activeIds: Set<number>): void {
-  const ids = store.get('notifiedMRIds', [])
-  const pruned = ids.filter((id) => activeIds.has(id)).slice(-500)
+  const ids = read('notifiedMRIds')
+  const pruned = ids.filter((id) => activeIds.has(id)).slice(-MAX_TRACKED_IDS)
   if (pruned.length !== ids.length) {
     store.set('notifiedMRIds', pruned)
   }
 }
 
-export function removeNotifiedMRId(id: number): void {
-  const ids = store.get('notifiedMRIds', [])
-  store.set('notifiedMRIds', ids.filter((i) => i !== id))
-}
-
-export function clearNotifiedMRIds(): void {
-  store.set('notifiedMRIds', [])
-}
-
 export function getLastSeenVersion(): string {
-  return store.get('lastSeenVersion', '')
+  return read('lastSeenVersion')
 }
 
 export function setLastSeenVersion(version: string): void {
@@ -166,7 +164,7 @@ export function setLastSeenVersion(version: string): void {
 
 
 export function getTeamReportGroupId(): number | null {
-  const id = store.get('teamReportGroupId', 0)
+  const id = read('teamReportGroupId')
   return id > 0 ? id : null
 }
 
@@ -174,28 +172,20 @@ export function saveTeamReportGroupId(id: number | null): void {
   store.set('teamReportGroupId', id ?? 0)
 }
 
-export function getNotifiedMergedMRIds(): Set<number> {
-  return new Set(store.get('notifiedMergedMRIds', []))
-}
-
 export function hasNotifiedMergedMRId(id: number): boolean {
-  return store.get('notifiedMergedMRIds', []).includes(id)
+  return read('notifiedMergedMRIds').includes(id)
 }
 
 export function addNotifiedMergedMRId(id: number): void {
-  const ids = store.get('notifiedMergedMRIds', [])
+  const ids = read('notifiedMergedMRIds')
   if (!ids.includes(id)) {
-    // Keep only last 500 to prevent unbounded growth
-    const updated = [...ids, id].slice(-500)
-    store.set('notifiedMergedMRIds', updated)
+    store.set('notifiedMergedMRIds', [...ids, id].slice(-MAX_TRACKED_IDS))
   }
 }
 
+/** หมายเหตุ: มี side effect — เรียกครั้งแรกจะ mark ว่ารันแล้ว จึงคืน true ได้ครั้งเดียว */
 export function isFirstRun(): boolean {
-  const hasRun = store.get('hasRunBefore', false)
-  if (!hasRun) {
-    store.set('hasRunBefore', true)
-    return true
-  }
-  return false
+  if (read('hasRunBefore')) return false
+  store.set('hasRunBefore', true)
+  return true
 }

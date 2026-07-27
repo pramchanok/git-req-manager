@@ -1,5 +1,6 @@
 import http from 'http'
 import os from 'os'
+import crypto from 'crypto'
 
 type WebhookPayload = {
   eventType: 'merge_request' | 'pipeline' | 'note'
@@ -14,11 +15,12 @@ type WebhookPayload = {
 type WebhookCallback = (payload: WebhookPayload) => void
 
 let server: http.Server | null = null
-let currentPort = 0
 
 const GITLAB_MR_HOOK = 'Merge Request Hook'
 const GITLAB_PIPELINE_HOOK = 'Pipeline Hook'
 const GITLAB_NOTE_HOOK = 'Note Hook'
+
+const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024 // 5MB
 
 function getLocalIP(): string {
   const nets = os.networkInterfaces()
@@ -40,6 +42,15 @@ export function getWebhookAddress(port: number, publicUrl?: string): string {
   return `http://${getLocalIP()}:${port}/webhook`
 }
 
+/** เทียบ secret แบบเวลาคงที่ — กัน timing attack เดา token ทีละไบต์ */
+function secretMatches(expected: string, received: unknown): boolean {
+  if (typeof received !== 'string') return false
+  const a = Buffer.from(expected, 'utf-8')
+  const b = Buffer.from(received, 'utf-8')
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
+}
+
 export function startWebhookServer(port: number, secret: string, onEvent: WebhookCallback): void {
   stopWebhookServer()
 
@@ -59,8 +70,7 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
     }
 
     // Verify secret token if configured
-    const token = req.headers['x-gitlab-token']
-    if (secret && token !== secret) {
+    if (secret && !secretMatches(secret, req.headers['x-gitlab-token'])) {
       console.warn('[webhook] unauthorized attempt')
       res.writeHead(401)
       res.end('Unauthorized')
@@ -69,27 +79,31 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
 
     const eventType = req.headers['x-gitlab-event'] as string
 
-    let body = ''
+    // เก็บเป็น Buffer แล้วค่อย decode ทีเดียวตอนจบ — ถ้าต่อ string ทีละ chunk
+    // ตัวอักษร UTF-8 หลายไบต์ (เช่นภาษาไทยใน title/description) ที่ถูกตัดคร่อม chunk จะเพี้ยน
+    const chunks: Buffer[] = []
     let totalSize = 0
-    const MAX_SIZE = 5 * 1024 * 1024 // 5MB
+    let aborted = false
 
-    req.on('data', (chunk) => {
+    req.on('data', (chunk: Buffer) => {
+      if (aborted) return
       totalSize += chunk.length
-      if (totalSize > MAX_SIZE) {
+      if (totalSize > MAX_PAYLOAD_SIZE) {
+        aborted = true
         console.warn(`[webhook] payload too large: ${totalSize} bytes`)
         res.writeHead(413)
         res.end('Payload Too Large')
         req.destroy()
         return
       }
-      body += chunk.toString()
+      chunks.push(chunk)
     })
 
     req.on('end', () => {
-      if (req.destroyed) return
+      if (aborted || req.destroyed) return
 
       try {
-        const payload = JSON.parse(body)
+        const payload = JSON.parse(Buffer.concat(chunks).toString('utf-8'))
 
         if (eventType === GITLAB_MR_HOOK) {
           const attrs = payload?.object_attributes ?? {}
@@ -142,9 +156,12 @@ export function startWebhookServer(port: number, secret: string, onEvent: Webhoo
   })
 
 
-  server.listen(port, '0.0.0.0', () => {
-    currentPort = port
-    console.log(`[webhook] listening on ${getWebhookAddress(port)}`)
+  // ไม่มี secret = endpoint ไม่มีการยืนยันตัวตน จึงผูกกับ loopback เท่านั้น
+  // ให้เครื่องอื่นในวง LAN ยิงเข้ามา trigger sync รัวๆ ไม่ได้
+  const host = secret ? '0.0.0.0' : '127.0.0.1'
+
+  server.listen(port, host, () => {
+    console.log(`[webhook] listening on ${host}:${port}/webhook${secret ? '' : ' (loopback only — ยังไม่ได้ตั้ง secret)'}`)
   })
 
   server.on('error', (err) => {
@@ -157,10 +174,5 @@ export function stopWebhookServer(): void {
     server.closeAllConnections()
     server.close()
     server = null
-    currentPort = 0
   }
-}
-
-export function getWebhookPort(): number {
-  return currentPort
 }
