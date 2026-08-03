@@ -1,5 +1,5 @@
-import type { MergeRequest } from '../../../shared/types'
-import { GitCommit, Folder } from 'lucide-react'
+import type { GitLabUser, MergeRequest } from '../../../shared/types'
+import { GitCommit, Folder, GitMerge, UserRoundCheck } from 'lucide-react'
 import PipelineMiniGraph from './PipelineMiniGraph'
 
 export type MRDetailTab = 'overview' | 'changes'
@@ -11,6 +11,39 @@ interface MRHeaderProps {
   diffsCount: number
   cancelingPipeline: boolean
   onCancelPipeline: () => void
+}
+
+function PeopleBadge({ label, people, merged = false }: { label: string; people: GitLabUser[]; merged?: boolean }) {
+  if (people.length === 0) return null
+  const Icon = merged ? GitMerge : UserRoundCheck
+
+  return (
+    <div
+      className={`flex items-center gap-1.5 rounded-md border px-1.5 py-1 shadow-sm ${
+        merged
+          ? 'border-blue-500/25 bg-blue-500/10 text-blue-300'
+          : 'border-violet-500/25 bg-violet-500/10 text-violet-200'
+      }`}
+      title={`${label.toLowerCase()}: ${people.map((person) => `${person.name} (@${person.username})`).join(', ')}`}
+    >
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span className="text-[10px] font-bold tracking-wide whitespace-nowrap">{label}</span>
+      <div className="flex items-center -space-x-1.5 pl-0.5">
+        {people.slice(0, 3).map((person) => (
+          <img
+            key={person.id}
+            src={person.avatarUrl}
+            alt={person.name}
+            title={`${person.name} (@${person.username})`}
+            className="w-5 h-5 rounded-full ring-1 ring-[#161b22] object-cover bg-gray-700"
+          />
+        ))}
+        {people.length > 3 && (
+          <span className="ml-2 text-[10px] font-semibold">+{people.length - 3}</span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 /** Header ของหน้า MR Detail: ชื่อ MR, branch, badge สถานะ, pipeline, labels และแท็บ */
@@ -69,6 +102,10 @@ export default function MRHeader({ mr, activeTab, onTabChange, diffsCount, cance
               }`}>
                 {mr.state.toUpperCase()}
               </span>
+
+              {/* Reviewers remain visible after merge; the actual merger is shown separately. */}
+              <PeopleBadge label="REQUESTED TO REVIEW" people={mr.reviewers} />
+              {mr.mergedBy && <PeopleBadge label="MERGED BY" people={[mr.mergedBy]} merged />}
 
               {/* Pipeline */}
               {mr.pipelineStatus && (

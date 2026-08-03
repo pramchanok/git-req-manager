@@ -808,8 +808,16 @@ function setupIPC(): void {
     (c, groupId: number, since: string) => c.getGroupMRsInTimeframe(groupId, since),
     []
   )
+  handleWithClient(
+    'get-my-mrs-in-timeframe',
+    async (c, since: string) => {
+      const user = await c.getCurrentUser()
+      return c.getMyMRsInTimeframe(user.id, since)
+    },
+    []
+  )
 
-  ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => {
+  ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal = false) => {
     const reportWin = new BrowserWindow({
       width: 1000,
       height: 700,
@@ -828,7 +836,7 @@ function setupIPC(): void {
     reportWin.setMenuBarVisibility(false)
 
     if (process.env.NODE_ENV === 'development') {
-      reportWin.loadURL(`http://localhost:5173/?page=report&username=${encodeURIComponent(username)}&name=${encodeURIComponent(name)}&avatarUrl=${encodeURIComponent(avatarUrl)}&timeframe=${encodeURIComponent(timeframe)}&groupId=${groupId}`)
+      reportWin.loadURL(`http://localhost:5173/?page=report&username=${encodeURIComponent(username)}&name=${encodeURIComponent(name)}&avatarUrl=${encodeURIComponent(avatarUrl)}&timeframe=${encodeURIComponent(timeframe)}${groupId ? `&groupId=${groupId}` : ''}${personal ? '&personal=true' : ''}`)
     } else {
       reportWin.loadFile(path.join(__dirname, '../renderer/index.html'), {
         query: {
@@ -837,7 +845,8 @@ function setupIPC(): void {
           name,
           avatarUrl,
           timeframe,
-          groupId: String(groupId),
+          ...(groupId ? { groupId: String(groupId) } : {}),
+          ...(personal ? { personal: 'true' } : {}),
         }
       })
     }

@@ -34,6 +34,8 @@ export interface MergeRequest {
   author: GitLabUser
   assignees: GitLabUser[]
   reviewers: GitLabUser[]
+  /** The GitLab user who completed the merge, when the MR has been merged. */
+  mergedBy: GitLabUser | null
   sourceBranch: string
   targetBranch: string
   webUrl: string

@@ -210,6 +210,20 @@ export class GitLabClient {
     )
   }
 
+  /**
+   * Personal report data. Queries are scoped to the authenticated user's own
+   * authored or review-requested MRs, rather than exposing a team-wide report.
+   */
+  async getMyMRsInTimeframe(userId: number, since: string): Promise<MergeRequest[]> {
+    const commonParams = { state: 'all', updated_after: since, scope: 'all', with_labels_details: true }
+    const [authored, reviewRequested] = await Promise.all([
+      this.fetchAllPages('/merge_requests', { ...commonParams, author_id: userId }, this.mapMR),
+      this.fetchAllPages('/merge_requests', { ...commonParams, reviewer_id: userId }, this.mapMR),
+    ])
+
+    return Array.from(new Map([...authored, ...reviewRequested].map((mr) => [mr.id, mr])).values())
+  }
+
   async getGroupMembers(groupId: number): Promise<GitLabUser[]> {
     return this.fetchAllPages(`/groups/${groupId}/members/all`, {}, this.mapUser)
   }
@@ -449,6 +463,9 @@ export class GitLabClient {
     const rawAuthor = mr.author as Record<string, unknown>
     const rawAssignees = (mr.assignees as Record<string, unknown>[]) ?? []
     const rawReviewers = (mr.reviewers as Record<string, unknown>[]) ?? []
+    // GitLab renamed this response field from `merged_by` to `merge_user`.
+    // Support both so self-managed GitLab instances of different versions work.
+    const rawMergedBy = (mr.merge_user ?? mr.merged_by) as Record<string, unknown> | null | undefined
 
     const headPipeline = mr.head_pipeline as Record<string, unknown> | undefined
 
@@ -467,6 +484,7 @@ export class GitLabClient {
       author: this.mapUser(rawAuthor),
       assignees: rawAssignees.map(this.mapUser),
       reviewers: rawReviewers.map(this.mapUser),
+      mergedBy: rawMergedBy ? this.mapUser(rawMergedBy) : null,
       sha: (mr.sha as string) ?? null,
       sourceBranch: mr.source_branch as string,
       targetBranch: mr.target_branch as string,

@@ -22,7 +22,8 @@ declare global {
       getTeamReportGroup: () => Promise<number | null>
       setTeamReportGroup: (id: number | null) => Promise<void>
       getGroupMRsInTimeframe: (groupId: number, since: string) => Promise<MergeRequest[]>
-      openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number) => Promise<void>
+      getMyMRsInTimeframe: (since: string) => Promise<MergeRequest[]>
+      openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal?: boolean) => Promise<void>
       openMRWindow: (projectId: number, mrIid: number) => Promise<void>
       exportReportPDF: () => Promise<boolean>
       saveReportFile: (filename: string, content: string) => Promise<boolean>

@@ -204,6 +204,12 @@ export default function TeamReport({ appState }: TeamReportProps) {
     )
   }
 
+  const openMyReport = () => {
+    const user = appState.currentUser
+    if (!user) return
+    window.electronAPI.openReportWindow(user.username, user.name, user.avatarUrl, timeframe, null, true)
+  }
+
   // ── Access Denied Screen ───────────────────────────────────────────────────
   if (!hasAccess) {
     return (
@@ -213,10 +219,17 @@ export default function TeamReport({ appState }: TeamReportProps) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
           </svg>
         </div>
-        <h2 className="text-base font-bold text-white mb-2">Access Restricted</h2>
+        <h2 className="text-base font-bold text-white mb-2">Team report restricted</h2>
         <p className="text-gray-400 text-xs max-w-xs leading-relaxed">
-          This report is only accessible to GitLab Administrators or Group Owners.
+          You can still view your own contribution history. Team members and their activity remain private.
         </p>
+        <button
+          onClick={openMyReport}
+          disabled={!appState.currentUser}
+          className="mt-5 inline-flex items-center gap-2 rounded-md border border-orange-500/30 bg-orange-500/10 px-4 py-2 text-xs font-bold text-orange-300 shadow-sm transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          View my history ↗
+        </button>
       </div>
     )
   }

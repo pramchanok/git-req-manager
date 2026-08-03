@@ -29,13 +29,14 @@ export default function ReportDetail() {
   const [referenceDate, setReferenceDate] = useState<Date>(new Date())
 
   // Parse remaining query params
-  const { username, name, avatarUrl, groupId } = useMemo(() => {
+  const { username, name, avatarUrl, groupId, personal } = useMemo(() => {
     const params = new URLSearchParams(window.location.search)
     return {
       username: params.get('username') || '',
       name: params.get('name') || '',
       avatarUrl: params.get('avatarUrl') || '',
       groupId: params.get('groupId') ? Number(params.get('groupId')) : null,
+      personal: params.get('personal') === 'true',
     }
   }, [])
 
@@ -45,10 +46,11 @@ export default function ReportDetail() {
   }, [])
 
   const selectedGroupName = useMemo(() => {
+    if (personal) return 'My accessible projects'
     if (!groupId) return 'All Groups'
     const g = groups.find((group) => group.id === groupId)
     return g ? g.name : `Group #${groupId}`
-  }, [groups, groupId])
+  }, [groups, groupId, personal])
 
   // 2. Calculate date range dynamically
   const { sinceIso, untilIso, timeframeLabel } = useMemo(() => {
@@ -123,7 +125,7 @@ export default function ReportDetail() {
 
   // 3. Fetch Group MRs in this timeframe
   useEffect(() => {
-    if (!groupId) {
+    if (!groupId && !personal) {
       setLoading(false)
       return
     }
@@ -132,8 +134,11 @@ export default function ReportDetail() {
     setLoading(true)
     setError(null)
 
-    window.electronAPI
-      .getGroupMRsInTimeframe(groupId, fetchSinceIso)
+    const fetchMRs = personal
+      ? window.electronAPI.getMyMRsInTimeframe(fetchSinceIso)
+      : window.electronAPI.getGroupMRsInTimeframe(groupId!, fetchSinceIso)
+
+    fetchMRs
       .then((mrs) => {
         if (active) {
           setGroupMRs(mrs)
@@ -151,7 +156,7 @@ export default function ReportDetail() {
     return () => {
       active = false
     }
-  }, [groupId, fetchSinceIso, fetchUntilIso])
+  }, [groupId, personal, fetchSinceIso, fetchUntilIso])
 
   // 4. Filter and Aggregate data for target developer
   const developerData = useMemo(() => {

@@ -63,8 +63,20 @@ describe('GitLabClient Mappers', () => {
     const mr = client.mapMR(rawMR)
     expect(mr.description).toBe('')
     expect(mr.assignees).toEqual([])
+    expect(mr.mergedBy).toBeNull()
     expect(mr.labels).toEqual([])
     expect(mr.approvalsRequired).toBe(0)
+  })
+
+  test('maps the actual merger from current and legacy GitLab fields', () => {
+    const merger = { id: 2, name: 'Merger', username: 'merger', avatar_url: 'https://avatar.test/2', web_url: 'https://gitlab.com/merger' }
+    const baseMR = {
+      id: 10, iid: 5, project_id: 123, title: 'Merged change', state: 'merged',
+      author: { id: 1, name: 'Alice', username: 'alice' }, source_branch: 'feature', target_branch: 'main', web_url: 'https://gitlab.com/mr/5',
+    }
+
+    expect(client.mapMR({ ...baseMR, merge_user: merger }).mergedBy.username).toBe('merger')
+    expect(client.mapMR({ ...baseMR, merged_by: merger }).mergedBy.username).toBe('merger')
   })
 })
 
@@ -82,6 +94,22 @@ describe('GitLabClient Report Queries', () => {
     const requestUrl = new URL(fetchMock.mock.calls[0][0] as string)
     expect(requestUrl.searchParams.get('updated_after')).toBe('2026-07-01T00:00:00.000Z')
     expect(requestUrl.searchParams.has('updated_before')).toBe(false)
+  })
+
+  test('fetches a personal report using only the authenticated user filters', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await client.getMyMRsInTimeframe(42, '2026-07-01T00:00:00.000Z')
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const requestUrls = fetchMock.mock.calls.map(([url]: [string]) => new URL(url))
+    expect(requestUrls.map((url) => url.searchParams.get('author_id'))).toContain('42')
+    expect(requestUrls.map((url) => url.searchParams.get('reviewer_id'))).toContain('42')
+    for (const url of requestUrls) {
+      expect(url.searchParams.get('state')).toBe('all')
+      expect(url.searchParams.get('updated_after')).toBe('2026-07-01T00:00:00.000Z')
+    }
   })
 
   test('retries transient network failures for GET requests', async () => {
