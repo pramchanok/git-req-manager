@@ -12,6 +12,7 @@
 - **ปรับปรุงการตรวจจับ Merge Conflict และ GitLab API**: เพิ่ม `detailed_merge_status` และ `with_merge_status_recheck: true` ใน GitLab REST API client เพื่อให้ตรวจจับ Merge Conflict และสถานะ Mergeability ได้แม่นยำยิ่งขึ้น
 - **เพิ่ม API สำหรับ MR Analytics แบบเจาะลึก**: เพิ่ม `getGroupMRAnalyticsSince` และ `getMyMRAnalyticsSince` รองรับการดึงข้อมูล MRs ที่ถูกสร้างหรืออัปเดตย้อนหลังเพื่อวิเคราะห์ผลงานทีมและบุคคล
 - **ปรับปรุง UI ของ MR Details และ Card**: ตกแต่งป้ายสถานะ MR (`Merged`, `Closed`, `Opened`) ด้วยไอคอน Lucide (`GitMerge`, `XCircle`, `Clock`) พร้อมจัดรูปแบบการแสดงผลวันที่และโปรเจกต์ให้อ่านง่ายยิ่งขึ้น
+- **ปรับมาตรฐานรูปแบบวันที่ของแอป (DD/MM/YYYY)**: เพิ่ม `dateFormat.ts` (`formatDate` และ `formatDateTime`) เพื่อปรับรูปแบบการแสดงผลวันที่ให้เป็นมาตรฐานเดียวกันทั้งแอปในฟอร์แมต **วัน/เดือน/ปี** (เช่น `10/08/2026`)
 - **ปรับปรุง Window Focus Behavior**: ปรับการทำงานของหน้าต่าง Electron ไม่ให้ซ่อนตัวอัตโนมัติเมื่อกดเปิดลิงก์ภายนอกไปยัง IDE หรือเบราว์เซอร์ ช่วยให้ใช้งานร่วมกับเครื่องมืออื่นได้อย่างต่อเนื่อง
 
 ### การแก้ไขข้อบกพร่อง (Bug Fixes)
