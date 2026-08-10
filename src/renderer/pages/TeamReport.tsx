@@ -210,6 +210,11 @@ export default function TeamReport({ appState }: TeamReportProps) {
     window.electronAPI.openReportWindow(user.username, user.name, user.avatarUrl, timeframe, null, true)
   }
 
+  const openLeadOverview = () => {
+    if (selectedGroupId === null) return
+    void window.electronAPI.openLeadOverviewWindow(selectedGroupId, timeframe)
+  }
+
   // ── Access Denied Screen ───────────────────────────────────────────────────
   if (!hasAccess) {
     return (
@@ -269,6 +274,7 @@ export default function TeamReport({ appState }: TeamReportProps) {
           onChange={(e) => setSearch(e.target.value)}
           className="w-28 bg-gray-800 border border-gray-700 text-white text-xs rounded px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-orange-500 placeholder-gray-500"
         />
+        <button onClick={openLeadOverview} disabled={selectedGroupId === null} className="shrink-0 rounded border border-orange-500/30 bg-orange-500/10 px-2 py-1.5 text-[10px] font-bold text-orange-300 hover:bg-orange-500/20 disabled:opacity-40">Lead ↗</button>
       </div>
 
       {/* Timeframe Controller Toolbar */}

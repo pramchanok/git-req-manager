@@ -1,4 +1,5 @@
 import type { MergeRequest } from '../../shared/types'
+import { formatDate, formatDateTime } from './dateFormat'
 
 export interface DeveloperData {
   authored: MergeRequest[]
@@ -20,7 +21,7 @@ export function buildReportMarkdown(meta: ReportMeta, data: DeveloperData): stri
     return mrs
       .map((mr, idx) => {
         const stateBadge = mr.state === 'merged' ? '✅ Merged' : mr.state === 'closed' ? '❌ Closed' : '🔵 Open'
-        const dateStr = new Date(mr.createdAt).toLocaleDateString()
+        const dateStr = formatDate(mr.createdAt)
         return `${idx + 1}. **!${mr.iid}**: [${mr.title.replace(/[\[\]]/g, '\\$&')}](${mr.webUrl}) - [${stateBadge}] (Created: ${dateStr})`
       })
       .join('\n')
@@ -30,7 +31,7 @@ export function buildReportMarkdown(meta: ReportMeta, data: DeveloperData): stri
 
 * **Group:** ${meta.groupName}
 * **Period:** ${meta.timeframeLabel}
-* **Generated At:** ${new Date().toLocaleString()}
+* **Generated At:** ${formatDateTime(new Date())}
 
 ---
 
@@ -64,7 +65,7 @@ export function buildReportCSV(meta: ReportMeta, data: DeveloperData): string {
   csv += `Name,${meta.name} (@${meta.username})\n`
   csv += `Group,${meta.groupName}\n`
   csv += `Timeframe,${meta.timeframeLabel}\n`
-  csv += `Generated At,${new Date().toLocaleString()}\n\n`
+  csv += `Generated At,${formatDateTime(new Date())}\n\n`
 
   csv += `Summary Metrics\n`
   csv += `Metric,Value\n`
@@ -78,7 +79,7 @@ export function buildReportCSV(meta: ReportMeta, data: DeveloperData): string {
   const addRows = (list: MergeRequest[], type: string) => {
     list.forEach((mr) => {
       const cleanTitle = mr.title.replace(/"/g, '""')
-      csv += `"${type}",${mr.iid},"${cleanTitle}","${mr.state}","${new Date(mr.createdAt).toLocaleDateString()}","${mr.webUrl}"\n`
+      csv += `"${type}",${mr.iid},"${cleanTitle}","${mr.state}","${formatDate(mr.createdAt)}","${mr.webUrl}"\n`
     })
   }
 

@@ -23,7 +23,10 @@ declare global {
       setTeamReportGroup: (id: number | null) => Promise<void>
       getGroupMRsInTimeframe: (groupId: number, since: string) => Promise<MergeRequest[]>
       getMyMRsInTimeframe: (since: string) => Promise<MergeRequest[]>
+      getGroupMRAnalyticsSince: (groupId: number, since: string) => Promise<MergeRequest[]>
+      getMyMRAnalyticsSince: (since: string) => Promise<MergeRequest[]>
       openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal?: boolean) => Promise<void>
+      openLeadOverviewWindow: (groupId: number, timeframe: string) => Promise<void>
       openMRWindow: (projectId: number, mrIid: number) => Promise<void>
       exportReportPDF: () => Promise<boolean>
       saveReportFile: (filename: string, content: string) => Promise<boolean>

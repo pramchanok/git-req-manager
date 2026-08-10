@@ -11,6 +11,7 @@ import Toast, { type ToastData, type ToastType } from './components/Toast'
 // แยก chunk เพื่อให้หน้าต่างหลัก (Dashboard ใน tray) เปิดเร็ว
 const ReportDetail = lazy(() => import('./pages/ReportDetail'))
 const MRDetail = lazy(() => import('./pages/MRDetail'))
+const LeadOverview = lazy(() => import('./pages/LeadOverview'))
 
 function PageLoader() {
   return (
@@ -20,7 +21,7 @@ function PageLoader() {
   )
 }
 
-type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report' | 'mr-detail'
+type Page = 'dashboard' | 'settings' | 'team-report' | 'changelog' | 'report' | 'mr-detail' | 'lead-overview'
 
 type BadgeColor = 'green' | 'amber' | null
 
@@ -200,6 +201,10 @@ export default function App() {
         />
       </Suspense>
     )
+  }
+
+  if (page === 'lead-overview') {
+    return <Suspense fallback={<PageLoader />}><LeadOverview /></Suspense>
   }
 
   return (

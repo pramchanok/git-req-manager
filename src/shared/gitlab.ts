@@ -193,7 +193,7 @@ export class GitLabClient {
   async getGroupOpenMRs(groupId: number): Promise<MergeRequest[]> {
     return this.fetchAllPages(
       `/groups/${groupId}/merge_requests`,
-      { state: 'opened', with_labels_details: true },
+      { state: 'opened', with_labels_details: true, with_merge_status_recheck: true },
       this.mapMR
     )
   }
@@ -205,9 +205,24 @@ export class GitLabClient {
         state: 'all',
         updated_after: since,
         with_labels_details: true,
+        with_merge_status_recheck: true,
       },
       this.mapMR
     )
+  }
+
+  /**
+   * Returns MRs created or updated after `since` for long-running analytics.
+   * GitLab combines `created_after` and `updated_after` with AND, so both
+   * paginated streams are read and de-duplicated.
+   */
+  async getGroupMRAnalyticsSince(groupId: number, since: string): Promise<MergeRequest[]> {
+    const commonParams = { state: 'all', with_labels_details: true, with_merge_status_recheck: true }
+    const [created, updated] = await Promise.all([
+      this.fetchAllPages(`/groups/${groupId}/merge_requests`, { ...commonParams, created_after: since }, this.mapMR),
+      this.fetchAllPages(`/groups/${groupId}/merge_requests`, { ...commonParams, updated_after: since }, this.mapMR),
+    ])
+    return Array.from(new Map([...created, ...updated].map((mr) => [mr.id, mr])).values())
   }
 
   /**
@@ -215,13 +230,24 @@ export class GitLabClient {
    * authored or review-requested MRs, rather than exposing a team-wide report.
    */
   async getMyMRsInTimeframe(userId: number, since: string): Promise<MergeRequest[]> {
-    const commonParams = { state: 'all', updated_after: since, scope: 'all', with_labels_details: true }
+    const commonParams = { state: 'all', updated_after: since, scope: 'all', with_labels_details: true, with_merge_status_recheck: true }
     const [authored, reviewRequested] = await Promise.all([
       this.fetchAllPages('/merge_requests', { ...commonParams, author_id: userId }, this.mapMR),
       this.fetchAllPages('/merge_requests', { ...commonParams, reviewer_id: userId }, this.mapMR),
     ])
 
     return Array.from(new Map([...authored, ...reviewRequested].map((mr) => [mr.id, mr])).values())
+  }
+
+  /** Personal version of the analytics query; it remains scoped to the current user. */
+  async getMyMRAnalyticsSince(userId: number, since: string): Promise<MergeRequest[]> {
+    const commonParams = { state: 'all', scope: 'all', with_labels_details: true, with_merge_status_recheck: true }
+    const [authored, authoredUpdated, reviewed] = await Promise.all([
+      this.fetchAllPages('/merge_requests', { ...commonParams, author_id: userId, created_after: since }, this.mapMR),
+      this.fetchAllPages('/merge_requests', { ...commonParams, author_id: userId, updated_after: since }, this.mapMR),
+      this.fetchAllPages('/merge_requests', { ...commonParams, reviewer_id: userId, updated_after: since }, this.mapMR),
+    ])
+    return Array.from(new Map([...authored, ...authoredUpdated, ...reviewed].map((mr) => [mr.id, mr])).values())
   }
 
   async getGroupMembers(groupId: number): Promise<GitLabUser[]> {
@@ -236,6 +262,7 @@ export class GitLabClient {
         per_page: 100,
         scope: 'all',
         with_labels_details: true,
+        with_merge_status_recheck: true,
       },
     })
     return data.map(this.mapMR)
@@ -249,6 +276,7 @@ export class GitLabClient {
         per_page: 100,
         scope: 'all',
         with_labels_details: true,
+        with_merge_status_recheck: true,
       },
     })
     return data.map(this.mapMR)
@@ -257,7 +285,7 @@ export class GitLabClient {
   async getMRByIid(projectId: number, mrIid: number): Promise<MergeRequest | null> {
     try {
       const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}`, {
-        params: { with_labels_details: true },
+        params: { with_labels_details: true, with_merge_status_recheck: true },
       })
       return this.mapMR(data as Record<string, unknown>)
     } catch {
@@ -390,7 +418,7 @@ export class GitLabClient {
     if (projectIds.length === 0) {
       return this.fetchAllPages(
         '/merge_requests',
-        { state: 'opened', scope: 'all', with_labels_details: true },
+        { state: 'opened', scope: 'all', with_labels_details: true, with_merge_status_recheck: true },
         this.mapMR
       )
     }
@@ -399,7 +427,7 @@ export class GitLabClient {
       try {
         return await this.fetchAllPages(
           `/projects/${id}/merge_requests`,
-          { state: 'opened', with_labels_details: true },
+          { state: 'opened', with_labels_details: true, with_merge_status_recheck: true },
           this.mapMR
         )
       } catch {
@@ -492,7 +520,10 @@ export class GitLabClient {
       approvalsRequired: (mr.approvals_required as number) ?? 0,
       approvalsLeft: (mr.approvals_left as number) ?? 0,
       draft: (mr.draft as boolean) ?? false,
-      hasConflicts: (mr.has_conflicts as boolean) ?? false,
+      // `has_conflicts` is false while GitLab is still calculating mergeability;
+      // `detailed_merge_status` gives the definitive conflict reason once available.
+      hasConflicts: (mr.has_conflicts as boolean) === true || mr.detailed_merge_status === 'conflict',
+      detailedMergeStatus: (mr.detailed_merge_status as string) ?? null,
       mergeWhenPipelineSucceeds: (mr.merge_when_pipeline_succeeds as boolean) ?? false,
       upvotes: (mr.upvotes as number) ?? 0,
       downvotes: (mr.downvotes as number) ?? 0,

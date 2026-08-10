@@ -39,6 +39,17 @@ describe('getTimeframeRange', () => {
     expect(new Date(untilIso)).toEqual(new Date(2028, 1, 29, 23, 59, 59, 999))
   })
 
+  test('yearly ครอบคลุมตั้งแต่วันที่ 1 ม.ค. ถึง 31 ธ.ค. ของปีนั้น', () => {
+    const { sinceIso, untilIso } = getTimeframeRange('yearly', WEDNESDAY)
+    expect(new Date(sinceIso)).toEqual(new Date(2026, 0, 1, 0, 0, 0, 0))
+    expect(new Date(untilIso)).toEqual(new Date(2026, 11, 31, 23, 59, 59, 999))
+  })
+
+  test('shiftReferenceDate เลื่อนปีสำหรับ yearly', () => {
+    expect(shiftReferenceDate('yearly', WEDNESDAY, 'next').getFullYear()).toBe(2027)
+    expect(shiftReferenceDate('yearly', WEDNESDAY, 'prev').getFullYear()).toBe(2025)
+  })
+
   // นี่คือหัวใจของบั๊กเดิม: ย้อนไปดูสัปดาห์ที่แล้วแล้วยอดรวมงานของสัปดาห์นี้เข้ามาด้วย
   test('ช่วงย้อนหลังไม่คาบเกี่ยวกับช่วงปัจจุบัน', () => {
     const thisWeek = getTimeframeRange('weekly', WEDNESDAY)

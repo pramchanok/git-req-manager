@@ -1,5 +1,5 @@
 import type { GitLabUser, MergeRequest } from '../../../shared/types'
-import { GitCommit, Folder, GitMerge, UserRoundCheck } from 'lucide-react'
+import { AlertTriangle, ExternalLink, GitCommit, Folder, GitMerge, UserRoundCheck } from 'lucide-react'
 import PipelineMiniGraph from './PipelineMiniGraph'
 
 export type MRDetailTab = 'overview' | 'changes'
@@ -48,6 +48,8 @@ function PeopleBadge({ label, people, merged = false }: { label: string; people:
 
 /** Header ของหน้า MR Detail: ชื่อ MR, branch, badge สถานะ, pipeline, labels และแท็บ */
 export default function MRHeader({ mr, activeTab, onTabChange, diffsCount, cancelingPipeline, onCancelPipeline }: MRHeaderProps) {
+  const conflictUrl = `${mr.webUrl}/conflicts`
+
   return (
     <header className="sticky top-0 z-20 bg-[#0d1117]/80 backdrop-blur-xl border-b border-gray-800 shrink-0">
       <div className="px-6 py-5">
@@ -102,6 +104,19 @@ export default function MRHeader({ mr, activeTab, onTabChange, diffsCount, cance
               }`}>
                 {mr.state.toUpperCase()}
               </span>
+
+              {mr.hasConflicts && (
+                <button
+                  type="button"
+                  onClick={() => window.electronAPI.openUrl(conflictUrl)}
+                  title="Merge is blocked by conflicts. Open GitLab to see the affected files and lines."
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/15 px-2.5 py-1 text-[11px] font-bold tracking-wide text-red-300 shadow-sm transition-colors hover:bg-red-500/25 focus:outline-none focus:ring-2 focus:ring-red-400/60"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  CONFLICTS — MERGE BLOCKED
+                  <ExternalLink className="h-3 w-3" />
+                </button>
+              )}
 
               {/* Reviewers remain visible after merge; the actual merger is shown separately. */}
               <PeopleBadge label="REQUESTED TO REVIEW" people={mr.reviewers} />

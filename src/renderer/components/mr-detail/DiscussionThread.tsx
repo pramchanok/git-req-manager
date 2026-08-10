@@ -4,7 +4,25 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { GitCommit } from 'lucide-react'
+import { formatDateTime } from '../../utils/dateFormat'
+
+const FALLBACK_AVATAR =
+  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="%236b7280"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="%236b7280"/></svg>'
+
+function Avatar({ note, className }: { note: MRNote; className: string }) {
+  return (
+    <img
+      src={note.author.avatarUrl || FALLBACK_AVATAR}
+      alt={note.author.name}
+      title={note.author.name}
+      className={`rounded-full bg-gray-800 border border-gray-700 object-cover ${className}`}
+      onError={(event) => {
+        event.currentTarget.onerror = null
+        event.currentTarget.src = FALLBACK_AVATAR
+      }}
+    />
+  )
+}
 
 interface DiscussionThreadProps {
   discussions: MRDiscussion[]
@@ -42,13 +60,13 @@ export default function DiscussionThread({ discussions, loading, mrWebUrl, onOpe
                   if (note.system) {
                     return (
                       <div key={note.id} className={`flex items-center gap-3 relative z-10 py-1 ${index > 0 ? 'ml-12' : 'ml-2'}`}>
-                        <div className="w-6 h-6 rounded-full bg-gray-800/50 flex items-center justify-center border border-gray-700/50 shrink-0">
-                          <GitCommit className="w-3 h-3 text-gray-500" />
-                        </div>
+                        <Avatar note={note} className="w-7 h-7 shrink-0" />
                         <div className="flex-1 flex flex-col gap-1 text-sm text-gray-400">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-300">{note.author.name}</span>
-                            <span className="text-xs text-gray-600 ml-auto">{new Date(note.createdAt).toLocaleString()}</span>
+                            <time className="text-xs text-gray-600 ml-auto" dateTime={note.createdAt} title={note.createdAt}>
+                              {formatDateTime(note.createdAt)}
+                            </time>
                           </div>
                           <div
                             className="prose prose-invert prose-sm max-w-none prose-p:my-0 [&_a]:inline-flex [&_a]:items-center [&_a]:gap-1 [&_a]:bg-[#21262d] [&_a]:border [&_a]:border-gray-700 hover:[&_a]:border-gray-500 [&_a]:text-gray-200 [&_a]:px-3 [&_a]:py-1.5 [&_a]:rounded-md [&_a]:text-[12px] [&_a]:font-semibold hover:[&_a]:bg-[#30363d] [&_a]:no-underline [&_a]:transition-colors [&_a]:shadow-sm [&_a]:cursor-pointer [&_ul]:my-2 [&_ul]:list-none [&_ul]:pl-0 [&_li]:my-1.5 [&_li]:bg-[#161b22] [&_li]:border [&_li]:border-gray-800 [&_li]:rounded-lg [&_li]:px-3 [&_li]:py-2.5 [&_li]:text-gray-300 [&_li]:font-mono [&_li]:text-[13px] [&_li]:shadow-sm"
@@ -91,15 +109,13 @@ export default function DiscussionThread({ discussions, loading, mrWebUrl, onOpe
                   }
                   return (
                     <div key={note.id} className={`flex gap-4 relative z-10 ${index > 0 ? 'ml-12' : ''}`}>
-                      <img
-                        src={note.author.avatarUrl}
-                        alt={note.author.name}
-                        className={`rounded-full bg-gray-800 border border-gray-700 object-cover ${index === 0 ? 'w-10 h-10' : 'w-8 h-8 mt-1'}`}
-                      />
+                      <Avatar note={note} className={index === 0 ? 'w-10 h-10' : 'w-8 h-8 mt-1'} />
                       <div className="flex-1 bg-[#161b22] border border-gray-800 rounded-xl overflow-hidden transition-colors hover:border-gray-700 shadow-sm">
                         <div className="bg-gray-800/30 px-4 py-2 border-b border-gray-800 flex items-center justify-between">
                           <span className="font-semibold text-gray-200 text-sm">{note.author.name}</span>
-                          <span className="text-gray-500 text-xs">{new Date(note.createdAt).toLocaleString()}</span>
+                          <time className="text-gray-500 text-xs" dateTime={note.createdAt} title={note.createdAt}>
+                            {formatDateTime(note.createdAt)}
+                          </time>
                         </div>
                         <div className="px-4 py-3 text-sm text-gray-300 prose prose-invert prose-orange max-w-none prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
                           <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>

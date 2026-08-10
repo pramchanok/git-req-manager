@@ -1,4 +1,6 @@
-export type Timeframe = 'daily' | 'weekly' | 'monthly'
+import { formatDate } from './dateFormat'
+
+export type Timeframe = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
 export interface TimeframeRange {
   /** ต้นช่วง (inclusive) เป็น ISO string */
@@ -11,10 +13,6 @@ export interface TimeframeRange {
 
 /**
  * คำนวณช่วงเวลาของรายงานจากวันอ้างอิง
- *
- * สำคัญ: ต้องคืน "ขอบบน" (untilIso) ด้วยเสมอ ไม่ใช่แค่ขอบล่าง — เดิมโค้ดกรองด้วย
- * `createdAt >= sinceIso` อย่างเดียว ทำให้เวลาย้อนไปดูสัปดาห์/เดือนที่แล้ว
- * ตัวเลขจะรวมงานของช่วงหลังจากนั้นจนถึงปัจจุบันเข้ามาด้วย
  */
 export function getTimeframeRange(timeframe: Timeframe, referenceDate: Date): TimeframeRange {
   const start = new Date(referenceDate)
@@ -26,12 +24,11 @@ export function getTimeframeRange(timeframe: Timeframe, referenceDate: Date): Ti
     return {
       sinceIso: start.toISOString(),
       untilIso: end.toISOString(),
-      label: start.toLocaleDateString(),
+      label: formatDate(start),
     }
   }
 
   if (timeframe === 'weekly') {
-    // จันทร์เป็นวันแรกของสัปดาห์ (getDay() คืน 0 = อาทิตย์)
     const day = start.getDay()
     start.setDate(start.getDate() - day + (day === 0 ? -6 : 1))
     start.setHours(0, 0, 0, 0)
@@ -43,14 +40,28 @@ export function getTimeframeRange(timeframe: Timeframe, referenceDate: Date): Ti
     return {
       sinceIso: start.toISOString(),
       untilIso: end.toISOString(),
-      label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
+      label: `${formatDate(start)} - ${formatDate(end)}`,
+    }
+  }
+
+  if (timeframe === 'yearly') {
+    start.setMonth(0, 1)
+    start.setHours(0, 0, 0, 0)
+
+    end.setFullYear(start.getFullYear(), 11, 31)
+    end.setHours(23, 59, 59, 999)
+
+    return {
+      sinceIso: start.toISOString(),
+      untilIso: end.toISOString(),
+      label: `${start.getFullYear()} (${formatDate(start)} - ${formatDate(end)})`,
     }
   }
 
   start.setDate(1)
   start.setHours(0, 0, 0, 0)
 
-  // วันที่ 0 ของเดือนถัดไป = วันสุดท้ายของเดือนนี้ (รองรับ 28/29/30/31 อัตโนมัติ)
+  // วันที่ 0 ของเดือนถัดไป = วันสุดท้ายของเดือนนี้
   end.setTime(start.getTime())
   end.setMonth(end.getMonth() + 1)
   end.setDate(0)
@@ -59,7 +70,7 @@ export function getTimeframeRange(timeframe: Timeframe, referenceDate: Date): Ti
   return {
     sinceIso: start.toISOString(),
     untilIso: end.toISOString(),
-    label: start.toLocaleString('default', { month: 'long', year: 'numeric' }),
+    label: `${formatDate(start)} - ${formatDate(end)}`,
   }
 }
 
@@ -74,9 +85,8 @@ export function shiftReferenceDate(
 
   if (timeframe === 'daily') next.setDate(next.getDate() + offset)
   else if (timeframe === 'weekly') next.setDate(next.getDate() + offset * 7)
+  else if (timeframe === 'yearly') next.setFullYear(next.getFullYear() + offset)
   else {
-    // Normalize to the first day before changing month. Otherwise Jan 31 + 1
-    // month overflows into March instead of selecting February.
     next.setDate(1)
     next.setMonth(next.getMonth() + offset)
   }
@@ -84,7 +94,7 @@ export function shiftReferenceDate(
   return next
 }
 
-/** MR อยู่ในช่วงเวลานี้ไหม — เทียบ ISO string ตรงๆ ได้เพราะเรียงตามลำดับตัวอักษรตรงกับเวลา */
+/** MR อยู่ในช่วงเวลานี้ไหม */
 export function isWithin(iso: string | null | undefined, since: string, until: string): boolean {
   return !!iso && iso >= since && iso <= until
 }

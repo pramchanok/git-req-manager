@@ -330,11 +330,11 @@ function createWindow(): BrowserWindow {
     hideWindow(win)
   })
 
-  win.on('blur', () => {
-    if (process.env.NODE_ENV !== 'development' && !win.isAlwaysOnTop()) {
-      hideWindow(win)
-    }
-  })
+  // Do not hide a visible window just because another app receives focus.
+  // Opening GitLab in a browser or a file in an IDE blurs this window; hiding
+  // it also removes the Dock entry on macOS and makes the app hard to find.
+  // The user can still hide it explicitly with the tray icon or close button,
+  // and can use the existing pin control when they want it above all windows.
 
   return win
 }
@@ -816,11 +816,24 @@ function setupIPC(): void {
     },
     []
   )
+  handleWithClient(
+    'get-group-mr-analytics-since',
+    (c, groupId: number, since: string) => c.getGroupMRAnalyticsSince(groupId, since),
+    []
+  )
+  handleWithClient(
+    'get-my-mr-analytics-since',
+    async (c, since: string) => {
+      const user = await c.getCurrentUser()
+      return c.getMyMRAnalyticsSince(user.id, since)
+    },
+    []
+  )
 
   ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal = false) => {
     const reportWin = new BrowserWindow({
-      width: 1000,
-      height: 700,
+      width: 1200,
+      height: 800,
       resizable: true,
       frame: true,
       title: `Developer Report: ${name}`,
@@ -849,6 +862,29 @@ function setupIPC(): void {
           ...(personal ? { personal: 'true' } : {}),
         }
       })
+    }
+  })
+
+  ipcMain.handle('open-lead-overview-window', (_event, groupId: number, timeframe: string) => {
+    if (!Number.isInteger(groupId) || groupId <= 0) throw new Error('A valid group is required.')
+    const safeTimeframe = ['daily', 'weekly', 'monthly'].includes(timeframe) ? timeframe : 'weekly'
+    const leadWin = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 960,
+      minHeight: 640,
+      resizable: true,
+      frame: true,
+      title: 'Lead Overview',
+      icon: getAppIcon(),
+      webPreferences: { preload: path.join(__dirname, '../preload.js'), contextIsolation: true, nodeIntegration: false },
+    })
+    applyAppIconToWindow(leadWin)
+    leadWin.setMenuBarVisibility(false)
+    if (process.env.NODE_ENV === 'development') {
+      leadWin.loadURL(`http://localhost:5173/?page=lead-overview&groupId=${groupId}&timeframe=${encodeURIComponent(safeTimeframe)}`)
+    } else {
+      leadWin.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { page: 'lead-overview', groupId: String(groupId), timeframe: safeTimeframe } })
     }
   })
 

@@ -4,6 +4,7 @@ release/
 release-temp/
 test-install/
 .claude/
+.tmp/
 
 *.log
 npm-debug.log*

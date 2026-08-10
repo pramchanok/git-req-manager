@@ -43,6 +43,8 @@ export interface MergeRequest {
   approvalsLeft: number
   draft: boolean
   hasConflicts: boolean
+  /** GitLab's detailed reason why this MR currently cannot merge. */
+  detailedMergeStatus: string | null
   mergeWhenPipelineSucceeds: boolean
   upvotes: number
   downvotes: number

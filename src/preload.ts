@@ -48,8 +48,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-group-mrs-in-timeframe', groupId, since),
   getMyMRsInTimeframe: (since: string): Promise<import('./shared/types').MergeRequest[]> =>
     ipcRenderer.invoke('get-my-mrs-in-timeframe', since),
+  getGroupMRAnalyticsSince: (groupId: number, since: string): Promise<import('./shared/types').MergeRequest[]> =>
+    ipcRenderer.invoke('get-group-mr-analytics-since', groupId, since),
+  getMyMRAnalyticsSince: (since: string): Promise<import('./shared/types').MergeRequest[]> =>
+    ipcRenderer.invoke('get-my-mr-analytics-since', since),
   openReportWindow: (username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal = false): Promise<void> =>
     ipcRenderer.invoke('open-report-window', username, name, avatarUrl, timeframe, groupId, personal),
+  openLeadOverviewWindow: (groupId: number, timeframe: string): Promise<void> =>
+    ipcRenderer.invoke('open-lead-overview-window', groupId, timeframe),
   openMRWindow: (projectId: number, mrIid: number): Promise<void> =>
     ipcRenderer.invoke('open-mr-window', projectId, mrIid),
   exportReportPDF: (): Promise<boolean> =>

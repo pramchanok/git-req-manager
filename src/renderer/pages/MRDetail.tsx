@@ -14,6 +14,7 @@ import DiscussionThread from '../components/mr-detail/DiscussionThread'
 import CommentComposer from '../components/mr-detail/CommentComposer'
 import MRActionBar, { MRAction } from '../components/mr-detail/MRActionBar'
 import CloseConfirmModal from '../components/mr-detail/CloseConfirmModal'
+import { AlertTriangle, ExternalLink } from 'lucide-react'
 
 import '@uiw/react-md-editor/markdown-editor.css'
 import '@uiw/react-markdown-preview/markdown.css'
@@ -593,6 +594,27 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
               </div>
             ) : (
               <div className="space-y-6 animate-fade-in">
+                {mr.hasConflicts && (
+                  <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 shadow-sm">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
+                      <div>
+                        <h2 className="text-sm font-semibold text-red-200">This merge request has conflicts</h2>
+                        <p className="mt-0.5 text-xs leading-relaxed text-red-200/75">
+                          Merge is blocked. GitLab shows the exact files and conflicting lines in its conflict resolver.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.electronAPI.openUrl(`${mr.webUrl}/conflicts`)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-red-400/40 bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/25 focus:outline-none focus:ring-2 focus:ring-red-400/60"
+                    >
+                      View conflict files in GitLab
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </section>
+                )}
                 <DiffList
                   diffs={orderedDiffs}
                   loading={loadingDiffs}

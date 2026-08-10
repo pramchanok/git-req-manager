@@ -112,6 +112,18 @@ describe('GitLabClient Report Queries', () => {
     }
   })
 
+  test('fetches group analytics from both created and updated activity streams', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await client.getGroupMRAnalyticsSince(42, '2026-01-01T00:00:00.000Z')
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const urls = fetchMock.mock.calls.map(([url]: [string]) => new URL(url))
+    expect(urls.some((url) => url.searchParams.get('created_after') === '2026-01-01T00:00:00.000Z')).toBe(true)
+    expect(urls.some((url) => url.searchParams.get('updated_after') === '2026-01-01T00:00:00.000Z')).toBe(true)
+  })
+
   test('retries transient network failures for GET requests', async () => {
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new TypeError('fetch failed'))
