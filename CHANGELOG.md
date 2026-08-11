@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.1] - 2026-08-11
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ไขภาพไอคอน Tray App บน macOS**: ปรับปรุงการเลือกไฟล์ไอคอนใน Tray (`tray-icon`, `tray-icon-active`, `tray-icon-update`) ให้ใช้ภาพ Alpha Mask ที่ถูกต้องร่วมกับ `setTemplateImage(true)` แก้ปัญหาไอคอนขึ้นเป็นกล่องสี่เหลี่ยมสีดำ/ขาวทึบบน Menu Bar ของ macOS
+
+---
+
 ## [1.14.0] - 2026-08-10
 
 ### การปรับปรุง (Improvements)

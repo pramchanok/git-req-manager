@@ -29,9 +29,9 @@ function getOrCreateWindow(): BrowserWindow | null {
 
 function createIcon(state: 'default' | 'active' | 'update'): Electron.NativeImage {
   const baseName =
-    state === 'update' ? 'tray-icon-update-app' :
-    state === 'active' ? 'tray-icon-app' :
-    'tray-icon-grey'
+    state === 'update' ? 'tray-icon-update' :
+    state === 'active' ? 'tray-icon-active' :
+    'tray-icon'
   const assetsDir = path.join(app.getAppPath(), 'assets')
 
   // Use fs.readFileSync so we can read from inside an asar archive, then
