@@ -49,11 +49,6 @@ function createIcon(state: 'default' | 'active' | 'update'): Electron.NativeImag
   tryAdd(`${baseName}.png`, 1.0)
   tryAdd(`${baseName}@2x.png`, 2.0)
 
-  // Inactive icon: use template so macOS auto-adapts to light/dark mode
-  // Active/update icons: keep colored so they stand out visually
-  if (process.platform === 'darwin' && state === 'default') {
-    icon.setTemplateImage(true)
-  }
   return icon
 }
 
