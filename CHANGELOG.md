@@ -4,7 +4,7 @@
 
 ### การแก้ไขข้อบกพร่อง (Bug Fixes)
 
-- **แก้ไขภาพไอคอน Tray App บน macOS**: ปรับปรุงการเลือกไฟล์ไอคอนใน Tray (`tray-icon`, `tray-icon-active`, `tray-icon-update`) ให้ใช้ภาพ Alpha Mask ที่ถูกต้องร่วมกับ `setTemplateImage(true)` แก้ปัญหาไอคอนขึ้นเป็นกล่องสี่เหลี่ยมสีดำ/ขาวทึบบน Menu Bar ของ macOS
+- **ปรับปรุงภาพไอคอน Tray App โลโก้ GitLab**: ปรับไฟล์ภาพไอคอนหัวหมาป่า GitLab (`tray-icon-grey`, `tray-icon-app`, `tray-icon-update-app`) ให้มีพื้นหลังโปร่งใส 100% (Transparent Background) โดยไม่มีกรอบกล่องสี่เหลี่ยม เพื่อให้ใช้งานโลโก้ GitLab Fox บน Tray ได้อย่างสวยงามทั้งบน Windows และ macOS (ไม่เกิดปัญหากล่องดำ/ขาวสี่เหลี่ยมทึบบน Mac Menu Bar อีกต่อไป)
 
 ---
 
