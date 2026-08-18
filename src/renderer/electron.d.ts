@@ -1,4 +1,4 @@
-import type { AppState, GitLabGroup, GitLabUser, MergeRequest, OpenFileInIDEResult, Settings, UpdateState, MRAwardEmoji } from '../../shared/types'
+import type { AppState, GitLabGroup, GitLabUser, MergeRequest, OpenFileInIDEResult, Settings, UpdateState, MRAwardEmoji, MRDiff, MRDiscussion, PipelineJob, GitLabProject } from '../../shared/types'
 
 declare global {
   interface Window {
@@ -17,7 +17,7 @@ declare global {
       checkCloudflared: () => Promise<{ available: boolean; path: string | null }>
       getMergedMRsByAuthor: (username: string) => Promise<MergeRequest[]>
       getGitLabGroups: () => Promise<GitLabGroup[]>
-      searchProjects: (query: string) => Promise<import('../../shared/types').GitLabProject[]>
+      searchProjects: (query: string) => Promise<GitLabProject[]>
       getGroupMembers: (groupId: number) => Promise<GitLabUser[]>
       getTeamReportGroup: () => Promise<number | null>
       setTeamReportGroup: (id: number | null) => Promise<void>
@@ -36,18 +36,19 @@ declare global {
       getOwnerGroups: () => Promise<GitLabGroup[]>
       setPinned: (pinned: boolean) => Promise<void>
       hideWindow: () => Promise<void>
-      getMRByIid: (projectId: number, mrIid: number) => Promise<import('../../shared/types').MergeRequest | null>
-      getMRDiffs: (projectId: number, mrIid: number) => Promise<import('../../shared/types').MRDiff[]>
-      getMRDiscussions: (projectId: number, mrIid: number) => Promise<import('../../shared/types').MRDiscussion[]>
+      getMRByIid: (projectId: number, mrIid: number) => Promise<MergeRequest | null>
+      getMRDiffs: (projectId: number, mrIid: number) => Promise<MRDiff[]>
+      getMRRawDiff: (projectId: number, mrIid: number) => Promise<string>
+      getMRDiscussions: (projectId: number, mrIid: number) => Promise<MRDiscussion[]>
       addMRNote: (projectId: number, mrIid: number, body: string) => Promise<void>
       approveMR: (projectId: number, mrIid: number) => Promise<void>
       unapproveMR: (projectId: number, mrIid: number) => Promise<void>
       mergeMR: (projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => Promise<void>
       closeMR: (projectId: number, mrIid: number) => Promise<void>
       cancelPipeline: (projectId: number, pipelineId: number) => Promise<void>
-      getPipelineJobs: (projectId: number, pipelineId: number) => Promise<import('../../shared/types').PipelineJob[]>
-      getCompareDiffs: (projectId: number, fromSha: string, toSha: string) => Promise<import('../../shared/types').MRDiff[]>
-      getCommitDiffs: (projectId: number, sha: string) => Promise<import('../../shared/types').MRDiff[]>
+      getPipelineJobs: (projectId: number, pipelineId: number) => Promise<PipelineJob[]>
+      getCompareDiffs: (projectId: number, fromSha: string, toSha: string) => Promise<MRDiff[]>
+      getCommitDiffs: (projectId: number, sha: string) => Promise<MRDiff[]>
       getMRAwardEmojis: (projectId: number, mrIid: number) => Promise<MRAwardEmoji[]>
       addMRAwardEmoji: (projectId: number, mrIid: number, name: string) => Promise<void>
       removeMRAwardEmoji: (projectId: number, mrIid: number, awardId: number) => Promise<void>

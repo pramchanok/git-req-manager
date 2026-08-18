@@ -1,4 +1,5 @@
 import type { GitLabUser, MergeRequest, MRLabel, GitLabProject, GitLabGroup, MRDiff, MRDiscussion, MRAwardEmoji, PipelineJob } from './types'
+import { isGeneratedFilePath } from './diffUtils'
 
 // ทุก request มี timeout — ถ้าปล่อยค้าง scheduler จะติดธง isSyncing ไว้ตลอด
 // แล้วรอบ sync ถัดๆ ไปจะถูก skip ทั้งหมดจนกว่าจะรีสตาร์ทแอป
@@ -83,7 +84,14 @@ class FetchWrapper {
         throw new Error(`GitLab API Error: ${res.status} ${res.statusText}${errText ? ` ${errText}` : ''}`)
       }
 
-      const data: any = res.status !== 204 ? await res.json().catch(() => ({})) : {}
+      let data: any
+      if (res.status === 204) {
+        data = options.responseType === 'text' ? '' : {}
+      } else if (options.responseType === 'text') {
+        data = await res.text()
+      } else {
+        data = await res.json().catch(() => ({}))
+      }
       return { data }
     }
 
@@ -542,22 +550,43 @@ export class GitLabClient {
       hasApproved: (mr.has_approved as boolean) ?? false,
     }
   }
+
   // ────── In-App Review & MR Actions ──────
 
-  private mapDiff = (change: Record<string, unknown>): MRDiff => ({
-    diff: change.diff as string,
-    newPath: change.new_path as string,
-    oldPath: change.old_path as string,
-    aMode: change.a_mode as string,
-    bMode: change.b_mode as string,
-    newFile: change.new_file as boolean,
-    renamedFile: change.renamed_file as boolean,
-    deletedFile: change.deleted_file as boolean,
-  })
+  private mapDiff = (change: Record<string, unknown>): MRDiff => {
+    const diff = (change.diff as string) ?? ''
+    const newPath = (change.new_path as string) ?? ''
+    const oldPath = (change.old_path as string) ?? ''
+    const isGenerated = (change.generated_file as boolean) === true || isGeneratedFilePath(newPath || oldPath)
+    const isCollapsed = (change.collapsed as boolean) === true || (isGenerated && !diff)
+    const isTooLarge = (change.too_large as boolean) === true
+
+    return {
+      diff,
+      newPath,
+      oldPath,
+      aMode: change.a_mode as string,
+      bMode: change.b_mode as string,
+      newFile: change.new_file as boolean,
+      renamedFile: change.renamed_file as boolean,
+      deletedFile: change.deleted_file as boolean,
+      collapsed: isCollapsed,
+      tooLarge: isTooLarge,
+      generatedFile: isGenerated,
+    }
+  }
 
   async getMRDiffs(projectId: number, mrIid: number): Promise<MRDiff[]> {
     const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/changes`)
     return (data.changes ?? []).map(this.mapDiff)
+  }
+
+  async getMRRawDiff(projectId: number, mrIid: number): Promise<string> {
+    const { data } = await this.http.get(`/projects/${projectId}/merge_requests/${mrIid}/raw_diffs`, {
+      responseType: 'text',
+      transformResponse: [(data: unknown) => data],
+    })
+    return typeof data === 'string' ? data : ''
   }
 
   async getCompareDiffs(projectId: number, fromSha: string, toSha: string): Promise<MRDiff[]> {

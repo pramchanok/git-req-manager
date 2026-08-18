@@ -771,6 +771,7 @@ function setupIPC(): void {
 
   ipcMain.handle('check-cloudflared', async () => {
     const bin = await findCloudflared()
+
     return { available: !!bin, path: bin }
   })
 
@@ -862,29 +863,6 @@ function setupIPC(): void {
           ...(personal ? { personal: 'true' } : {}),
         }
       })
-    }
-  })
-
-  ipcMain.handle('open-lead-overview-window', (_event, groupId: number, timeframe: string) => {
-    if (!Number.isInteger(groupId) || groupId <= 0) throw new Error('A valid group is required.')
-    const safeTimeframe = ['daily', 'weekly', 'monthly'].includes(timeframe) ? timeframe : 'weekly'
-    const leadWin = new BrowserWindow({
-      width: 1200,
-      height: 800,
-      minWidth: 960,
-      minHeight: 640,
-      resizable: true,
-      frame: true,
-      title: 'Lead Overview',
-      icon: getAppIcon(),
-      webPreferences: { preload: path.join(__dirname, '../preload.js'), contextIsolation: true, nodeIntegration: false },
-    })
-    applyAppIconToWindow(leadWin)
-    leadWin.setMenuBarVisibility(false)
-    if (process.env.NODE_ENV === 'development') {
-      leadWin.loadURL(`http://localhost:5173/?page=lead-overview&groupId=${groupId}&timeframe=${encodeURIComponent(safeTimeframe)}`)
-    } else {
-      leadWin.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { page: 'lead-overview', groupId: String(groupId), timeframe: safeTimeframe } })
     }
   })
 
@@ -982,6 +960,7 @@ function setupIPC(): void {
   // ────── In-App Review & MR Actions ──────
   // อ่านข้อมูล: มี fallback ค่าว่าง เพราะ renderer เอาไปวนแสดงผลตรงๆ
   handleWithClient('get-mr-diffs', (c, projectId: number, mrIid: number) => c.getMRDiffs(projectId, mrIid), [])
+  handleWithClient('get-mr-raw-diff', (c, projectId: number, mrIid: number) => c.getMRRawDiff(projectId, mrIid), '')
   handleWithClient('get-mr-discussions', (c, projectId: number, mrIid: number) => c.getMRDiscussions(projectId, mrIid), [])
   handleWithClient('get-pipeline-jobs', (c, projectId: number, pipelineId: number) => c.getPipelineJobs(projectId, pipelineId), [])
   handleWithClient('get-compare-diffs', (c, projectId: number, fromSha: string, toSha: string) => c.getCompareDiffs(projectId, fromSha, toSha), [])
@@ -994,7 +973,8 @@ function setupIPC(): void {
   handleWithClient('add-mr-note', (c, projectId: number, mrIid: number, body: string) => c.addMRNote(projectId, mrIid, body))
   handleWithClient('approve-mr', (c, projectId: number, mrIid: number) => c.approveMR(projectId, mrIid))
   handleWithClient('unapprove-mr', (c, projectId: number, mrIid: number) => c.unapproveMR(projectId, mrIid))
-  handleWithClient('merge-mr', (c, projectId: number, mrIid: number, options?: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean }) => c.mergeMR(projectId, mrIid, options))
+
+  handleWithClient('merge-mr', (c, projectId: number, mrIid: number, options: { mergeWhenPipelineSucceeds?: boolean; removeSourceBranch?: boolean } = {}) => c.mergeMR(projectId, mrIid, options))
   handleWithClient('close-mr', (c, projectId: number, mrIid: number) => c.closeMR(projectId, mrIid))
   handleWithClient('cancel-pipeline', (c, projectId: number, pipelineId: number) => c.cancelPipeline(projectId, pipelineId))
   handleWithClient('add-mr-award-emoji', (c, projectId: number, mrIid: number, name: string) => c.addMRAwardEmoji(projectId, mrIid, name))

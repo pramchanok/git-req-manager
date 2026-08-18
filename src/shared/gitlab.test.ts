@@ -78,6 +78,43 @@ describe('GitLabClient Mappers', () => {
     expect(client.mapMR({ ...baseMR, merge_user: merger }).mergedBy.username).toBe('merger')
     expect(client.mapMR({ ...baseMR, merged_by: merger }).mergedBy.username).toBe('merger')
   })
+
+  test('mapDiff identifies generated lockfiles and sets collapsed flag', () => {
+    const rawDiff = {
+      old_path: 'package-lock.json',
+      new_path: 'package-lock.json',
+      a_mode: '100644',
+      b_mode: '100644',
+      new_file: false,
+      renamed_file: false,
+      deleted_file: false,
+      diff: '',
+    }
+
+    const diff = client.mapDiff(rawDiff)
+    expect(diff.generatedFile).toBe(true)
+    expect(diff.collapsed).toBe(true)
+    expect(diff.tooLarge).toBe(false)
+  })
+
+  test('mapDiff respects too_large and collapsed from API response', () => {
+    const rawDiff = {
+      old_path: 'big-data.json',
+      new_path: 'big-data.json',
+      a_mode: '100644',
+      b_mode: '100644',
+      new_file: false,
+      renamed_file: false,
+      deleted_file: false,
+      diff: '',
+      too_large: true,
+      collapsed: true,
+    }
+
+    const diff = client.mapDiff(rawDiff)
+    expect(diff.tooLarge).toBe(true)
+    expect(diff.collapsed).toBe(true)
+  })
 })
 
 describe('GitLabClient Report Queries', () => {
@@ -142,5 +179,16 @@ describe('GitLabClient Report Queries', () => {
 
     await expect(client.getCurrentUser()).rejects.toThrow('GitLab API Error: 401 Unauthorized')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('getMRRawDiff calls the raw_diffs endpoint', async () => {
+    const rawDiffText = 'diff --git a/file.txt b/file.txt\n+hello'
+    const fetchMock = vi.fn(async () => new Response(rawDiffText, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const diff = await client.getMRRawDiff(123, 45)
+    expect(diff).toBe(rawDiffText)
+    const requestUrl = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(requestUrl.pathname).toContain('/projects/123/merge_requests/45/raw_diffs')
   })
 })

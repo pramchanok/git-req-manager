@@ -6,6 +6,7 @@ import remarkBreaks from 'remark-breaks'
 import parseDiff from 'parse-diff'
 import { CommitDiffModal } from '../components/CommitDiffModal'
 import { buildFileTree, getFilePathsInTreeOrder } from '../utils/pathTree'
+import { extractFileDiffFromRaw } from '../../shared/diffUtils'
 import MRHeader, { MRDetailTab } from '../components/mr-detail/MRHeader'
 import FilesSidebar from '../components/mr-detail/FilesSidebar'
 import DiffList from '../components/mr-detail/DiffList'
@@ -99,6 +100,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const [currentUser, setCurrentUser] = useState<GitLabUser | null>(null)
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
   const [openingPath, setOpeningPath] = useState<string | null>(null)
+  const [rawDiff, setRawDiff] = useState<string | null>(null)
+  const [loadingDiffPaths, setLoadingDiffPaths] = useState<Set<string>>(new Set())
   // mrRef ต้องประกาศก่อน effect ที่อ่านค่ามัน (effect ตอน mount ใช้เทียบ MR ตัวปัจจุบัน)
   const mrRef = useRef<MergeRequest | null>(null)
   const lastShaRef = useRef<string | null>(null)
@@ -222,6 +225,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
 
   const fetchDiffs = async (silent = false) => {
     if (!silent) setLoadingDiffs(true)
+    setRawDiff(null)
     try {
       const data = await window.electronAPI.getMRDiffs(projectId, mrIid)
       setDiffs(data)
@@ -230,6 +234,40 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       onToast('Failed to load diffs', 'error')
     } finally {
       setLoadingDiffs(false)
+    }
+  }
+
+  const handleLoadDiff = async (filePath: string) => {
+    setLoadingDiffPaths((prev) => new Set(prev).add(filePath))
+    try {
+      let currentRawDiff = rawDiff
+      if (currentRawDiff === null) {
+        currentRawDiff = await window.electronAPI.getMRRawDiff(projectId, mrIid)
+        setRawDiff(currentRawDiff)
+      }
+      const extracted = extractFileDiffFromRaw(currentRawDiff, filePath)
+      if (extracted) {
+        setDiffs((prevDiffs) =>
+          prevDiffs.map((d) => {
+            const path = d.newPath && d.newPath !== '/dev/null' ? d.newPath : d.oldPath
+            if (path === filePath) {
+              return { ...d, diff: extracted, collapsed: false }
+            }
+            return d
+          })
+        )
+      } else {
+        onToast('Diff content is empty for this file.', 'info')
+      }
+    } catch (err) {
+      console.error(err)
+      onToast('Failed to load diff', 'error')
+    } finally {
+      setLoadingDiffPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(filePath)
+        return next
+      })
     }
   }
 
@@ -307,7 +345,6 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     // real-time: โหมด webhook — main ส่ง note-event ตรงมาเมื่อมีคอมเมนต์ใหม่บน MR นี้
     // ดึง discussions/emojis ใหม่แบบเงียบทันที ไม่ต้องรอ poll 20 วิ
     const unsubscribeNote = window.electronAPI.onMRNoteEvent(({ projectId: p, mrIid: i }) => {
-      if (p !== projectId || i !== mrIid) return
       fetchDiscussions(true)
       fetchAwardEmojis()
     })
@@ -626,6 +663,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                   openingPath={openingPath}
                   diffStats={diffStats}
                   viewMode={diffViewMode}
+                  onLoadDiff={handleLoadDiff}
+                  loadingDiffPaths={loadingDiffPaths}
                 />
               </div>
             )}

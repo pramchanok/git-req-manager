@@ -67,6 +67,9 @@ export interface MRDiff {
   newFile: boolean
   renamedFile: boolean
   deletedFile: boolean
+  collapsed?: boolean
+  tooLarge?: boolean
+  generatedFile?: boolean
 }
 
 export interface OpenFileInIDEResult {
@@ -195,6 +198,7 @@ export type IpcChannel =
   | 'show-changelog'
   | 'get-owner-groups'
   | 'get-mr-diffs'
+  | 'get-mr-raw-diff'
   | 'get-mr-discussions'
   | 'add-mr-note'
   | 'approve-mr'

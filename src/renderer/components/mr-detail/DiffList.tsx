@@ -14,10 +14,25 @@ interface DiffListProps {
   openingPath: string | null
   diffStats: Map<string, { additions: number; deletions: number }>
   viewMode: 'inline' | 'split'
+  onLoadDiff?: (path: string) => void
+  loadingDiffPaths?: Set<string>
 }
 
 /** ลิสต์ diff ของทุกไฟล์ในแท็บ Changes พร้อม checkbox "Viewed" */
-function DiffList({ diffs, loading, viewedFiles, onToggleViewed, onCopyPath, onOpenInIDE, copiedPath, openingPath, diffStats, viewMode }: DiffListProps) {
+function DiffList({
+  diffs,
+  loading,
+  viewedFiles,
+  onToggleViewed,
+  onCopyPath,
+  onOpenInIDE,
+  copiedPath,
+  openingPath,
+  diffStats,
+  viewMode,
+  onLoadDiff,
+  loadingDiffPaths,
+}: DiffListProps) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -39,6 +54,7 @@ function DiffList({ diffs, loading, viewedFiles, onToggleViewed, onCopyPath, onO
       {diffs.map((diff) => {
         const filePath = diff.newPath && diff.newPath !== '/dev/null' ? diff.newPath : diff.oldPath
         const isViewed = viewedFiles.has(filePath)
+        const isLoadingDiff = loadingDiffPaths?.has(filePath) ?? false
         const stats = diffStats.get(diff.newPath)
         return (
           <div id={`diff-${diff.newPath}`} key={diff.newPath} className={`diff-file-card scroll-mt-4 bg-[#161b22] border ${isViewed ? 'border-gray-800/40 opacity-70' : 'border-gray-800'} rounded-xl overflow-hidden shadow-sm transition-[opacity,border-color] duration-150`}>
@@ -90,7 +106,36 @@ function DiffList({ diffs, loading, viewedFiles, onToggleViewed, onCopyPath, onO
             </div>
             {/* Diff Viewer Wrapper */}
             {!isViewed && (
-              <CustomDiffViewer diffString={diff.diff} viewMode={viewMode} />
+              diff.diff ? (
+                <CustomDiffViewer diffString={diff.diff} viewMode={viewMode} />
+              ) : (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-5 bg-[#0d1117]/80 text-center sm:text-left">
+                  <p className="text-sm text-gray-400">
+                    {diff.generatedFile
+                      ? 'This file was collapsed because it is generated code.'
+                      : diff.tooLarge || diff.collapsed
+                        ? 'Large diffs are not shown by default.'
+                        : 'Empty file'}
+                  </p>
+                  {onLoadDiff && (
+                    <button
+                      type="button"
+                      onClick={() => onLoadDiff(filePath)}
+                      disabled={isLoadingDiff}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-200 bg-gray-800 hover:bg-gray-700 hover:text-white border border-gray-700 rounded-md transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      {isLoadingDiff ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-400" />
+                          <span>Loading diff...</span>
+                        </>
+                      ) : (
+                        <span>Load diff</span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )
             )}
           </div>
         )

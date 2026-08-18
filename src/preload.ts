@@ -90,6 +90,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-mr-by-iid', projectId, mrIid),
   getMRDiffs: (projectId: number, mrIid: number): Promise<import('./shared/types').MRDiff[]> =>
     ipcRenderer.invoke('get-mr-diffs', projectId, mrIid),
+  getMRRawDiff: (projectId: number, mrIid: number): Promise<string> =>
+    ipcRenderer.invoke('get-mr-raw-diff', projectId, mrIid),
   getMRDiscussions: (projectId: number, mrIid: number): Promise<import('./shared/types').MRDiscussion[]> =>
     ipcRenderer.invoke('get-mr-discussions', projectId, mrIid),
   addMRNote: (projectId: number, mrIid: number, body: string): Promise<void> =>

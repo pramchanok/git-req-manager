@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.14.3] - 2026-08-18
+
+### การปรับปรุง (Improvements)
+
+- **รองรับ Collapsed Diff และ Generated Files สไตล์ GitHub**: เพิ่มการตรวจจับไฟล์ที่ถูกยุบ (Collapsed Diffs) และไฟล์ประเภท Generated Code/Lockfiles (เช่น `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `go.sum`, `composer.lock` ฯลฯ) พร้อมแสดงข้อความและดีไซน์แบบ GitHub Box
+- **โหลด Diff แบบ On-Demand (Load diff)**: เพิ่มปุ่ม "Load diff" พร้อมสถานะกำลังโหลด เพื่อดึง Patch ตัวเต็มผ่าน API `GET /projects/:id/merge_requests/:iid/raw_diffs` และสกัดเฉพาะ Diff ของไฟล์นั้นมาแสดงผลได้ทันที
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ไข GitLab Raw Diff Endpoint และ Fetch Text Parsing**: แก้ไข path การเรียก Raw Diff endpoint ให้ถูกต้องตาม GitLab API v4 (`/raw_diffs`) พร้อมปรับปรุง `FetchWrapper` ให้รองรับการอ่าน response แบบ `text/plain`
+
+---
+
 ## [1.14.2] - 2026-08-11
 
 ### การแก้ไขข้อบกพร่อง (Bug Fixes)
