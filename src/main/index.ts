@@ -866,6 +866,39 @@ function setupIPC(): void {
     }
   })
 
+  ipcMain.handle('open-lead-overview-window', (_event, groupId: number, timeframe: string) => {
+    if (!Number.isInteger(groupId) || groupId <= 0) throw new Error('A valid group is required.')
+    const safeTimeframe = ['daily', 'weekly', 'monthly', 'yearly'].includes(timeframe) ? timeframe : 'weekly'
+    const leadWin = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      minWidth: 960,
+      minHeight: 640,
+      resizable: true,
+      frame: true,
+      title: 'Lead Overview',
+      icon: getAppIcon(),
+      webPreferences: {
+        preload: path.join(__dirname, '../preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    })
+    applyAppIconToWindow(leadWin)
+    leadWin.setMenuBarVisibility(false)
+    if (process.env.NODE_ENV === 'development') {
+      leadWin.loadURL(`http://localhost:5173/?page=lead-overview&groupId=${groupId}&timeframe=${encodeURIComponent(safeTimeframe)}`)
+    } else {
+      leadWin.loadFile(path.join(__dirname, '../renderer/index.html'), {
+        query: {
+          page: 'lead-overview',
+          groupId: String(groupId),
+          timeframe: safeTimeframe,
+        },
+      })
+    }
+  })
+
   function openMRWindow(projectId: number, mrIid: number) {
     const mrWin = new BrowserWindow({
       width: 1200,
