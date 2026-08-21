@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.4] - 2026-08-21
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **กู้คืนการทำงานของปุ่ม Team Lead Overview**: เพิ่ม IPC Handler `open-lead-overview-window` ใน Main Process เพื่อให้สามารถกดปุ่ม "Lead ↗" ในหน้า Team Report และเปิดหน้าต่างสรุปผลรวมสำหรับ Team Lead ได้ตามปกติ
+
+---
+
 ## [1.14.3] - 2026-08-18
 
 ### การปรับปรุง (Improvements)
