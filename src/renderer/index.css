@@ -105,3 +105,8 @@ body {
 .w-md-editor-toolbar li > button {
   padding: 2px 4px !important;
 }
+
+/* Keep the comment emoji picker compact and independent from editor overflow. */
+.comment-emoji-picker em-emoji-picker {
+  height: min(360px, calc(100vh - 24px));
+}
