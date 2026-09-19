@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, Component, type ReactNode } from 'react'
+import { useState, useRef, useEffect, Component, type ReactNode } from 'react'
 import { X, Users, Trophy, GitPullRequest, GitMerge, Eye, Clock, Award, Check, Plus, Search, BarChart3, TrendingUp, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import type { GitLabUser } from '../../../shared/types'
 import type { Timeframe } from '../../utils/timeframe'
@@ -631,7 +631,6 @@ function MemberComparisonModalContent({
                       <Clock className="w-3.5 h-3.5 text-purple-400" />
                     </div>
                     {safeComparisonRows.map((r, idx) => {
-                      const scheme = COLOR_SCHEMES[idx % COLOR_SCHEMES.length]
                       const hours = typeof r.averageLeadHours === 'number' && !isNaN(r.averageLeadHours) ? r.averageLeadHours : 0
                       const maxHours = Math.max(...validLeadTimes, 1)
                       const barWidth = hours > 0 ? Math.max((hours / maxHours) * 100, 8) : 0

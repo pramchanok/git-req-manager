@@ -188,6 +188,7 @@ export default function App() {
 
   if (page === 'mr-detail') {
     return (
+      <>
       <Suspense fallback={<PageLoader />}>
         <MRDetail
           projectId={Number(new URLSearchParams(window.location.search).get('projectId'))}
@@ -200,6 +201,8 @@ export default function App() {
           onToast={showToast}
         />
       </Suspense>
+      {toast && <Toast {...toast} onDismiss={() => setToast(null)} />}
+      </>
     )
   }
 

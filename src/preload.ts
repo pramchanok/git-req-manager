@@ -18,6 +18,10 @@ function subscribe<T extends unknown[]>(
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  getNotificationState: (): Promise<import('./shared/types').NotificationInboxState> => ipcRenderer.invoke('get-notification-state'),
+  markNotificationsRead: (): Promise<void> => ipcRenderer.invoke('mark-notifications-read'),
+  snoozeNotification: (projectId: number, mrIid: number, minutes: number): Promise<void> => ipcRenderer.invoke('snooze-notification', projectId, mrIid, minutes),
+  onNotificationInboxUpdated: (callback: () => void) => subscribe<[]>('notification-inbox-updated', callback),
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: Settings): Promise<void> => ipcRenderer.invoke('save-settings', settings),
   getAppState: (): Promise<AppState> => ipcRenderer.invoke('get-app-state'),

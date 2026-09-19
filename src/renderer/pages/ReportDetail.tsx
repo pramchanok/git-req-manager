@@ -9,7 +9,6 @@ import {
   Users, 
   AlertTriangle, 
   CheckCircle2, 
-  Clock, 
   GitPullRequest, 
   GitMerge, 
   Eye, 
@@ -18,11 +17,9 @@ import {
   ChevronRight, 
   LayoutDashboard, 
   FolderGit2,
-  Activity
 } from 'lucide-react'
 import type { MergeRequest, GitLabGroup, GitLabUser } from '../../shared/types'
 import ActivityBarChart from '../components/report/ActivityBarChart'
-import ContributionRadar from '../components/report/ContributionRadar'
 import ReportMRCard from '../components/report/ReportMRCard'
 import MemberComparisonModal from '../components/report/MemberComparisonModal'
 import { buildReportMarkdown, buildReportCSV } from '../utils/reportBuilder'

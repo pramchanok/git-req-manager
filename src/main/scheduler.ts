@@ -1,7 +1,8 @@
 import { GitLabClient } from '../shared/gitlab'
 import type { AppState, GitLabGroup, GitLabUser, MergeRequest } from '../shared/types'
-import { getSettings, isConfigured, pruneNotifiedMRIds, hasNotifiedMergedMRId, addNotifiedMergedMRId } from './store'
+import { getSettings, isConfigured, pruneNotifiedMRIds, hasNotifiedMergedMRId, addNotifiedMergedMRId, setNotificationIdentity } from './store'
 import { notifyNewMRs, notifyMRMerged, notifyCIPipelineFailed, notifyLabelsChanged, notifyNewGroupMRs } from './notifier'
+import { setNotificationScope } from './notification-inbox'
 
 type StateChangeCallback = (state: AppState) => void
 
@@ -13,6 +14,10 @@ let previousGroupMRIds = new Map<number, Set<number>>()
 // Track user's authored open MRs — used to detect when one gets merged/closed
 let previousAuthoredOpenMRIds = new Map<number, { projectId: number; iid: number }>()
 let cachedUser: GitLabUser | null = null
+let generation = 0
+let syncTask: Promise<void> | null = null
+let syncPending = false
+let pipelineEpoch = 0
 
 const OWNER_GROUPS_TTL = 10 * 60 * 1000
 let ownerGroupsCache: { groups: GitLabGroup[]; fetchedAt: number } | null = null
@@ -21,14 +26,31 @@ let ownerGroupsCache: { groups: GitLabGroup[]; fetchedAt: number } | null = null
 // มี pipeline ใหม่ (commit ใหม่ → updatedAt เปลี่ยน) หรือ user กด retry ซึ่งไม่แตะ updatedAt
 // จึงใส่ TTL 5 นาทีกันค้างจากเคส retry — ส่วนสถานะ null/running fetch ใหม่เสมอ
 const PIPELINE_CACHE_TTL = 5 * 60 * 1000
-let pipelineCache = new Map<number, { updatedAt: string; status: MergeRequest['pipelineStatus']; cachedAt: number }>()
+type PipelineCacheEntry = {
+  projectId: number
+  mrIid: number
+  updatedAt: string
+  status: MergeRequest['pipelineStatus']
+  cachedAt: number
+}
+let pipelineCache = new Map<number, PipelineCacheEntry>()
+
+export type WebhookCacheEvent = {
+  // Older relays omit the type; unknown events use conservative invalidation.
+  eventType?: string
+  projectId?: number | null
+  mrIid?: number | null
+  mrId?: number | null
+}
 
 async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[], chunkSize = 5): Promise<void> {
+  const epoch = pipelineEpoch
+  const accountGeneration = generation
   const now = Date.now()
   const toFetch: MergeRequest[] = []
   for (const mr of mrs) {
     const cached = pipelineCache.get(mr.id)
-    const isTerminal = cached && cached.status !== null && cached.status !== 'running'
+    const isTerminal = cached && ['success', 'failed', 'canceled', 'skipped'].includes(cached.status ?? '')
     if (cached && isTerminal && cached.updatedAt === mr.updatedAt && now - cached.cachedAt < PIPELINE_CACHE_TTL) {
       mr.pipelineStatus = cached.status
     } else {
@@ -37,7 +59,15 @@ async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[]
   }
 
   for (let i = 0; i < toFetch.length; i += chunkSize) {
+    if (accountGeneration !== generation) break
     const chunk = toFetch.slice(i, i + chunkSize)
+    // The entry object doubles as a request revision. Removing it invalidates
+    // only this MR's in-flight result without retaining a separate revision map.
+    const entries = chunk.map((mr): PipelineCacheEntry => {
+      const entry = { projectId: mr.projectId, mrIid: mr.iid, updatedAt: mr.updatedAt, status: null, cachedAt: 0 }
+      if (epoch === pipelineEpoch) pipelineCache.set(mr.id, entry)
+      return entry
+    })
     const statuses = await Promise.all(
       chunk.map((mr) => client.getMRPipelines(mr.projectId, mr.iid).catch((err) => {
         console.error(`[scheduler] Failed to fetch pipeline for MR !${mr.iid}:`, err instanceof Error ? err.message : String(err))
@@ -46,13 +76,16 @@ async function fetchPipelinesThrottled(client: GitLabClient, mrs: MergeRequest[]
     )
     chunk.forEach((mr, j) => {
       mr.pipelineStatus = statuses[j]
-      pipelineCache.set(mr.id, { updatedAt: mr.updatedAt, status: statuses[j], cachedAt: now })
+      if (epoch === pipelineEpoch && pipelineCache.get(mr.id) === entries[j]) {
+        entries[j].status = statuses[j]
+        entries[j].cachedAt = now
+      }
     })
   }
 
   // กัน cache โตไม่จำกัด — เก็บเฉพาะ MR ที่ยังอยู่ในรอบนี้
   const activeIds = new Set(mrs.map((mr) => mr.id))
-  for (const id of pipelineCache.keys()) {
+  for (const id of epoch === pipelineEpoch ? pipelineCache.keys() : []) {
     if (!activeIds.has(id)) pipelineCache.delete(id)
   }
 }
@@ -66,6 +99,7 @@ const currentState: AppState = {
   currentUser: null,
   isConfigured: false,
   ownerGroups: [],
+  syncHealth: { lastAttemptAt: null, lastWebhookAt: null, reviewsSyncedAt: null, allOpenSyncedAt: null, durationMs: null },
 }
 
 let onStateChange: StateChangeCallback = () => {}
@@ -83,10 +117,46 @@ export function getAppState(): AppState {
   return { ...currentState }
 }
 
-export async function syncNow(): Promise<void> {
-  // Never overlap sync cycles: shared caches and notification history are mutated
-  // throughout the cycle, so starting a second cycle would create race conditions.
-  if (currentState.isSyncing) return
+export function syncNow(): Promise<void> {
+  syncPending = true
+  if (!syncTask) {
+    syncTask = Promise.resolve().then(async () => {
+      while (syncPending) {
+        syncPending = false
+        await runSyncCycle()
+      }
+    }).finally(() => { syncTask = null })
+  }
+  return syncTask
+}
+
+export function recordWebhookEvent(event: WebhookCacheEvent): void {
+  if (event.eventType !== 'note') {
+    const hasId = (value: number | null | undefined): value is number => Number.isInteger(value) && Number(value) > 0
+    const hasMRId = hasId(event.mrId)
+    const hasProject = hasId(event.projectId)
+    const hasPair = hasProject && hasId(event.mrIid)
+    if (!hasMRId && !hasProject) {
+      pipelineEpoch++
+      pipelineCache.clear()
+    } else {
+      for (const [id, entry] of pipelineCache) {
+        // A fork pipeline's project can be the source project while mrId belongs
+        // to the target project, so its global MR ID takes precedence.
+        const matches = hasMRId ? id === event.mrId :
+          entry.projectId === event.projectId && (!hasPair || entry.mrIid === event.mrIid)
+        if (matches) pipelineCache.delete(id)
+      }
+    }
+  }
+  currentState.syncHealth!.lastWebhookAt = new Date().toISOString()
+  onStateChange({ ...currentState })
+}
+
+async function runSyncCycle(): Promise<void> {
+  const cycleGeneration = generation
+  const started = Date.now()
+  currentState.syncHealth!.lastAttemptAt = new Date(started).toISOString()
 
   if (!isConfigured()) {
     currentState.isConfigured = false
@@ -104,11 +174,16 @@ export async function syncNow(): Promise<void> {
     const settings = getSettings()
     const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
 
-    const user = cachedUser ?? (cachedUser = await client.getCurrentUser())
+    const user = cachedUser ?? await client.getCurrentUser()
+    if (cycleGeneration !== generation) return
+    cachedUser = user
+    setNotificationIdentity(settings.gitlabUrl, user.id)
+    setNotificationScope(settings.gitlabUrl, user.id)
     currentState.currentUser = user
 
     const [reviewResult, allOpenResult, authoredResult] = await Promise.allSettled([
       client.getMRsForReview(user.id).then(async (mrs) => {
+        if (cycleGeneration !== generation) return mrs
         await fetchPipelinesThrottled(client, mrs)
         return mrs
       }),
@@ -118,6 +193,7 @@ export async function syncNow(): Promise<void> {
         ? client.getAuthoredOpenMRs(user.id)
         : Promise.resolve(null),
     ])
+    if (cycleGeneration !== generation) return
 
     const reviewMRs = reviewResult.status === 'fulfilled' ? reviewResult.value : currentState.myReviewMRs
     const allOpenMRs = allOpenResult.status === 'fulfilled' ? allOpenResult.value : currentState.allOpenMRs
@@ -126,6 +202,7 @@ export async function syncNow(): Promise<void> {
     const syncErrors: string[] = []
     if (reviewResult.status === 'rejected') syncErrors.push(`[API Error] My Reviews: ${reviewResult.reason instanceof Error ? reviewResult.reason.message : String(reviewResult.reason)}`)
     if (allOpenResult.status === 'rejected') syncErrors.push(`[API Error] All Open: ${allOpenResult.reason instanceof Error ? allOpenResult.reason.message : String(allOpenResult.reason)}`)
+    if (authoredResult.status === 'rejected') syncErrors.push('Authored MRs could not be refreshed.')
 
     currentState.error = syncErrors.length > 0 ? syncErrors.join(' | ') : null
 
@@ -175,6 +252,7 @@ export async function syncNow(): Promise<void> {
         if (hasNotifiedMergedMRId(id)) continue
         // Verify actual state via API (could be close, not merge)
         const mr = await client.getMRByIid(projectId, iid).catch(() => null)
+        if (cycleGeneration !== generation) return
         if (mr?.state === 'merged') {
           addNotifiedMergedMRId(id)
           notifyMRMerged(mr)
@@ -190,8 +268,12 @@ export async function syncNow(): Promise<void> {
     }
 
     currentState.myReviewMRs = reviewMRs
-    currentState.allOpenMRs = allOpenMRs
-    currentState.lastSyncedAt = new Date().toISOString()
+    const reviewPipelines = new Map((reviewResult.status === 'fulfilled' ? reviewMRs : [])
+      .filter(mr => mr.pipelineStatus !== null).map(mr => [mr.id, mr.pipelineStatus]))
+    currentState.allOpenMRs = allOpenMRs.map(mr => reviewPipelines.has(mr.id) ? { ...mr, pipelineStatus: reviewPipelines.get(mr.id)! } : mr)
+    const syncedAt = new Date().toISOString()
+    if (reviewResult.status === 'fulfilled') currentState.syncHealth!.reviewsSyncedAt = syncedAt
+    if (allOpenResult.status === 'fulfilled') currentState.syncHealth!.allOpenSyncedAt = syncedAt
 
     // Fetch groups where user is Owner (cache 10 นาที — รายชื่อ group แทบไม่เปลี่ยน) and notify new MRs for enabled ones
     if (!ownerGroupsCache || Date.now() - ownerGroupsCache.fetchedAt > OWNER_GROUPS_TTL) {
@@ -199,7 +281,9 @@ export async function syncNow(): Promise<void> {
         console.error('[scheduler] Failed to fetch owner groups:', err instanceof Error ? err.message : String(err))
         return null
       })
+      if (cycleGeneration !== generation) return
       if (groups !== null) ownerGroupsCache = { groups, fetchedAt: Date.now() }
+      else syncErrors.push('Owner groups could not be refreshed.')
     }
     const ownerGroups = ownerGroupsCache?.groups ?? []
     currentState.ownerGroups = ownerGroups
@@ -209,10 +293,12 @@ export async function syncNow(): Promise<void> {
       const group = ownerGroups.find((g) => g.id === groupId)
       if (!group) return
 
-      const groupMRs = await client.getGroupOpenMRs(groupId).catch((err): MergeRequest[] => {
+      const groupMRs = await client.getGroupOpenMRs(groupId).catch((err): null => {
         console.error(`[scheduler] Failed to fetch open MRs for group ${groupId}:`, err instanceof Error ? err.message : String(err))
-        return []
+        syncErrors.push(`Group ${group.name} could not be refreshed.`)
+        return null
       })
+      if (cycleGeneration !== generation || groupMRs === null) return
       const prevIds = previousGroupMRIds.get(groupId) ?? new Set<number>()
       const newGroupMRs = groupMRs.filter((mr) => !prevIds.has(mr.id))
       if (newGroupMRs.length > 0) {
@@ -220,14 +306,22 @@ export async function syncNow(): Promise<void> {
       }
       previousGroupMRIds.set(groupId, new Set(groupMRs.map((mr) => mr.id)))
     }))
+    if (cycleGeneration !== generation) return
+    currentState.error = syncErrors.length ? syncErrors.join(' | ') : null
+    if (syncErrors.length === 0) currentState.lastSyncedAt = new Date().toISOString()
 
     // Prune notifiedMRIds to only active open MRs (cap 500) to prevent unbounded growth
     const activeMRIds = new Set([...reviewMRs, ...allOpenMRs].map((mr) => mr.id))
+    for (const groupId of notifyGroupIds) {
+      for (const id of previousGroupMRIds.get(groupId) ?? []) activeMRIds.add(id)
+    }
     pruneNotifiedMRIds(activeMRIds)
   } catch (err) {
+    if (cycleGeneration !== generation) return
     const message = err instanceof Error ? err.message : String(err)
     currentState.error = `Sync failed: ${message}`
   } finally {
+    if (cycleGeneration === generation) currentState.syncHealth!.durationMs = Date.now() - started
     currentState.isSyncing = false
     onSyncStatusChange(false)
     onStateChange({ ...currentState })
@@ -243,6 +337,7 @@ export function startScheduler(intervalMinutes: number): void {
 }
 
 export function stopScheduler(): void {
+  syncPending = false
   if (intervalHandle !== null) {
     clearInterval(intervalHandle)
     intervalHandle = null
@@ -261,10 +356,26 @@ export function restartScheduler(): void {
  * instead of reusing the previous account's identity.
  */
 export function resetSchedulerCache(): void {
+  generation++
+  pipelineEpoch++
   cachedUser = null
+  previousReviewMRIds.clear()
+  previousPipelineStatuses.clear()
+  previousMRLabels.clear()
+  previousGroupMRIds.clear()
   previousAuthoredOpenMRIds = new Map()
   pipelineCache = new Map()
   ownerGroupsCache = null
+  currentState.myReviewMRs = []
+  currentState.allOpenMRs = []
+  currentState.ownerGroups = []
+  currentState.currentUser = null
+  currentState.lastSyncedAt = null
+  currentState.error = null
+  currentState.syncHealth = { lastAttemptAt: null, lastWebhookAt: null, reviewsSyncedAt: null, allOpenSyncedAt: null, durationMs: null }
+  setNotificationScope(null, null)
+  setNotificationIdentity(null, null)
+  onStateChange({ ...currentState })
 }
 
 /**
@@ -272,6 +383,7 @@ export function resetSchedulerCache(): void {
  * Immediately notifies the author without waiting for next sync cycle.
  */
 export async function handleWebhookMerge(authorId: number, projectId: number, mrIid: number): Promise<void> {
+  const eventGeneration = generation
   const settings = getSettings()
   if (!settings.notifyOnMyMRMerged) return
 
@@ -281,7 +393,7 @@ export async function handleWebhookMerge(authorId: number, projectId: number, mr
   const client = new GitLabClient(settings.gitlabUrl, settings.accessToken)
   const mr = await client.getMRByIid(projectId, mrIid).catch(() => null)
 
-  if (!mr) return
+  if (!mr || eventGeneration !== generation || mr.state !== 'merged') return
   if (hasNotifiedMergedMRId(mr.id)) return
 
   addNotifiedMergedMRId(mr.id)

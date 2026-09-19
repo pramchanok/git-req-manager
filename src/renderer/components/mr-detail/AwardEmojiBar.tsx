@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import data from '@emoji-mart/data'
-import Picker from '@emoji-mart/react'
-import { getEmojiChar } from '../../utils/emoji'
+import { lazy, Suspense, useState } from 'react'
+const EmojiPicker = lazy(() => import('./EmojiPicker'))
+const EmojiCharacter = lazy(() => import('./EmojiCharacter'))
+
 
 export type EmojiGroups = Record<string, { count: number; hasVoted: boolean }>
 
@@ -24,7 +24,7 @@ export default function AwardEmojiBar({ emojiGroups, onToggle, pendingEmoji }: A
         const hasVoted = group?.hasVoted || false
         if (count === 0 && name !== 'thumbsup' && name !== 'thumbsdown') return null
 
-        const nativeChar = getEmojiChar(name)
+        const nativeChar = name === 'thumbsup' ? '👍' : name === 'thumbsdown' ? '👎' : <Suspense fallback={(':' + name + ':')}><EmojiCharacter name={name} /></Suspense>
 
         return (
           <button
@@ -57,15 +57,15 @@ export default function AwardEmojiBar({ emojiGroups, onToggle, pendingEmoji }: A
 
       {showPicker && (
         <div className="absolute top-10 left-0 z-50 shadow-2xl border border-gray-700 rounded-lg overflow-hidden">
-          <Picker
-            data={data}
-            theme="dark"
-            onEmojiSelect={(emoji: any) => {
+          <Suspense fallback={<div className="p-4 text-sm">Loading emoji…</div>}><EmojiPicker
+
+
+            onSelect={(emoji) => {
               onToggle(emoji.id)
               setShowPicker(false)
             }}
-            onClickOutside={() => setShowPicker(false)}
-          />
+            onClose={() => setShowPicker(false)}
+          /></Suspense>
         </div>
       )}
     </div>

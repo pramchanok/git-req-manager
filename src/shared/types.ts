@@ -11,6 +11,8 @@ export interface Settings {
   launchAtStartup: boolean
   notifyOwnerGroupIds: number[]
   notifyOnMyMRMerged: boolean
+  tokenStorage?: 'encrypted' | 'session' | 'missing'
+  quietHours?: { enabled: boolean; start: string; end: string }
 }
 
 export interface MRLabel {
@@ -50,7 +52,7 @@ export interface MergeRequest {
   downvotes: number
   userNotesCount: number
   sha: string | null
-  pipelineStatus: 'running' | 'success' | 'failed' | 'canceled' | null
+  pipelineStatus: PipelineJobStatus | null
   pipelineId: number | null
   pipelineWebUrl: string | null
   labels: MRLabel[]
@@ -138,6 +140,29 @@ export interface AppState {
   currentUser: GitLabUser | null
   isConfigured: boolean
   ownerGroups: GitLabGroup[]
+  syncHealth?: {
+    lastAttemptAt: string | null
+    lastWebhookAt: string | null
+    reviewsSyncedAt: string | null
+    allOpenSyncedAt: string | null
+    durationMs: number | null
+  }
+}
+
+export interface NotificationEntry {
+  id: string
+  title: string
+  body: string
+  createdAt: string
+  read: boolean
+  projectId?: number
+  mrIid?: number
+  snoozedUntil?: string
+}
+
+export interface NotificationInboxState {
+  entries: NotificationEntry[]
+  snoozed: Record<string, string>
 }
 
 export type PipelineJobStatus =

@@ -17,8 +17,7 @@ import MRActionBar, { MRAction } from '../components/mr-detail/MRActionBar'
 import CloseConfirmModal from '../components/mr-detail/CloseConfirmModal'
 import { AlertTriangle, ExternalLink } from 'lucide-react'
 
-import '@uiw/react-md-editor/markdown-editor.css'
-import '@uiw/react-markdown-preview/markdown.css'
+import { createRefreshQueue, mrStorageScope } from '../utils/mrWorkspace'
 
 interface MRDetailProps {
   projectId: number
@@ -28,57 +27,7 @@ interface MRDetailProps {
   onToast: (message: string, type?: 'success' | 'error' | 'info') => void
 }
 
-// ── สถานะ "ไฟล์ที่ดูแล้ว" เก็บใน localStorage แยก key ต่อ MR ──
-const VIEWED_KEY_PREFIX = 'mr-viewed-'
-const VIEWED_ENTRY_TTL = 30 * 24 * 60 * 60 * 1000 // 30 วัน
-
-type ViewedEntry = { paths: string[]; savedAt: number }
-
-function readViewedFiles(key: string): Set<string> {
-  try {
-    const saved = localStorage.getItem(key)
-    if (!saved) return new Set()
-    const parsed = JSON.parse(saved)
-    // รองรับรูปแบบเดิมที่เก็บเป็น array เปล่าๆ ไม่มี savedAt
-    return new Set<string>(Array.isArray(parsed) ? parsed : ((parsed as ViewedEntry).paths ?? []))
-  } catch {
-    return new Set()
-  }
-}
-
-/** ลบสถานะของ MR ที่ไม่ได้แตะมานาน — เดิมเขียน key ใหม่เรื่อยๆ โดยไม่มีใครลบ */
-function pruneViewedFileEntries(): void {
-  try {
-    const now = Date.now()
-    const stale: string[] = []
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (!key?.startsWith(VIEWED_KEY_PREFIX)) continue
-
-      const raw = localStorage.getItem(key)
-      if (!raw) continue
-
-      try {
-        const parsed = JSON.parse(raw)
-        // รูปแบบเดิม (array) ไม่มี timestamp — เก็บไว้ก่อนเพื่อไม่ให้ผู้ใช้
-        // สูญเสียสถานะเดิม; เมื่อเปิด MR นั้นอีกครั้ง effect ด้านบนจะ migrate เป็น object
-        if (Array.isArray(parsed)) continue
-
-        const savedAt = (parsed as ViewedEntry).savedAt
-        if (typeof savedAt !== 'number' || now - savedAt > VIEWED_ENTRY_TTL) stale.push(key)
-      } catch {
-        stale.push(key)
-      }
-    }
-
-    for (const key of stale) localStorage.removeItem(key)
-  } catch {
-    // localStorage ใช้ไม่ได้ — ข้ามการเก็บกวาดไปเลย
-  }
-}
-
-export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast }: MRDetailProps) {
+function MRDetailContent({ projectId, mrIid, onBack, onRefresh, onToast }: MRDetailProps) {
   const [mr, setMR] = useState<MergeRequest | null>(null)
   const [activeTab, setActiveTab] = useState<MRDetailTab>('overview')
   const [diffs, setDiffs] = useState<MRDiff[]>([])
@@ -114,25 +63,76 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   const displayedSidebarWidthRef = useRef(sidebarWidth)
   const lastLiveResizeAtRef = useRef(0)
 
-  const storageKey = `mr-viewed-${projectId}-${mrIid}`
-  const [viewedFiles, setViewedFiles] = useState<Set<string>>(() => readViewedFiles(storageKey))
 
+  const refreshQueue = useRef(createRefreshQueue())
+  const alive = useRef(true)
+  const [storageKey, setStorageKey] = useState<string | null>(null)
+  const [draftStatus, setDraftStatus] = useState('Loading saved draft…')
+  const [draftReady, setDraftReady] = useState(false)
+  const [viewedFiles, setViewedFiles] = useState<Set<string>>(new Set())
+  const [reviewHead, setReviewHead] = useState<string | null>(null)
+  const [resumePosition, setResumePosition] = useState<{ path: string; offset: number } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const lastPositionSave = useRef(0)
+  const scopeRef = useRef<string | null>(null)
+  const viewedRef = useRef(viewedFiles)
+  viewedRef.current = viewedFiles
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   useEffect(() => {
+    let canceled = false
+    if (!currentUser) return
+    setDraftReady(false)
+    window.electronAPI.getSettings().then(settings => {
+      if (canceled) return
+      const key = mrStorageScope(settings.gitlabUrl, currentUser.id, projectId, mrIid)
+      if (scopeRef.current === key) { setDraftReady(true); return }
+      scopeRef.current = key
+      setStorageKey(key)
+      setCommentText('')
+      setViewedFiles(new Set())
+      setReviewHead(null)
+      setResumePosition(null)
+      try {
+        setCommentText(localStorage.getItem(key + ':draft') || '')
+        const review = JSON.parse(localStorage.getItem(key + ':review') || 'null')
+        if (review && Date.now() - review.savedAt < 30 * 86400000) {
+          setViewedFiles(new Set(Array.isArray(review.paths) ? review.paths.filter((p: unknown) => typeof p === 'string') : []))
+          setReviewHead(typeof review.head === 'string' ? review.head : null)
+          if (typeof review.position?.path === 'string' && Number.isFinite(review.position?.offset)) setResumePosition(review.position)
+        }
+        setDraftStatus('Drafts saved on this device')
+      } catch { setDraftStatus('Draft storage unavailable') }
+      setDraftReady(true)
+    }).catch(() => { if (!canceled) { setDraftStatus('Draft storage unavailable'); setDraftReady(true) } })
+    return () => { canceled = true }
+  }, [currentUser?.id, projectId, mrIid])
+
+  const changeComment = (text: string) => {
+    setCommentText(text)
+    if (!storageKey) return
     try {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ paths: Array.from(viewedFiles), savedAt: Date.now() })
-      )
-    } catch {
-      // storage เต็ม/ถูกปิด — ไม่ใช่เรื่องคอขาดบาดตาย ปล่อยผ่าน
-    }
-  }, [viewedFiles, storageKey])
-
-  // เก็บกวาดสถานะ "ไฟล์ที่ดูแล้ว" ของ MR เก่า — เดิมเขียน key ใหม่ต่อ MR โดยไม่มีใครลบ
-  useEffect(() => {
-    pruneViewedFileEntries()
-  }, [])
-
+      if (text) localStorage.setItem(storageKey + ':draft', text)
+      else localStorage.removeItem(storageKey + ':draft')
+      setDraftStatus(text ? 'Draft saved on this device' : 'Drafts saved on this device')
+    } catch { setDraftStatus('Draft storage unavailable') }
+  }
+  const changedSinceReview = Boolean(reviewHead && mr?.sha && reviewHead !== mr.sha)
+  const effectiveViewed = changedSinceReview ? new Set<string>() : viewedFiles
+  const saveReview = (paths: Set<string>, head: string | null, position = resumePosition) => {
+    if (!storageKey) return
+    try { localStorage.setItem(storageKey + ':review', JSON.stringify({ paths: [...paths], head, position, savedAt: Date.now() })) } catch { /* Optional local persistence. */ }
+  }
+  const rememberPosition = () => {
+    if (activeTab !== 'changes' || !scrollRef.current || Date.now() - lastPositionSave.current < 300) return
+    lastPositionSave.current = Date.now()
+    const top = scrollRef.current.getBoundingClientRect().top
+    const cards = [...scrollRef.current.querySelectorAll<HTMLElement>('.diff-file-card')]
+    const card = cards.find(item => item.getBoundingClientRect().bottom > top)
+    if (!card) return
+    const position = { path: card.id.slice(5), offset: top - card.getBoundingClientRect().top }
+    setResumePosition(position)
+    saveReview(viewedRef.current, reviewHead, position)
+  }
   useEffect(() => {
     const applyPendingSidebarWidth = (persist: boolean) => {
       const pendingWidth = pendingSidebarWidthRef.current
@@ -213,8 +213,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   }, [diffs])
 
   const fileTree = useMemo(() => {
-    return buildFileTree(diffs.map(d => d.newPath), viewedFiles, diffStats)
-  }, [diffs, viewedFiles, diffStats])
+    return buildFileTree(diffs.map(d => d.newPath), changedSinceReview ? new Set() : viewedFiles, diffStats)
+  }, [diffs, viewedFiles, diffStats, changedSinceReview])
 
   const orderedDiffs = useMemo(() => {
     const diffsByPath = new Map(diffs.map(diff => [diff.newPath, diff]))
@@ -223,19 +223,20 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       .filter((diff): diff is MRDiff => diff !== undefined)
   }, [diffs, fileTree])
 
-  const fetchDiffs = async (silent = false) => {
+  const fetchDiffs = (silent = false) => refreshQueue.current("fetchDiffs", async () => {
+    if (!alive.current) return
     if (!silent) setLoadingDiffs(true)
     setRawDiff(null)
     try {
       const data = await window.electronAPI.getMRDiffs(projectId, mrIid)
-      setDiffs(data)
+      if (alive.current) setDiffs(data)
     } catch (err) {
       console.error(err)
       onToast('Failed to load diffs', 'error')
     } finally {
       setLoadingDiffs(false)
     }
-  }
+  })
 
   const handleLoadDiff = async (filePath: string) => {
     setLoadingDiffPaths((prev) => new Set(prev).add(filePath))
@@ -271,30 +272,33 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     }
   }
 
-  const fetchDiscussions = async (silent = false) => {
+  const fetchDiscussions = (silent = false) => refreshQueue.current("fetchDiscussions", async () => {
+    if (!alive.current) return
     if (!silent) setLoadingDiscussions(true)
     try {
       const data = await window.electronAPI.getMRDiscussions(projectId, mrIid)
-      setDiscussions(data)
+      if (alive.current) setDiscussions(data)
     } catch (err) {
       console.error(err)
       if (!silent) onToast('Failed to load discussions', 'error')
     } finally {
       setLoadingDiscussions(false)
     }
-  }
+  })
 
-  const fetchAwardEmojis = async () => {
+  const fetchAwardEmojis = () => refreshQueue.current("fetchAwardEmojis", async () => {
+    if (!alive.current) return
     try {
       const data = await window.electronAPI.getMRAwardEmojis(projectId, mrIid)
-      setAwardEmojis(data)
+      if (alive.current) setAwardEmojis(data)
     } catch (err) {
       console.error(err)
     }
-  }
+  })
 
   /** โหลดตัว MR + approvals ใหม่ (ใช้ทั้งตอน mount, ตอนได้ push จาก main และตอน poll ระหว่าง pipeline วิ่ง) */
-  const refreshMR = async (notifyError = false) => {
+  const refreshMR = (notifyError = false) => refreshQueue.current("refreshMR", async () => {
+    if (!alive.current) return
     try {
       const [mrData, appState, approvals] = await Promise.all([
         window.electronAPI.getMRByIid(projectId, mrIid),
@@ -303,16 +307,17 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       ])
 
       if (mrData && appState.currentUser) {
-        mrData.hasApproved = approvals.approved_by.some(a => a.user.id === appState.currentUser?.id)
+        mrData.hasApproved = approvals.approved_by.some((a: { user: GitLabUser }) => a.user.id === appState.currentUser?.id)
       }
 
+      if (!alive.current) return
       setMR(mrData)
       setCurrentUser(appState.currentUser)
     } catch (err) {
       console.error(err)
       if (notifyError) onToast('Failed to load MR', 'error')
     }
-  }
+  })
 
   useEffect(() => {
     refreshMR(true)
@@ -322,6 +327,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     // fallback poll (โหมด polling หรือกรณี webhook หลุด) — discussions/emojis ทุก 20 วินาที
     // ยิงแบบ silent: อัปเดตข้อมูลเบื้องหลังโดยไม่โชว์ spinner → ไม่เกิดอาการกระพริบ
     const interval = setInterval(() => {
+      if (document.hidden) return
       fetchDiscussions(true)
       fetchAwardEmojis()
     }, 20000)
@@ -329,9 +335,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     // real-time: main process broadcast state ใหม่ทุกครั้งที่ sync (webhook/polling)
     // เช็คจาก state ที่แนบมาก่อนว่า MR นี้มีอะไรเปลี่ยนจริงไหม — ถ้าไม่เปลี่ยนก็ไม่ต้องยิง API ซ้ำ
     const unsubscribe = window.electronAPI.onAppStateUpdated((state) => {
+      if (document.hidden) return
       const cur = mrRef.current
-      const inReviews = state.myReviewMRs.find(m => m.projectId === projectId && m.iid === mrIid)
-      const found = inReviews ?? state.allOpenMRs.find(m => m.projectId === projectId && m.iid === mrIid)
+      const inReviews = state.myReviewMRs.find((m: MergeRequest) => m.projectId === projectId && m.iid === mrIid)
+      const found = inReviews ?? state.allOpenMRs.find((m: MergeRequest) => m.projectId === projectId && m.iid === mrIid)
       if (found && cur && found.updatedAt === cur.updatedAt &&
           // pipeline status ถูก patch เฉพาะ list ของ My Reviews — เทียบได้เมื่อเจอในนั้นเท่านั้น
           (!inReviews || inReviews.pipelineStatus === cur.pipelineStatus)) {
@@ -345,11 +352,20 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
     // real-time: โหมด webhook — main ส่ง note-event ตรงมาเมื่อมีคอมเมนต์ใหม่บน MR นี้
     // ดึง discussions/emojis ใหม่แบบเงียบทันที ไม่ต้องรอ poll 20 วิ
     const unsubscribeNote = window.electronAPI.onMRNoteEvent(({ projectId: p, mrIid: i }) => {
+      if (p !== projectId || i !== mrIid || document.hidden) return
       fetchDiscussions(true)
       fetchAwardEmojis()
     })
 
+    const onVisible = () => {
+      if (document.hidden) return
+      refreshMR()
+      fetchDiscussions(true)
+      fetchAwardEmojis()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
+      document.removeEventListener('visibilitychange', onVisible)
       clearInterval(interval)
       unsubscribe()
       unsubscribeNote()
@@ -364,8 +380,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   }, [])
 
   useEffect(() => {
-    if (mr?.pipelineStatus !== 'running') return
-    const interval = setInterval(() => refreshMR(), webhookMode ? 30000 : 15000)
+    if (!mr?.pipelineStatus || !['running', 'pending', 'preparing', 'created', 'waiting_for_resource', 'scheduled'].includes(mr.pipelineStatus)) return
+    const interval = setInterval(() => { if (!document.hidden) refreshMR() }, webhookMode ? 30000 : 15000)
     return () => clearInterval(interval)
   }, [mr?.pipelineStatus, webhookMode, projectId, mrIid])
 
@@ -383,11 +399,11 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   }, [mr?.sha])
 
   const handleAddComment = async () => {
-    if (!commentText.trim()) return
+    if (!commentText.trim() || submittingComment) return
     setSubmittingComment(true)
     try {
       await window.electronAPI.addMRNote(projectId, mrIid, commentText)
-      setCommentText('')
+      changeComment('')
       await fetchDiscussions()
       onToast('Comment added')
     } catch (err) {
@@ -484,12 +500,12 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
   }
 
   const toggleViewedFile = (filePath: string) => {
-    setViewedFiles(prev => {
-      const next = new Set(prev)
+      const next = new Set(changedSinceReview ? [] : viewedFiles)
       if (next.has(filePath)) next.delete(filePath)
       else next.add(filePath)
-      return next
-    })
+      setReviewHead(mr?.sha || null)
+      saveReview(next, mr?.sha || null)
+      setViewedFiles(next)
   }
 
   const copyFilePath = async (filePath: string) => {
@@ -571,10 +587,18 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
           />
         )}
 
-        <div className="diff-scroll-container flex-1 overflow-y-auto custom-scrollbar relative">
+        <div ref={scrollRef} onScroll={rememberPosition} className="diff-scroll-container flex-1 overflow-y-auto custom-scrollbar relative">
           <div className={`${activeTab === 'changes' ? 'w-full' : 'max-w-5xl mx-auto'} p-6 pb-20`}>
             {activeTab === 'changes' && (
-              <div className="mb-4 flex justify-end">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                  {changedSinceReview && <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-300">New commits since your last review · review viewed files again</span>}
+                  {resumePosition && <button type="button" className="rounded-md border border-gray-700 px-2 py-1 hover:text-orange-300" onClick={() => {
+                    const card = document.getElementById('diff-' + resumePosition.path)
+                    const container = scrollRef.current
+                    if (card && container) container.scrollTop += card.getBoundingClientRect().top - container.getBoundingClientRect().top + resumePosition.offset
+                  }}>Resume review</button>}
+                </div>
                 <div className="flex items-center bg-[#161b22] border border-gray-800 rounded-lg p-1">
                   <button
                     onClick={() => setDiffViewMode('inline')}
@@ -624,8 +648,10 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 {/* Comment Input */}
                 <CommentComposer
                   value={commentText}
-                  onChange={setCommentText}
+                  onChange={changeComment}
+                  draftStatus={draftStatus}
                   submitting={submittingComment}
+                  disabled={!draftReady}
                   onSubmit={handleAddComment}
                 />
               </div>
@@ -655,7 +681,7 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
                 <DiffList
                   diffs={orderedDiffs}
                   loading={loadingDiffs}
-                  viewedFiles={viewedFiles}
+                  viewedFiles={effectiveViewed}
                   onToggleViewed={toggleViewedFile}
                   onCopyPath={copyFilePath}
                   onOpenInIDE={openFileInIDE}
@@ -705,4 +731,8 @@ export default function MRDetail({ projectId, mrIid, onBack, onRefresh, onToast 
       )}
     </div>
   )
+}
+
+export default function MRDetail(props: MRDetailProps) {
+  return <MRDetailContent key={props.projectId + ':' + props.mrIid} {...props} />
 }

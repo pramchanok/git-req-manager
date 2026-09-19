@@ -26,9 +26,11 @@ import {
   setSyncStatusChangeCallback,
   handleWebhookMerge,
   resetSchedulerCache,
+  recordWebhookEvent,
 } from './scheduler'
 import { startWebhookServer, stopWebhookServer, getWebhookAddress } from './webhook'
 import { setMRClickHandler, testNotification } from './notifier'
+import { getNotificationState, markNotificationsRead, snoozeNotification, onInboxChanged } from './notification-inbox'
 import {
   startTunnel,
   stopTunnel,
@@ -431,12 +433,14 @@ function broadcastMRNoteEvent(projectId: number, mrIid: number): void {
 /** Handler กลางของ webhook event — ใช้ร่วมกันทั้ง local HTTP server และ relay socket */
 function handleWebhookPayload(payload: {
   eventType?: string
+  mrId?: number | null
   action?: string | null
   authorId?: number | null
   projectId?: number | null
   mrIid?: number | null
 }): void {
   // Real-time merge notification for the MR author
+  recordWebhookEvent(payload)
   if (payload.eventType === 'merge_request' && payload.action === 'merge' && payload.authorId && payload.projectId && payload.mrIid) {
     void handleWebhookMerge(payload.authorId, payload.projectId, payload.mrIid)
   }
@@ -462,9 +466,8 @@ function applySyncMode(settings: Settings, opts: { isStartup?: boolean } = {}): 
     return
   }
 
-  // Webhook active — ปิด polling, sync ครั้งเดียวตอนเริ่ม
-  stopScheduler()
-  syncNow()
+  // Reconcile periodically even when an event was lost or the relay disconnected.
+  startScheduler(Math.max(5, settings.refreshIntervalMinutes))
   ensureTunnelWebhookSecret(settings)
 
   const useRelay = !settings.webhookUseTunnel && !!settings.webhookPublicUrl.trim()
@@ -591,6 +594,14 @@ function handleWithClient<T>(
 }
 
 function setupIPC(): void {
+  ipcMain.handle('get-notification-state', () => getNotificationState())
+  ipcMain.handle('mark-notifications-read', () => markNotificationsRead())
+  ipcMain.handle('snooze-notification', (_event, projectId: number, mrIid: number, minutes: number) => snoozeNotification(projectId, mrIid, minutes))
+  onInboxChanged(() => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('notification-inbox-updated')
+    }
+  })
   ipcMain.handle('get-settings', () => getSettings())
   ipcMain.handle('test-notification', () => testNotification())
 
@@ -607,11 +618,24 @@ function setupIPC(): void {
   })
 
   ipcMain.handle('save-settings', (_event, settings: Settings) => {
+    if (!settings || typeof settings.gitlabUrl !== 'string' || typeof settings.accessToken !== 'string') throw new Error('Invalid settings')
+    const url = new URL(settings.gitlabUrl)
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid GitLab URL')
+    if (!Number.isFinite(settings.refreshIntervalMinutes) || settings.refreshIntervalMinutes < 1 || settings.refreshIntervalMinutes > 120) throw new Error('Invalid refresh interval')
+    if (settings.quietHours && (typeof settings.quietHours.enabled !== 'boolean' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.quietHours.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.quietHours.end))) throw new Error('Invalid quiet hours')
+    const previousSettings = getSettings()
     saveSettings(settings)
 
     // Settings (URL/token) may have changed — drop cached user identity
     // so the next sync re-authenticates as the correct account.
-    resetSchedulerCache()
+    if (previousSettings.gitlabUrl !== settings.gitlabUrl || (settings.accessToken && previousSettings.accessToken !== settings.accessToken)) {
+      // Drafts are persisted while typing. Close account-bound detail/report
+      // windows so old MR IDs cannot be used with the newly saved credential.
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win !== mainWindow && !win.isDestroyed() && new URL(win.webContents.getURL() || 'about:blank').searchParams.has('page')) win.close()
+      }
+      resetSchedulerCache()
+    }
     resetGitLabClient()
 
     // Apply launch at startup

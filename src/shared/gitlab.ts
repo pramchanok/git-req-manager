@@ -6,6 +6,7 @@ import { isGeneratedFilePath } from './diffUtils'
 const REQUEST_TIMEOUT_MS = 30_000
 const MAX_GET_ATTEMPTS = 3
 const RETRY_BASE_DELAY_MS = 250
+const MAX_RETRY_DELAY_MS = 30_000
 
 const PER_PAGE = 100
 // กันลูป pagination ไม่รู้จบถ้า API ตอบผิดสัญญา (100 หน้า = 10,000 รายการ)
@@ -66,7 +67,7 @@ class FetchWrapper {
         const name = err instanceof Error ? err.name : ''
         const isTimeout = name === 'TimeoutError' || name === 'AbortError'
         if (attempt < maxAttempts && (isTimeout || isRetryableNetworkError(err))) {
-          await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1))
+          await delay(getRetryDelay(attempt))
           continue
         }
         if (isTimeout) {
@@ -78,8 +79,12 @@ class FetchWrapper {
       if (!res.ok) {
         const errText = (await res.text().catch(() => '')).slice(0, 500)
         if (attempt < maxAttempts && isRetryableStatus(res.status)) {
-          await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1))
-          continue
+          const retryDelay = getRetryDelay(attempt, res.headers.get('Retry-After'))
+          // Do not retry earlier than the server permits, or hold sync open indefinitely.
+          if (retryDelay <= MAX_RETRY_DELAY_MS) {
+            await delay(retryDelay)
+            continue
+          }
         }
         throw new Error(`GitLab API Error: ${res.status} ${res.statusText}${errText ? ` ${errText}` : ''}`)
       }
@@ -106,6 +111,18 @@ class FetchWrapper {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function getRetryDelay(attempt: number, retryAfter?: string | null): number {
+  const backoff = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)
+  const jitteredBackoff = backoff + Math.floor(Math.random() * RETRY_BASE_DELAY_MS)
+  if (!retryAfter?.trim()) return jitteredBackoff
+
+  const value = retryAfter.trim()
+  const serverDelay = /^\d+$/.test(value)
+    ? Number(value) * 1000
+    : Date.parse(value) - Date.now()
+  return Number.isNaN(serverDelay) ? jitteredBackoff : Math.max(jitteredBackoff, serverDelay)
 }
 
 function isRetryableStatus(status: number): boolean {
@@ -263,31 +280,23 @@ export class GitLabClient {
   }
 
   async getMRsForReview(userId: number): Promise<MergeRequest[]> {
-    const { data } = await this.http.get('/merge_requests', {
-      params: {
-        reviewer_id: userId,
-        state: 'opened',
-        per_page: 100,
-        scope: 'all',
-        with_labels_details: true,
-        with_merge_status_recheck: true,
-      },
-    })
-    return data.map(this.mapMR)
+    return this.fetchAllPages('/merge_requests', {
+      reviewer_id: userId,
+      state: 'opened',
+      scope: 'all',
+      with_labels_details: true,
+      with_merge_status_recheck: true,
+    }, this.mapMR)
   }
 
   async getAuthoredOpenMRs(authorId: number): Promise<MergeRequest[]> {
-    const { data } = await this.http.get('/merge_requests', {
-      params: {
-        author_id: authorId,
-        state: 'opened',
-        per_page: 100,
-        scope: 'all',
-        with_labels_details: true,
-        with_merge_status_recheck: true,
-      },
-    })
-    return data.map(this.mapMR)
+    return this.fetchAllPages('/merge_requests', {
+      author_id: authorId,
+      state: 'opened',
+      scope: 'all',
+      with_labels_details: true,
+      with_merge_status_recheck: true,
+    }, this.mapMR)
   }
 
   async getMRByIid(projectId: number, mrIid: number): Promise<MergeRequest | null> {
@@ -431,6 +440,7 @@ export class GitLabClient {
       )
     }
 
+    const failures: string[] = []
     const results = await mapWithConcurrency(projectIds, PROJECT_FETCH_CONCURRENCY, async (id) => {
       try {
         return await this.fetchAllPages(
@@ -438,11 +448,16 @@ export class GitLabClient {
           { state: 'opened', with_labels_details: true, with_merge_status_recheck: true },
           this.mapMR
         )
-      } catch {
-        return [] as MergeRequest[] // silent: skip failed projects
+      } catch (error) {
+        failures.push(`Project ${id}: ${getErrorMessage(error)}`)
+        return [] as MergeRequest[]
       }
     })
 
+    // A partial collection must not replace the scheduler's last successful snapshot.
+    if (failures.length > 0) {
+      throw new Error(`Could not refresh ${failures.length} project(s). ${failures.join(' | ')}`)
+    }
     return results.flat()
   }
 

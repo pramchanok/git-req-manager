@@ -126,7 +126,8 @@ export default function SettingsPage({
       }
       const url = await window.electronAPI.getWebhookUrl()
       setWebhookUrl(url)
-      onToast?.('Settings saved')
+      const saved = await window.electronAPI.getSettings()
+      onToast?.(saved.tokenStorage === 'session' ? 'Settings saved. Token is kept only until the app closes because secure storage is unavailable.' : 'Settings saved', saved.tokenStorage === 'session' ? 'info' : 'success')
       onSaved()
     } catch {
       setError('Failed to save settings. Please try again.')
@@ -165,13 +166,14 @@ export default function SettingsPage({
           <span className="text-gray-400">api</span>
           <span className="text-gray-600"> (ใช้สำหรับ approve/merge/comment และ auto-manage webhook)</span>
         </p>
+        {settings.tokenStorage === 'session' && <p role="status" className="rounded-md border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-200">Secure storage is unavailable. Your token stays in memory for this session; enter it again after restarting the app.</p>}
       </div>
 
       {SHOW_REFRESH_INTERVAL && (
-      <div className={`flex flex-col gap-1 ${settings.webhookEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
+      <div className="flex flex-col gap-1">
         <label className="text-xs text-gray-400">
           Refresh Interval (minutes)
-          {settings.webhookEnabled && <span className="ml-2 text-gray-600">— ปิดเพราะใช้ Webhook</span>}
+          {settings.webhookEnabled && <span className="ml-2 text-gray-600">— Webhook fallback (minimum 5 minutes)</span>}
         </label>
         <input
           type="number"
@@ -182,7 +184,6 @@ export default function SettingsPage({
             updateSettings({ refreshIntervalMinutes: parseInt(e.target.value) || 5 })
           }
           className="bg-gray-800 border border-gray-600 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-orange-400 w-24"
-          disabled={settings.webhookEnabled}
         />
       </div>
       )}
@@ -209,6 +210,17 @@ export default function SettingsPage({
 
       {/* Notifications section */}
       <div className="border-t border-gray-700 pt-2 flex flex-col gap-3">
+        <div className="rounded-md border border-gray-800 bg-gray-950/40 p-3 space-y-2">
+          <label className="flex items-center justify-between gap-2 text-xs text-gray-300">
+            Quiet hours
+            <input type="checkbox" checked={settings.quietHours?.enabled ?? false} onChange={event => updateSettings({ quietHours: { start: '22:00', end: '08:00', ...settings.quietHours, enabled: event.target.checked } })} />
+          </label>
+          {settings.quietHours?.enabled && <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+            <label>From <input aria-label="Quiet hours start" type="time" value={settings.quietHours.start} onChange={event => updateSettings({ quietHours: { ...settings.quietHours!, start: event.target.value } })} className="rounded-md border border-gray-700 bg-gray-800 p-1 text-white" /></label>
+            <label>Until <input aria-label="Quiet hours end" type="time" value={settings.quietHours.end} onChange={event => updateSettings({ quietHours: { ...settings.quietHours!, end: event.target.value } })} className="rounded-md border border-gray-700 bg-gray-800 p-1 text-white" /></label>
+          </div>}
+          <p className="text-[10px] text-gray-500">Uses this computer's local time. Notifications remain in your inbox. Equal times disable the quiet period.</p>
+        </div>
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-gray-300">🔔 Notifications</p>
           <button

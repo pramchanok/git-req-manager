@@ -123,7 +123,7 @@ describe('GitLabClient Report Queries', () => {
   })
 
   test('fetches report candidates after the start without excluding later-updated MRs', async () => {
-    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    const fetchMock = vi.fn(async (_url: string) => new Response('[]', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await client.getGroupMRsInTimeframe(42, '2026-07-01T00:00:00.000Z')
@@ -134,7 +134,7 @@ describe('GitLabClient Report Queries', () => {
   })
 
   test('fetches a personal report using only the authenticated user filters', async () => {
-    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    const fetchMock = vi.fn(async (_url: string) => new Response('[]', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await client.getMyMRsInTimeframe(42, '2026-07-01T00:00:00.000Z')
@@ -150,7 +150,7 @@ describe('GitLabClient Report Queries', () => {
   })
 
   test('fetches group analytics from both created and updated activity streams', async () => {
-    const fetchMock = vi.fn(async () => new Response('[]', { status: 200 }))
+    const fetchMock = vi.fn(async (_url: string) => new Response('[]', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await client.getGroupMRAnalyticsSince(42, '2026-01-01T00:00:00.000Z')
@@ -174,7 +174,7 @@ describe('GitLabClient Report Queries', () => {
   })
 
   test('does not retry authentication failures', async () => {
-    const fetchMock = vi.fn(async () => new Response('401', { status: 401, statusText: 'Unauthorized' }))
+    const fetchMock = vi.fn(async (_url: string) => new Response('401', { status: 401, statusText: 'Unauthorized' }))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(client.getCurrentUser()).rejects.toThrow('GitLab API Error: 401 Unauthorized')
@@ -183,12 +183,153 @@ describe('GitLabClient Report Queries', () => {
 
   test('getMRRawDiff calls the raw_diffs endpoint', async () => {
     const rawDiffText = 'diff --git a/file.txt b/file.txt\n+hello'
-    const fetchMock = vi.fn(async () => new Response(rawDiffText, { status: 200 }))
+    const fetchMock = vi.fn(async (_url: string) => new Response(rawDiffText, { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const diff = await client.getMRRawDiff(123, 45)
     expect(diff).toBe(rawDiffText)
     const requestUrl = new URL(fetchMock.mock.calls[0][0] as string)
     expect(requestUrl.pathname).toContain('/projects/123/merge_requests/45/raw_diffs')
+  })
+})
+
+describe('GitLabClient personal MR pagination', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  test.each(['reviewer_id', 'author_id'] as const)('fetches every page with the %s filter intact', async (filter) => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const params = new URL(url).searchParams
+      expect(params.get(filter)).toBe('42')
+      expect(params.get('scope')).toBe('all')
+      expect(params.get('state')).toBe('opened')
+      expect(params.get('per_page')).toBe('100')
+      const page = Number(params.get('page'))
+      const rows = Array.from({ length: page === 1 ? 100 : 1 }, (_, index) => ({
+        id: (page - 1) * 100 + index + 1,
+        author: { id: 42, name: 'Author' },
+      }))
+      return new Response(JSON.stringify(rows), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new GitLabClient('https://gitlab.example/subpath/', 'token')
+
+    const mrs = await (filter === 'reviewer_id' ? api.getMRsForReview(42) : api.getAuthoredOpenMRs(42))
+
+    expect(mrs).toHaveLength(101)
+    expect(mrs[100].id).toBe(101)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(new URL(fetchMock.mock.calls[0][0]).pathname).toBe('/subpath/api/v4/merge_requests')
+  })
+
+  test('propagates a later page failure instead of returning incomplete MR data', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(Array.from({ length: 100 }, (_, id) => ({ id, author: {} })))))
+      .mockResolvedValueOnce(new Response('denied', { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(new GitLabClient('https://gitlab.com', 'token').getMRsForReview(42)).rejects.toThrow('403')
+  })
+})
+
+describe('GitLabClient selected project refresh', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  test('rejects a partial project refresh so the scheduler can retain its previous snapshot', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (new URL(url).pathname.includes('/projects/2/')) {
+        return new Response('Access denied', { status: 403 })
+      }
+      return new Response(JSON.stringify([{ id: 11, author: {} }]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(new GitLabClient('https://gitlab.com', 'token').getAllOpenMRs([1, 2, 3]))
+      .rejects.toThrow('Project 2: GitLab API Error: 403')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  test('combines healthy selected projects including empty results', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const rows = new URL(url).pathname.includes('/projects/2/') ? [] : [{ id: 11, author: {} }]
+      return new Response(JSON.stringify(rows))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const results = await new GitLabClient('https://gitlab.com', 'token').getAllOpenMRs([1, 2])
+    expect(results.map((mr) => mr.id)).toEqual([11])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('GitLabClient bounded retries', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  test.each([429, 503])('honors Retry-After seconds on HTTP %s', async (status) => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('busy', { status, headers: { 'Retry-After': '2' } }))
+      .mockResolvedValueOnce(new Response('{"id":7}'))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = new GitLabClient('https://gitlab.com', 'token').getCurrentUser()
+
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect((await result).id).toBe(7)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  test('honors Retry-After HTTP dates', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-19T12:00:00Z'))
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 503, headers: { 'Retry-After': 'Sat, 19 Sep 2026 12:00:03 GMT' } }))
+      .mockResolvedValueOnce(new Response('{"id":7}'))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = new GitLabClient('https://gitlab.com', 'token').getCurrentUser()
+
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await result
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  test.each(['invalid', ''])('uses jittered exponential backoff for unusable Retry-After %j and stops after three attempts', async (retryAfter) => {
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    const fetchMock = vi.fn(async () => new Response('busy', { status: 429, headers: { 'Retry-After': retryAfter } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = expect(new GitLabClient('https://gitlab.com', 'token').getCurrentUser()).rejects.toThrow('429')
+
+    await vi.advanceTimersByTimeAsync(374)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(624)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    await result
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  test('fails promptly when server asks for a delay above the retry budget', async () => {
+    const fetchMock = vi.fn(async () => new Response('rate limited', { status: 429, headers: { 'Retry-After': '3600' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(new GitLabClient('https://gitlab.com', 'token').getCurrentUser()).rejects.toThrow('429')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('never retries a mutation even for a retryable response', async () => {
+    const fetchMock = vi.fn(async () => new Response('busy', { status: 503, headers: { 'Retry-After': '1' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(new GitLabClient('https://gitlab.com', 'token').addMRNote(1, 2, 'hello')).rejects.toThrow('503')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

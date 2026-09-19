@@ -1,4 +1,4 @@
-import { FolderGit2, Calendar, GitPullRequest, GitMerge, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { FolderGit2, Calendar, GitPullRequest, GitMerge, XCircle, Clock } from 'lucide-react'
 import type { MergeRequest } from '../../../shared/types'
 import { formatDate } from '../../utils/dateFormat'
 
@@ -58,4 +58,3 @@ export default function ReportMRCard({ mr, accentClass, onOpen }: ReportMRCardPr
     </div>
   )
 }
-

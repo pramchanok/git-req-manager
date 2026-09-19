@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,7 +15,6 @@ import {
   Award,
   BarChart3,
   ArrowLeft,
-  X,
   FolderGit2,
   PieChart,
 } from 'lucide-react'

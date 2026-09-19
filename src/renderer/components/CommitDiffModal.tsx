@@ -25,7 +25,7 @@ const FileTreeNodeView = ({ node, depth = 0 }: { node: FileTreeNode, depth?: num
           <Folder className="w-3.5 h-3.5 text-blue-400" />
           <span className="text-sm truncate">{node.name}</span>
         </div>
-        {expanded && node.children.map(child => (
+        {expanded && node.children?.map(child => (
           <FileTreeNodeView key={child.path} node={child} depth={depth + 1} />
         ))}
       </div>

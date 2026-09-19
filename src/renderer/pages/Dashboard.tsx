@@ -2,7 +2,11 @@ import { useState } from 'react'
 import type { AppState, MRTab, MergeRequest } from '../../shared/types'
 import MRCard from '../components/MRCard'
 import SkeletonCard from '../components/SkeletonCard'
-import { Search, ArrowUpDown, Activity, Wifi, Shield, ArrowUpRight } from 'lucide-react'
+import { Search, ArrowUpDown, Activity, Wifi, Shield, SlidersHorizontal } from 'lucide-react'
+import ReviewQueueFilters from '../components/ReviewQueueFilters'
+import NotificationInbox from '../components/NotificationInbox'
+import { EMPTY_QUEUE_FILTERS, filterReviewQueue, type QueueFilters } from '../components/review-queue'
+import { SHOW_REVIEW_QUEUE, SHOW_NOTIFICATION_INBOX } from '../featureFlags'
 
 type SortOption = 'updated_desc' | 'updated_asc' | 'approvals_asc'
 
@@ -15,21 +19,16 @@ export default function Dashboard({ appState }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOption, setSortOption] = useState<SortOption>('updated_desc')
   const [showStatus, setShowStatus] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<QueueFilters>({ ...EMPTY_QUEUE_FILTERS })
 
   const baseMrs = activeTab === 'myReviews' ? appState.myReviewMRs : appState.allOpenMRs
   const reviewCount = appState.myReviewMRs.length
   const allCount = appState.allOpenMRs.length
 
-  // Filter
-  let mrs = baseMrs
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase()
-    mrs = mrs.filter((mr) => 
-      (mr.title || '').toLowerCase().includes(q) || 
-      (mr.author?.name || '').toLowerCase().includes(q) ||
-      (mr.projectName || '').toLowerCase().includes(q)
-    )
-  }
+  const activeFilters = SHOW_REVIEW_QUEUE ? filters : EMPTY_QUEUE_FILTERS
+  let mrs = filterReviewQueue(baseMrs, activeFilters, searchQuery)
+  const hasFilters = searchQuery.trim() || Object.values(activeFilters).some(Boolean)
 
   // Sort
   mrs = [...mrs].sort((a, b) => {
@@ -81,7 +80,7 @@ export default function Dashboard({ appState }: DashboardProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto">
       {/* Tabs & Status */}
       <div className="flex bg-gray-900 px-3 py-2 border-b border-gray-800/80 items-center justify-between flex-shrink-0 select-none relative">
         <div className="w-8" /> {/* Spacer for centering */}
@@ -104,6 +103,8 @@ export default function Dashboard({ appState }: DashboardProps) {
 
         <button
           onClick={() => setShowStatus(!showStatus)}
+          aria-expanded={showStatus}
+          aria-label="Sync health"
           className={`w-8 h-8 flex items-center justify-center rounded transition-colors relative ${showStatus ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
           title="System Status"
         >
@@ -113,24 +114,34 @@ export default function Dashboard({ appState }: DashboardProps) {
 
         {showStatus && (
           <div className="absolute top-full right-3 mt-1 w-64 bg-gray-800 border border-gray-700 shadow-xl rounded-lg z-50 overflow-hidden flex flex-col text-xs">
-            <div className="bg-gray-900 px-3 py-2 font-semibold text-gray-300 border-b border-gray-700">System Status</div>
+            <div className="bg-gray-900 px-3 py-2 font-semibold text-gray-300 border-b border-gray-700">Sync health</div>
             <div className="p-3 flex flex-col gap-3">
               <div className="flex items-center gap-2">
-                <Wifi className={`w-4 h-4 ${appState.error ? 'text-red-400' : 'text-green-400'}`} />
+                <Wifi className={`w-4 h-4 ${appState.error ? 'text-red-400' : appState.lastSyncedAt ? 'text-green-400' : 'text-gray-400'}`} />
                 <div className="flex flex-col">
-                  <span className="text-gray-200">GitLab API Sync</span>
+                  <span className="text-gray-200">Last full sync</span>
                   <span className="text-gray-500 text-[10px]">
-                    {appState.lastSyncedAt ? new Date(appState.lastSyncedAt).toLocaleTimeString() : 'Never'}
+                    {appState.lastSyncedAt ? new Date(appState.lastSyncedAt).toLocaleString() : 'Never'}
                   </span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-green-400" />
+                <Shield className={`w-4 h-4 ${appState.isConfigured ? 'text-green-400' : 'text-gray-400'}`} />
                 <div className="flex flex-col">
                   <span className="text-gray-200">App State</span>
                   <span className="text-gray-500 text-[10px]">{appState.isConfigured ? 'Configured' : 'Missing Config'}</span>
                 </div>
               </div>
+              {appState.syncHealth && <dl className="space-y-2 text-[10px] text-gray-400">
+                {([
+                  ['Last attempt', appState.syncHealth.lastAttemptAt],
+                  ['My Reviews updated', appState.syncHealth.reviewsSyncedAt],
+                  ['All Open updated', appState.syncHealth.allOpenSyncedAt],
+                  ['Last webhook received', appState.syncHealth.lastWebhookAt],
+                ] as const).map(([label, value]) => <div key={label}><dt className="text-gray-300">{label}</dt><dd>{value ? new Date(value).toLocaleString() : 'Not yet'}</dd></div>)}
+                {appState.syncHealth.durationMs !== null && <div><dt>Last sync duration</dt><dd>{(appState.syncHealth.durationMs / 1000).toFixed(1)} seconds</dd></div>}
+              </dl>}
+              <button disabled={appState.isSyncing} onClick={() => window.electronAPI.triggerSync()} className="rounded-md border border-gray-600 px-2 py-1 text-blue-300 disabled:opacity-50">{appState.isSyncing ? 'Syncing…' : 'Sync now'}</button>
               {appState.error && (
                 <div className="mt-1 p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px]">
                   {appState.error}
@@ -157,14 +168,16 @@ export default function Dashboard({ appState }: DashboardProps) {
         </div>
       )}
 
+      {SHOW_NOTIFICATION_INBOX && <NotificationInbox />}
+
       {/* Toolbar */}
       <div className="flex bg-gray-900/50 px-3 py-2 border-b border-gray-800/50 gap-2 flex-shrink-0">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
             <Search className="w-3.5 h-3.5 text-gray-500" />
           </div>
           <input
-            type="text"
+            aria-label="Search merge requests" type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search MRs..."
@@ -176,12 +189,12 @@ export default function Dashboard({ appState }: DashboardProps) {
             <ArrowUpDown className="w-3.5 h-3.5 text-gray-500" />
           </div>
           <select
-            value={sortOption}
+            aria-label="Sort merge requests" value={sortOption}
             onChange={(e) => setSortOption(e.target.value as SortOption)}
             className="appearance-none bg-gray-800 border border-gray-700 rounded pl-7 pr-6 py-1 text-xs text-white focus:outline-none focus:border-orange-400 transition-colors"
           >
             <option value="updated_desc">Recently Updated</option>
-            <option value="updated_asc">Oldest Waiting</option>
+            <option value="updated_asc">Least Recently Updated</option>
             <option value="approvals_asc">Approvals Pending</option>
           </select>
           <div className="absolute inset-y-0 right-0 pr-1.5 flex items-center pointer-events-none text-gray-500">
@@ -190,8 +203,14 @@ export default function Dashboard({ appState }: DashboardProps) {
         </div>
       </div>
 
+      {SHOW_REVIEW_QUEUE && <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-800/50 text-[11px] text-gray-400">
+        <button aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-1.5 text-orange-300 hover:text-orange-200"><SlidersHorizontal className="h-3.5 w-3.5" />Review queue filters</button>
+        <span>{mrs.length} of {baseMrs.length}</span>
+      </div>}
+      {SHOW_REVIEW_QUEUE && showFilters && <ReviewQueueFilters mrs={baseMrs} userId={appState.currentUser?.id} lastSyncedAt={appState.lastSyncedAt} current={{ name: '', tab: activeTab, search: searchQuery, sort: sortOption, filters }} onChange={setFilters} onLoad={preset => { setActiveTab(preset.tab); setSearchQuery(preset.search); setSortOption(preset.sort); setFilters(preset.filters) }} />}
+
       {/* MR List */}
-      <div className="flex-1 overflow-y-auto scroll-hide">
+      <div className="flex-1 min-h-[160px] overflow-y-auto scroll-hide">
         {appState.isSyncing && baseMrs.length === 0 ? (
           <div className="flex flex-col">
             {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
@@ -236,12 +255,12 @@ export default function Dashboard({ appState }: DashboardProps) {
             </div>
             <div>
               <p className="text-gray-200 text-sm font-semibold">
-                {activeTab === 'myReviews'
+                {hasFilters ? 'No matching Merge Requests' : activeTab === 'myReviews'
                   ? 'All caught up!'
                   : 'No open Merge Requests'}
               </p>
               <p className="text-gray-500 text-xs mt-1 max-w-[260px] leading-relaxed">
-                {activeTab === 'myReviews'
+                {hasFilters ? (SHOW_REVIEW_QUEUE ? 'Adjust your search or review queue filters to see more results.' : 'Adjust your search to see more results.') : activeTab === 'myReviews'
                   ? 'No Merge Requests are waiting for your review.'
                   : 'No open Merge Requests were found in your configured projects.'}
               </p>

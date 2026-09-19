@@ -22,6 +22,8 @@ interface StoreSchema {
   localRepoPaths: Record<string, string>
   hasRunBefore: boolean
   launchAtStartupDefaultApplied: boolean
+  quietHours: { enabled: boolean; start: string; end: string }
+  notificationAccounts: Record<string, { review: number[]; merged: number[] }>
 }
 
 // แหล่งความจริงเดียวของค่า default — ทั้ง electron-store และ fallback ของ getSettings()
@@ -46,6 +48,8 @@ const DEFAULTS: StoreSchema = {
   localRepoPaths: {},
   hasRunBefore: false,
   launchAtStartupDefaultApplied: false,
+  quietHours: { enabled: false, start: '22:00', end: '08:00' },
+  notificationAccounts: {},
 }
 
 const store = new Store<StoreSchema>({ defaults: DEFAULTS })
@@ -63,30 +67,75 @@ if (!read('launchAtStartupDefaultApplied')) {
 }
 
 const PLAIN_TOKEN_PREFIX = 'plain:'
+let sessionToken: string | null = null
+
+function secureStorageAvailable(): boolean {
+  return safeStorage.isEncryptionAvailable() &&
+    (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text')
+}
+
+function persistToken(token: string): void {
+  if (secureStorageAvailable()) {
+    const encrypted = safeStorage.encryptString(token)
+    store.set('encryptedToken', encrypted.toString('base64'))
+    sessionToken = null
+  } else {
+    sessionToken = token
+    store.set('encryptedToken', '')
+  }
+}
 
 // เพดานจำนวน MR id ที่จำไว้กันแจ้งเตือนซ้ำ — กันไฟล์ config โตไม่จำกัด
 const MAX_TRACKED_IDS = 500
+let notificationAccount: string | null = null
+
+export function setNotificationIdentity(host: string | null, userId: number | null): void {
+  const url = host ? new URL(host) : null
+  notificationAccount = url && userId ? `${url.origin}${url.pathname.replace(/\/+$/, '')}:${userId}` : null
+}
+
+function readNotificationIds(kind: 'review' | 'merged'): number[] {
+  if (!notificationAccount) return []
+  return read('notificationAccounts')[notificationAccount]?.[kind] ?? []
+}
+
+function writeNotificationIds(kind: 'review' | 'merged', ids: number[]): void {
+  if (!notificationAccount) return
+  const accounts = read('notificationAccounts')
+  const entry = accounts[notificationAccount] ?? { review: [], merged: [] }
+  delete accounts[notificationAccount]
+  const retained = Object.fromEntries(Object.entries(accounts).slice(-9))
+  retained[notificationAccount] = { ...entry, [kind]: ids.slice(-MAX_TRACKED_IDS) }
+  store.set('notificationAccounts', retained)
+}
 
 function decryptAccessToken(): string {
+  if (sessionToken !== null) return sessionToken
   const encryptedToken = read('encryptedToken')
   if (!encryptedToken) return ''
 
   if (encryptedToken.startsWith(PLAIN_TOKEN_PREFIX)) {
-    // Fallback storage: OS keychain ไม่พร้อมใช้งานตอนบันทึก (เช่น Linux ไม่มี keyring)
-    return Buffer.from(encryptedToken.slice(PLAIN_TOKEN_PREFIX.length), 'base64').toString('utf-8')
+    const token = Buffer.from(encryptedToken.slice(PLAIN_TOKEN_PREFIX.length), 'base64').toString('utf-8')
+    persistToken(token)
+    return token
   }
 
   try {
-    return safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'))
+    const token = safeStorage.decryptString(Buffer.from(encryptedToken, 'base64'))
+    if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') persistToken(token)
+    return token
   } catch {
     return ''
   }
 }
 
 export function getSettings(): Settings {
+  const accessToken = decryptAccessToken()
   return {
     gitlabUrl: read('gitlabUrl'),
-    accessToken: decryptAccessToken(),
+    accessToken,
+    tokenStorage: accessToken ? (sessionToken !== null ? 'session' : 'encrypted') : 'missing',
+    quietHours: read('quietHours'),
     refreshIntervalMinutes: read('refreshIntervalMinutes'),
     projectIds: read('projectIds'),
     webhookEnabled: read('webhookEnabled'),
@@ -101,6 +150,9 @@ export function getSettings(): Settings {
 }
 
 export function saveSettings(settings: Settings): void {
+  // Encrypt before saving the remaining settings so a keychain error does not
+  // silently bind the old credential to a new GitLab host.
+  if (settings.accessToken) persistToken(settings.accessToken)
   store.set('gitlabUrl', settings.gitlabUrl)
   store.set('refreshIntervalMinutes', settings.refreshIntervalMinutes)
   store.set('projectIds', settings.projectIds)
@@ -112,18 +164,8 @@ export function saveSettings(settings: Settings): void {
   store.set('launchAtStartup', settings.launchAtStartup)
   store.set('notifyOwnerGroupIds', settings.notifyOwnerGroupIds ?? [])
   store.set('notifyOnMyMRMerged', settings.notifyOnMyMRMerged ?? true)
+  if (settings.quietHours) store.set('quietHours', settings.quietHours)
 
-  if (settings.accessToken) {
-    if (safeStorage.isEncryptionAvailable()) {
-      const encrypted = safeStorage.encryptString(settings.accessToken)
-      store.set('encryptedToken', encrypted.toString('base64'))
-    } else {
-      // OS keychain ไม่พร้อมใช้งาน (เช่น Linux ที่ไม่มี keyring) — เก็บแบบ base64
-      // เพื่อไม่ให้ save ล้มเหลวเงียบๆ (encryptString จะ throw)
-      console.warn('[store] safeStorage unavailable — storing token base64-encoded (not encrypted)')
-      store.set('encryptedToken', PLAIN_TOKEN_PREFIX + Buffer.from(settings.accessToken, 'utf-8').toString('base64'))
-    }
-  }
   // หมายเหตุ: token ว่างจะ "ไม่" ล้างค่าเดิม เพื่อกันเคส decrypt fail ชั่วคราว
   // แล้ว save ทับจนหาย — ใช้ clearAccessToken() เมื่อต้องการ logout จริงๆ
 }
@@ -138,21 +180,21 @@ export function isConfigured(): boolean {
 }
 
 export function getNotifiedMRIds(): Set<number> {
-  return new Set(read('notifiedMRIds'))
+  return new Set(readNotificationIds('review'))
 }
 
 export function addNotifiedMRId(id: number): void {
-  const ids = read('notifiedMRIds')
+  const ids = readNotificationIds('review')
   if (!ids.includes(id)) {
-    store.set('notifiedMRIds', [...ids, id].slice(-MAX_TRACKED_IDS))
+    writeNotificationIds('review', [...ids, id])
   }
 }
 
 export function pruneNotifiedMRIds(activeIds: Set<number>): void {
-  const ids = read('notifiedMRIds')
+  const ids = readNotificationIds('review')
   const pruned = ids.filter((id) => activeIds.has(id)).slice(-MAX_TRACKED_IDS)
   if (pruned.length !== ids.length) {
-    store.set('notifiedMRIds', pruned)
+    writeNotificationIds('review', pruned)
   }
 }
 
@@ -184,13 +226,13 @@ export function saveLocalRepoPath(projectKey: string, repoPath: string): void {
 }
 
 export function hasNotifiedMergedMRId(id: number): boolean {
-  return read('notifiedMergedMRIds').includes(id)
+  return readNotificationIds('merged').includes(id)
 }
 
 export function addNotifiedMergedMRId(id: number): void {
-  const ids = read('notifiedMergedMRIds')
+  const ids = readNotificationIds('merged')
   if (!ids.includes(id)) {
-    store.set('notifiedMergedMRIds', [...ids, id].slice(-MAX_TRACKED_IDS))
+    writeNotificationIds('merged', [...ids, id])
   }
 }
 

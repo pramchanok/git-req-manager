@@ -3,6 +3,10 @@ import type { AppState, GitLabGroup, GitLabUser, MergeRequest, OpenFileInIDEResu
 declare global {
   interface Window {
     electronAPI: {
+      getNotificationState: () => Promise<import('../../shared/types').NotificationInboxState>
+      markNotificationsRead: () => Promise<void>
+      snoozeNotification: (projectId: number, mrIid: number, minutes: number) => Promise<void>
+      onNotificationInboxUpdated: (callback: () => void) => () => void
       getSettings: () => Promise<Settings>
       saveSettings: (settings: Settings) => Promise<void>
       getAppState: () => Promise<AppState>
