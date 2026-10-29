@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const nativeUpdater = (() => {
@@ -75,14 +75,26 @@ vi.mock('electron-updater', () => ({
 }))
 
 let updater: typeof import('./updater')
+const originalAppImage = process.env.APPIMAGE
 
 beforeEach(async () => {
   vi.resetModules()
   vi.clearAllMocks()
+  delete process.env.APPIMAGE
   mocks.nativeUpdater.removeAllListeners()
   mocks.updaterEvents.removeAllListeners()
   mocks.checkForUpdates.mockResolvedValue(null)
   updater = await import('./updater')
+})
+
+afterEach(() => {
+  updater.stopUpdater()
+  vi.restoreAllMocks()
+  if (originalAppImage === undefined) {
+    delete process.env.APPIMAGE
+  } else {
+    process.env.APPIMAGE = originalAppImage
+  }
 })
 
 describe('updater install lifecycle', () => {
@@ -91,7 +103,21 @@ describe('updater install lifecycle', () => {
     expect(mocks.quitAndInstall).not.toHaveBeenCalled()
   })
 
+  it('disables auto-update on non-AppImage Linux builds', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    updater.initializeUpdater()
+    expect(updater.getUpdateState().status).toBe('disabled')
+  })
+
+  it('enables auto-update on Linux AppImage builds', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    process.env.APPIMAGE = '/tmp/GitLab-MR-Manager.AppImage'
+    updater.initializeUpdater()
+    expect(mocks.checkForUpdates).toHaveBeenCalledOnce()
+  })
+
   it('runs pre-install shutdown callback before quitAndInstall and destroys open windows on before-quit-for-update', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const callOrder: string[] = []
     mocks.quitAndInstall.mockImplementation(() => {
       callOrder.push('quitAndInstall')
@@ -122,7 +148,5 @@ describe('updater install lifecycle', () => {
     expect(activeWin.destroy).toHaveBeenCalledOnce()
     expect(destroyedWin.destroy).not.toHaveBeenCalled()
     expect(callOrder).toEqual(['beforeInstall', 'quitAndInstall', 'destroyWin'])
-
-    updater.stopUpdater()
   })
 })
