@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.15.3] - 2026-10-29
+
+### การแก้ไขข้อบกพร่อง (Bug Fixes)
+
+- **แก้ไขขั้นตอนการติดตั้ง Auto-Update บน Windows ให้ปิดโปรเซสและไม่ลบ Cache ระหว่างอัปเดต**:
+  - ปรับ `customUnInstall` ใน NSIS (`assets/installer.nsh`) ให้ลบโฟลเดอร์ `gitlab-req-manager-updater` เฉพาะตอนถอนการติดตั้งจริง (`${ifNot} ${isUpdated}`) เพื่อไม่ให้ Uninstaller ตัวเก่าเผลอลบ `update-info.json` และไฟล์ cache สำหรับ differential update ทิ้งกลางคันระหว่างอัปเดตเวอร์ชัน
+  - เพิ่ม Pre-install Shutdown Hook ก่อนเรียก `autoUpdater.quitAndInstall` ให้ครอบคลุมทุกช่องทาง (รวมถึงการกดติดตั้งจากเมนูคลิกขวาที่ System Tray) เพื่อตั้งสถานะ `isQuitting`, หยุด Background Services / Tunnel / Single-Instance Pipe และปิดหน้าต่างทั้งหมดทันทีเมื่อเริ่มติดตั้งอัปเดต
+
+---
+
 ## [1.15.2] - 2026-10-29
 
 ### ความปลอดภัยและการแก้ไขข้อบกพร่อง (Security & Bug Fixes)

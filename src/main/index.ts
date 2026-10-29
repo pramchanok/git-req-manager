@@ -47,6 +47,7 @@ import {
   installDownloadedUpdate,
   setUpdaterWindowGetter,
   setUpdateStateCallback,
+  setBeforeInstallCallback,
   stopUpdater,
 } from './updater'
 import {
@@ -69,6 +70,23 @@ import {
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 let isQuitting = false
+let servicesStopped = false
+
+function stopBackgroundServices(): void {
+  if (servicesStopped) return
+  servicesStopped = true
+  if (webhookSyncTimer) {
+    clearTimeout(webhookSyncTimer)
+    webhookSyncTimer = null
+  }
+  stopScheduler()
+  stopUpdater()
+  stopWebhookServer()
+  stopTunnel()
+  disconnectSocketClient()
+  destroyTray()
+  cleanupSingleInstanceChannelSync()
+}
 let revealWindowOnReady = false
 let isInitialLaunch = true
 const isDevelopment = process.env.NODE_ENV === 'development'
@@ -191,6 +209,10 @@ async function startApp(): Promise<void> {
     splashWindow = createSplashWindow(firstRun)
 
     setupIPC()
+    setBeforeInstallCallback(() => {
+      isQuitting = true
+      stopBackgroundServices()
+    })
     setUpdateStateCallback((state) => {
       updateTrayUpdate(state.status, state.availableVersion ?? state.downloadedVersion)
 
@@ -291,13 +313,7 @@ async function startApp(): Promise<void> {
 
   app.on('before-quit', () => {
     isQuitting = true
-    stopScheduler()
-    stopUpdater()
-    stopWebhookServer()
-    stopTunnel()
-    disconnectSocketClient()
-    destroyTray()
-    cleanupSingleInstanceChannelSync()
+    stopBackgroundServices()
   })
 
 }

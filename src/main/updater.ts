@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification } from 'electron'
+import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { UpdateDownloadedEvent, UpdateInfo, ProgressInfo } from 'electron-updater'
 import type { UpdateState } from '../shared/types'
@@ -27,6 +27,12 @@ function getMainWindow(): BrowserWindow | null {
 }
 
 let stateChangeCallback: ((state: UpdateState) => void) | null = null
+let beforeInstallCallback: (() => void) | null = null
+let quitForUpdateHookRegistered = false
+
+export function setBeforeInstallCallback(cb: () => void): void {
+  beforeInstallCallback = cb
+}
 
 export function setUpdateStateCallback(cb: (state: UpdateState) => void): void {
   stateChangeCallback = cb
@@ -143,6 +149,19 @@ export async function checkForUpdates(): Promise<UpdateState> {
 export function installDownloadedUpdate(): void {
   if (updateState.status !== 'downloaded') {
     throw new Error('No downloaded update is ready to install.')
+  }
+
+  beforeInstallCallback?.()
+
+  if (!quitForUpdateHookRegistered) {
+    quitForUpdateHookRegistered = true
+    nativeAutoUpdater.once('before-quit-for-update', () => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.destroy()
+        }
+      }
+    })
   }
 
   // Run the installer with the custom NSIS UI visible

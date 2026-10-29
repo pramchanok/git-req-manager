@@ -47,6 +47,7 @@ export function startTunnel(port: number): void {
 
     tunnelProcess = spawn(bin, ['tunnel', '--url', `http://localhost:${port}`], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     })
 
     const handleOutput = (data: Buffer) => {
