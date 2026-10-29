@@ -1,7 +1,8 @@
-import { Notification, shell, app } from 'electron'
+import { Notification, app } from 'electron'
 import type { GitLabGroup, MergeRequest } from '../shared/types'
 import { addNotifiedMRId, getNotifiedMRIds } from './store'
 import { recordNotification, getNotificationAccountKey } from './notification-inbox'
+import { openSafeExternalUrl } from './security'
 
 // Deduplication is persisted and scoped to the active GitLab account.
 let _mrClickHandler: ((projectId: number, mrIid: number) => void) | null = null
@@ -39,7 +40,7 @@ function openMR(mr: MergeRequest): () => void {
     if (_mrClickHandler) {
       _mrClickHandler(mr.projectId, mr.iid)
     } else {
-      shell.openExternal(mr.webUrl)
+      void openSafeExternalUrl(mr.webUrl)
     }
   }
 }
@@ -107,7 +108,7 @@ export function notifyNewGroupMRs(group: GitLabGroup, newMRs: MergeRequest[]): v
     showDesktopNotification(
       `👥 มี MR ใหม่ ${visible.length} รายการ`,
       `ในกลุ่ม ${group.name}\nเปิดดูรายการทั้งหมดเพื่อ Review`,
-      () => shell.openExternal(`${group.webUrl}/-/merge_requests`),
+      () => void openSafeExternalUrl(`${group.webUrl}/-/merge_requests`),
     )
   } else {
     for (const mr of toNotify) {

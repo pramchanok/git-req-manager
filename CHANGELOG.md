@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.15.2] - 2026-10-29
+
+### ความปลอดภัยและการแก้ไขข้อบกพร่อง (Security & Bug Fixes)
+
+- **อัปเกรด Electron และ Dependencies ปิดช่องโหว่ความปลอดภัย**: อัปเกรด `electron` เป็น `43.8.4` (แพตช์ช่องโหว่ Brotli `CVE-2026-111497`, eMudhra TLS `CVE-2026-115570`, `CVE-2026-114121` และ `CVE-2026-114124`), อัปเดต `dompurify` เป็น `3.4.17` (`CVE-2026-116802`) และอัปเดตชุดไลบรารีที่เกี่ยวข้องจนไม่เหลือช่องโหว่ใน `npm audit`
+- **ป้องกันหน้าต่าง Electron หลุดไปยังเว็บภายนอกและตรวจสอบผู้เรียก IPC**: เพิ่ม `hardenWebContents` บล็อกการเปิด popup และการ navigate ออกจากหน้าแอปในทุก `BrowserWindow`, เปิด `sandbox: true` ทุกหน้าต่าง, ตรวจสอบ origin ของ top-level frame ก่อนอนุญาตให้เรียก IPC ทุกช่องทาง และกรองให้ `openSafeExternalUrl` เปิดเฉพาะลิงก์ `http(s)` ในทุกจุด (รวมถึง Tray และ Notification)
+- **ปรับความปลอดภัยของลิงก์ Markdown, HTML Sanitization และ CSP**: ดักคลิกลิงก์ทั้งหมดใน `<ReactMarkdown>` และบล็อก HTML ที่ผ่าน `DOMPurify` ให้เปิดผ่านเบราว์เซอร์ภายนอกเสมอ ตัดแท็กเสี่ยง UI-redressing (`<style>`, `<form>`, `<iframe>`, `<base>`) และเพิ่ม Content-Security-Policy (CSP) สำหรับ production build
+- **ป้องกัน CSV Formula Injection และจำกัดสิทธิ์ Named Pipe**: ป้องกันอักขระขึ้นต้นสูตรคำนวณ (`=`, `+`, `-`, `@`) และการแทรกบรรทัดใหม่เมื่อ Export รายงานเป็นไฟล์ CSV สำหรับ Excel พร้อมจำกัดสิทธิ์ Single-Instance Named Pipe / Unix Socket ให้เฉพาะเจ้าของบัญชีผู้ใช้บนเครื่อง
+
+---
+
 ## [1.15.1] - 2026-09-19
 
 ### การแก้ไขข้อบกพร่อง (Bug Fixes)

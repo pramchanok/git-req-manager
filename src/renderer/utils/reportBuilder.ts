@@ -14,6 +14,13 @@ export interface ReportMeta {
   timeframeLabel: string
 }
 
+/** ป้องกัน CSV / Excel Formula Injection (CWE-1236) และการขึ้นบรรทัดใหม่หลุดคอลัมน์ */
+export function escapeCSVCell(value: string | number): string {
+  const normalized = String(value).replace(/[\r\n]+/g, ' ')
+  const neutralized = /^[\s]*[=+\-@]/.test(normalized) ? `'${normalized}` : normalized
+  return `"${neutralized.replace(/"/g, '""')}"`
+}
+
 /** สร้างเนื้อหารายงานเป็น Markdown (pure function — เขียน test ได้ง่าย) */
 export function buildReportMarkdown(meta: ReportMeta, data: DeveloperData): string {
   const formatMRList = (mrs: MergeRequest[]) => {
@@ -62,10 +69,10 @@ ${formatMRList(data.reviewed)}
 /** สร้างเนื้อหารายงานเป็น CSV สำหรับ Excel (pure function — เขียน test ได้ง่าย) */
 export function buildReportCSV(meta: ReportMeta, data: DeveloperData): string {
   let csv = `Developer Performance Report\n`
-  csv += `Name,${meta.name} (@${meta.username})\n`
-  csv += `Group,${meta.groupName}\n`
-  csv += `Timeframe,${meta.timeframeLabel}\n`
-  csv += `Generated At,${formatDateTime(new Date())}\n\n`
+  csv += `Name,${escapeCSVCell(`${meta.name} (@${meta.username})`)}\n`
+  csv += `Group,${escapeCSVCell(meta.groupName)}\n`
+  csv += `Timeframe,${escapeCSVCell(meta.timeframeLabel)}\n`
+  csv += `Generated At,${escapeCSVCell(formatDateTime(new Date()))}\n\n`
 
   csv += `Summary Metrics\n`
   csv += `Metric,Value\n`
@@ -78,8 +85,7 @@ export function buildReportCSV(meta: ReportMeta, data: DeveloperData): string {
 
   const addRows = (list: MergeRequest[], type: string) => {
     list.forEach((mr) => {
-      const cleanTitle = mr.title.replace(/"/g, '""')
-      csv += `"${type}",${mr.iid},"${cleanTitle}","${mr.state}","${formatDate(mr.createdAt)}","${mr.webUrl}"\n`
+      csv += `${escapeCSVCell(type)},${mr.iid},${escapeCSVCell(mr.title)},${escapeCSVCell(mr.state)},${escapeCSVCell(formatDate(mr.createdAt))},${escapeCSVCell(mr.webUrl)}\n`
     })
   }
 

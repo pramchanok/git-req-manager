@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
-import type { OpenDialogOptions } from 'electron'
+import type { IpcMainInvokeEvent, OpenDialogOptions } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
@@ -61,6 +61,11 @@ import {
   configureWindowsAppIdentity,
   getAppIcon,
 } from './app-icon'
+import {
+  assertTrustedIpcSender,
+  hardenWebContents,
+  openSafeExternalUrl,
+} from './security'
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 let isQuitting = false
@@ -94,6 +99,10 @@ async function startApp(): Promise<void> {
   if (!gotSingleInstanceChannel) {
     exitDuplicateInstance()
   }
+
+  app.on('web-contents-created', (_event, contents) => {
+    hardenWebContents(contents)
+  })
 
   app.whenReady().then(() => {
     const storedSettings = getSettings()
@@ -313,6 +322,7 @@ function createWindow(): BrowserWindow {
       preload: path.join(__dirname, '../preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   })
   applyAppIconToWindow(win)
@@ -355,6 +365,7 @@ function createSplashWindow(firstRun: boolean): BrowserWindow {
       preload: path.join(__dirname, '../splash-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   })
   applyAppIconToWindow(win)
@@ -573,12 +584,22 @@ function resetGitLabClient(): void {
  * ไว้ที่เดียว. ส่ง fallback มาเมื่อ "ยังไม่ได้ตั้งค่า" ควรคืนค่าว่างแทนการ throw
  * (เช่น list ที่ renderer เอาไปวนแสดงผล) ถ้าไม่ส่งจะ throw ให้ renderer จัดการ
  */
+function handleTrustedIPC(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: any[]) => unknown
+): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    assertTrustedIpcSender(event, channel)
+    return listener(event, ...args)
+  })
+}
+
 function handleWithClient<T>(
   channel: string,
   fn: (client: GitLabClient, ...args: any[]) => Promise<T>,
   fallback?: T
 ): void {
-  ipcMain.handle(channel, async (_event, ...args: any[]) => {
+  handleTrustedIPC(channel, async (_event, ...args: any[]) => {
     if (!isConfigured()) {
       if (fallback !== undefined) return fallback
       throw new Error('GitLab is not configured')
@@ -594,30 +615,30 @@ function handleWithClient<T>(
 }
 
 function setupIPC(): void {
-  ipcMain.handle('get-notification-state', () => getNotificationState())
-  ipcMain.handle('mark-notifications-read', () => markNotificationsRead())
-  ipcMain.handle('snooze-notification', (_event, projectId: number, mrIid: number, minutes: number) => snoozeNotification(projectId, mrIid, minutes))
+  handleTrustedIPC('get-notification-state', () => getNotificationState())
+  handleTrustedIPC('mark-notifications-read', () => markNotificationsRead())
+  handleTrustedIPC('snooze-notification', (_event, projectId: number, mrIid: number, minutes: number) => snoozeNotification(projectId, mrIid, minutes))
   onInboxChanged(() => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send('notification-inbox-updated')
     }
   })
-  ipcMain.handle('get-settings', () => getSettings())
-  ipcMain.handle('test-notification', () => testNotification())
+  handleTrustedIPC('get-settings', () => getSettings())
+  handleTrustedIPC('test-notification', () => testNotification())
 
-  ipcMain.handle('set-pinned', (_event, pinned: boolean) => {
+  handleTrustedIPC('set-pinned', (_event, pinned: boolean) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setAlwaysOnTop(pinned)
     }
   })
 
-  ipcMain.handle('hide-window', () => {
+  handleTrustedIPC('hide-window', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       hideWindow(mainWindow)
     }
   })
 
-  ipcMain.handle('save-settings', (_event, settings: Settings) => {
+  handleTrustedIPC('save-settings', (_event, settings: Settings) => {
     if (!settings || typeof settings.gitlabUrl !== 'string' || typeof settings.accessToken !== 'string') throw new Error('Invalid settings')
     const url = new URL(settings.gitlabUrl)
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid GitLab URL')
@@ -659,24 +680,11 @@ function setupIPC(): void {
     applySyncMode(settings)
   })
 
-  ipcMain.handle('get-app-state', () => getAppState())
-  ipcMain.handle('trigger-sync', () => syncNow())
-  ipcMain.handle('open-url', (_event, url: string) => {
-    // Security: only allow http/https — block file://, smb:// etc.
-    try {
-      const parsed = new URL(url)
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        console.warn('[open-url] blocked non-http(s) URL:', url)
-        return
-      }
-    } catch {
-      console.warn('[open-url] blocked invalid URL:', url)
-      return
-    }
-    return shell.openExternal(url)
-  })
+  handleTrustedIPC('get-app-state', () => getAppState())
+  handleTrustedIPC('trigger-sync', () => syncNow())
+  handleTrustedIPC('open-url', (_event, url: string) => openSafeExternalUrl(url))
 
-  ipcMain.handle('open-file-in-ide', async (_event, projectId: number, projectName: string, relativePath: string): Promise<OpenFileInIDEResult> => {
+  handleTrustedIPC('open-file-in-ide', async (_event, projectId: number, projectName: string, relativePath: string): Promise<OpenFileInIDEResult> => {
     if (!Number.isSafeInteger(projectId) || projectId <= 0 || typeof projectName !== 'string' || typeof relativePath !== 'string') {
       return { opened: false, message: 'Invalid project or file path.' }
     }
@@ -775,14 +783,14 @@ function setupIPC(): void {
     if (openError) return { opened: false, message: `Could not open the file: ${openError}` }
     return { opened: true, message: 'Opened with the default application.' }
   })
-  ipcMain.handle('get-update-state', () => getUpdateState())
-  ipcMain.handle('check-for-updates', () => checkForUpdates())
-  ipcMain.handle('install-update', () => {
+  handleTrustedIPC('get-update-state', () => getUpdateState())
+  handleTrustedIPC('check-for-updates', () => checkForUpdates())
+  handleTrustedIPC('install-update', () => {
     isQuitting = true
     installDownloadedUpdate()
   })
 
-  ipcMain.handle('get-webhook-url', () => {
+  handleTrustedIPC('get-webhook-url', () => {
     const settings = getSettings()
     if (!settings.webhookEnabled) return null
     // Tunnel URL takes priority if active
@@ -793,7 +801,7 @@ function setupIPC(): void {
     return getWebhookAddress(settings.webhookPort, settings.webhookPublicUrl)
   })
 
-  ipcMain.handle('check-cloudflared', async () => {
+  handleTrustedIPC('check-cloudflared', async () => {
     const bin = await findCloudflared()
 
     return { available: !!bin, path: bin }
@@ -804,11 +812,11 @@ function setupIPC(): void {
   handleWithClient('search-projects', (c, query: string) => c.searchProjects(query), [])
   handleWithClient('get-group-members', (c, groupId: number) => c.getGroupMembers(groupId), [])
 
-  ipcMain.handle('get-team-report-group', () => getTeamReportGroupId())
+  handleTrustedIPC('get-team-report-group', () => getTeamReportGroupId())
 
-  ipcMain.handle('set-team-report-group', (_event, id: number | null) => saveTeamReportGroupId(id))
+  handleTrustedIPC('set-team-report-group', (_event, id: number | null) => saveTeamReportGroupId(id))
 
-  ipcMain.handle('get-changelog', () => {
+  handleTrustedIPC('get-changelog', () => {
     try {
       const changelogPath = path.join(app.getAppPath(), 'CHANGELOG.md')
       return fs.readFileSync(changelogPath, 'utf-8')
@@ -819,11 +827,11 @@ function setupIPC(): void {
 
   // Renderer asks after its listeners and state are ready. This avoids losing
   // the startup event between BrowserWindow did-finish-load and React mount.
-  ipcMain.handle('should-show-changelog', () => {
+  handleTrustedIPC('should-show-changelog', () => {
     return getLastSeenVersion() !== app.getVersion()
   })
 
-  ipcMain.handle('set-last-seen-version', () => {
+  handleTrustedIPC('set-last-seen-version', () => {
     setLastSeenVersion(app.getVersion())
   })
 
@@ -855,7 +863,7 @@ function setupIPC(): void {
     []
   )
 
-  ipcMain.handle('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal = false) => {
+  handleTrustedIPC('open-report-window', (_event, username: string, name: string, avatarUrl: string, timeframe: string, groupId: number | null, personal = false) => {
     const reportWin = new BrowserWindow({
       width: 1200,
       height: 800,
@@ -867,6 +875,7 @@ function setupIPC(): void {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
       },
     })
     applyAppIconToWindow(reportWin)
@@ -890,7 +899,7 @@ function setupIPC(): void {
     }
   })
 
-  ipcMain.handle('open-lead-overview-window', (_event, groupId: number, timeframe: string) => {
+  handleTrustedIPC('open-lead-overview-window', (_event, groupId: number, timeframe: string) => {
     if (!Number.isInteger(groupId) || groupId <= 0) throw new Error('A valid group is required.')
     const safeTimeframe = ['daily', 'weekly', 'monthly', 'yearly'].includes(timeframe) ? timeframe : 'weekly'
     const leadWin = new BrowserWindow({
@@ -906,6 +915,7 @@ function setupIPC(): void {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
       },
     })
     applyAppIconToWindow(leadWin)
@@ -935,6 +945,7 @@ function setupIPC(): void {
         preload: path.join(__dirname, '../preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
       },
     })
     applyAppIconToWindow(mrWin)
@@ -956,13 +967,13 @@ function setupIPC(): void {
 
   setMRClickHandler(openMRWindow)
 
-  ipcMain.handle('open-mr-window', (_event, projectId: number, mrIid: number) => {
+  handleTrustedIPC('open-mr-window', (_event, projectId: number, mrIid: number) => {
     openMRWindow(projectId, mrIid)
   })
 
   handleWithClient('get-mr-by-iid', (c, projectId: number, mrIid: number) => c.getMRByIid(projectId, mrIid))
 
-  ipcMain.handle('export-report-pdf', async (event) => {
+  handleTrustedIPC('export-report-pdf', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return false
 
@@ -988,7 +999,7 @@ function setupIPC(): void {
     }
   })
 
-  ipcMain.handle('save-report-file', async (event, filename: string, content: string) => {
+  handleTrustedIPC('save-report-file', async (event, filename: string, content: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return false
 

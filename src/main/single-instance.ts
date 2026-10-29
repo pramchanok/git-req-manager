@@ -79,6 +79,24 @@ function notifyPrimaryInstance(): Promise<boolean> {
   })
 }
 
+function listenWithRestrictedPermissions(server: net.Server): void {
+  if (process.platform === 'win32') {
+    server.listen({
+      path: singleInstanceChannelPath,
+      readableAll: false,
+      writableAll: false,
+    })
+  } else {
+    server.listen(singleInstanceChannelPath, () => {
+      try {
+        fs.chmodSync(singleInstanceChannelPath, 0o600)
+      } catch {
+        // Best-effort owner-only socket permissions on Unix
+      }
+    })
+  }
+}
+
 function startServer(): void {
   const server = net.createServer((socket) => {
     secondInstanceHandler?.()
@@ -88,22 +106,14 @@ function startServer(): void {
   server.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE' && process.platform !== 'win32') {
       fs.rmSync(singleInstanceChannelPath, { force: true })
-      server.listen(singleInstanceChannelPath)
+      listenWithRestrictedPermissions(server)
       return
     }
 
     console.error('[single-instance] failed to listen for second-instance requests:', error)
   })
 
-  if (process.platform === 'win32') {
-    server.listen({
-      path: singleInstanceChannelPath,
-      readableAll: true,
-      writableAll: true,
-    })
-  } else {
-    server.listen(singleInstanceChannelPath)
-  }
+  listenWithRestrictedPermissions(server)
 
   singleInstanceServer = server
 }

@@ -1,8 +1,9 @@
-import { Tray, Menu, nativeImage, BrowserWindow, app, screen, shell, nativeTheme } from 'electron'
+import { Tray, Menu, nativeImage, BrowserWindow, app, screen, nativeTheme } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import type { MergeRequest, UpdateStatus } from '../shared/types'
 import { checkForUpdates, installDownloadedUpdate } from './updater'
+import { openSafeExternalUrl } from './security'
 
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
@@ -127,7 +128,7 @@ function updateTrayMenu(): void {
 
   const mrItems = mrList.slice(0, 3).map((mr) => ({
     label: mr.title.length > 45 ? mr.title.slice(0, 45) + '…' : mr.title,
-    click: () => shell.openExternal(mr.webUrl),
+    click: () => void openSafeExternalUrl(mr.webUrl),
   }))
 
   const updateItems: Electron.MenuItemConstructorOptions[] = []

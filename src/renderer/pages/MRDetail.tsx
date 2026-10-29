@@ -18,6 +18,7 @@ import CloseConfirmModal from '../components/mr-detail/CloseConfirmModal'
 import { AlertTriangle, ExternalLink } from 'lucide-react'
 
 import { createRefreshQueue, mrStorageScope } from '../utils/mrWorkspace'
+import { createMarkdownComponents } from '../utils/safeMarkdown'
 
 interface MRDetailProps {
   projectId: number
@@ -625,7 +626,10 @@ function MRDetailContent({ projectId, mrIid, onBack, onRefresh, onToast }: MRDet
                   </h3>
                   {mr.description ? (
                     <div className="prose prose-invert prose-orange max-w-none text-sm text-gray-300 leading-relaxed marker:text-orange-500 prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                        components={createMarkdownComponents(mr.webUrl)}
+                      >
                         {mr.description}
                       </ReactMarkdown>
                     </div>

@@ -3,8 +3,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import { formatDateTime } from '../../utils/dateFormat'
+import { createMarkdownComponents, resolveExternalMarkdownHref, sanitizeUntrustedHtml } from '../../utils/safeMarkdown'
 
 const FALLBACK_AVATAR =
   'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="%236b7280"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="%236b7280"/></svg>'
@@ -70,12 +70,12 @@ export default function DiscussionThread({ discussions, loading, mrWebUrl, onOpe
                           </div>
                           <div
                             className="prose prose-invert prose-sm max-w-none prose-p:my-0 [&_a]:inline-flex [&_a]:items-center [&_a]:gap-1 [&_a]:bg-[#21262d] [&_a]:border [&_a]:border-gray-700 hover:[&_a]:border-gray-500 [&_a]:text-gray-200 [&_a]:px-3 [&_a]:py-1.5 [&_a]:rounded-md [&_a]:text-[12px] [&_a]:font-semibold hover:[&_a]:bg-[#30363d] [&_a]:no-underline [&_a]:transition-colors [&_a]:shadow-sm [&_a]:cursor-pointer [&_ul]:my-2 [&_ul]:list-none [&_ul]:pl-0 [&_li]:my-1.5 [&_li]:bg-[#161b22] [&_li]:border [&_li]:border-gray-800 [&_li]:rounded-lg [&_li]:px-3 [&_li]:py-2.5 [&_li]:text-gray-300 [&_li]:font-mono [&_li]:text-[13px] [&_li]:shadow-sm"
-                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked(note.body) as string) }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeUntrustedHtml(marked(note.body) as string) }}
                             onClick={(e) => {
-                              const target = e.target as HTMLElement;
-                              if (target.tagName === 'A') {
+                              const anchor = (e.target as HTMLElement | null)?.closest('a');
+                              if (anchor) {
                                 e.preventDefault();
-                                const href = target.getAttribute('href');
+                                const href = anchor.getAttribute('href');
                                 if (href) {
                                   if (href.includes('/diffs?')) {
                                     const hashes = Array.from(note.body.matchAll(/[a-f0-9]{8,40}/gi)).map(m => m[0]);
@@ -91,14 +91,10 @@ export default function DiscussionThread({ discussions, loading, mrWebUrl, onOpe
                                       return;
                                     }
                                   }
-                                  let fullUrl = href;
-                                  if (href.startsWith('/')) {
-                                    try {
-                                      const origin = new URL(mrWebUrl).origin;
-                                      fullUrl = origin + href;
-                                    } catch {}
+                                  const safeUrl = resolveExternalMarkdownHref(href, mrWebUrl);
+                                  if (safeUrl) {
+                                    void window.electronAPI.openUrl(safeUrl);
                                   }
-                                  window.electronAPI.openUrl(fullUrl);
                                 }
                               }
                             }}
@@ -118,7 +114,12 @@ export default function DiscussionThread({ discussions, loading, mrWebUrl, onOpe
                           </time>
                         </div>
                         <div className="px-4 py-3 text-sm text-gray-300 prose prose-invert prose-orange max-w-none prose-a:text-orange-400 hover:prose-a:text-orange-300 prose-code:text-orange-200 prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-gray-800">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                            components={createMarkdownComponents(mrWebUrl)}
+                          >
+                            {note.body}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>

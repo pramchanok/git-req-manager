@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { resolveExternalMarkdownHref, sanitizeUntrustedHtml } from '../utils/safeMarkdown'
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -400,7 +400,7 @@ export default function ReportDetail() {
   const htmlContent = useMemo(() => {
     try {
       // sanitize ก่อน render — MR title/description เป็น user content จาก GitLab
-      return DOMPurify.sanitize(marked.parse(markdownContent) as string)
+      return sanitizeUntrustedHtml(marked.parse(markdownContent) as string)
     } catch (err) {
       console.error(err)
       return '<p className="text-red-500">Error rendering report.</p>'
@@ -811,7 +811,10 @@ export default function ReportDetail() {
                             if (mr) {
                               window.electronAPI.openMRWindow(mr.projectId, mr.iid);
                             } else {
-                              window.electronAPI.openUrl(href);
+                              const safeUrl = resolveExternalMarkdownHref(href);
+                              if (safeUrl) {
+                                void window.electronAPI.openUrl(safeUrl);
+                              }
                             }
                           }
                         }

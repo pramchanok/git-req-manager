@@ -83,4 +83,11 @@ describe('desktop notification integration', () => {
     expect(mocks.recordNotification).not.toHaveBeenCalled()
     expect(mocks.shown).toEqual([])
   })
+
+  it('blocks non-http(s) external URLs when opening notifications without an in-app handler', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    notifier.notifyMRMerged({ ...mr(99), webUrl: 'file:///C:/Windows/System32/calc.exe' })
+    mocks.shown[0].click?.()
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
 })

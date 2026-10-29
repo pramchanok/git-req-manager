@@ -1,6 +1,6 @@
-import DOMPurify from 'dompurify'
 import { RefreshCw, Download, CheckCircle2, ChevronRight, FileText } from 'lucide-react'
 import type { UpdateState } from '../../../shared/types'
+import { handleSanitizedLinkClick, sanitizeUntrustedHtml } from '../../utils/safeMarkdown'
 
 interface UpdateCardProps {
   updateState: UpdateState
@@ -102,7 +102,8 @@ export default function UpdateCard({
               </summary>
               <div
                 className="mt-2.5 p-3 bg-gray-950/50 rounded-lg text-gray-400 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed border border-gray-800/50"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(updateState.releaseNotes) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeUntrustedHtml(updateState.releaseNotes) }}
+                onClick={(e) => handleSanitizedLinkClick(e)}
               />
             </details>
           </div>

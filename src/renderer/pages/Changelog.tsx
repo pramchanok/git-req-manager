@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { handleSanitizedLinkClick, sanitizeUntrustedHtml } from '../utils/safeMarkdown'
 
 interface Props {
   onBack: () => void
@@ -16,7 +16,7 @@ export default function Changelog({ onBack, currentVersion }: Props) {
     window.electronAPI.getChangelog().then((md) => {
       if (md) {
         const rawHtml = marked.parse(md) as string
-        const cleanHtml = DOMPurify.sanitize(rawHtml)
+        const cleanHtml = sanitizeUntrustedHtml(rawHtml)
         setHtml(cleanHtml)
       }
       setLoading(false)
@@ -62,6 +62,7 @@ export default function Changelog({ onBack, currentVersion }: Props) {
             ref={contentRef}
             className="changelog-content text-xs text-gray-300 leading-relaxed"
             dangerouslySetInnerHTML={{ __html: html }}
+            onClick={(e) => handleSanitizedLinkClick(e)}
           />
         ) : (
           <p className="text-xs text-gray-500">ไม่พบข้อมูล changelog</p>
